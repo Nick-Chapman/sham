@@ -59,10 +59,10 @@ newtype FD = FD Int
   deriving (Eq,Ord,Show)
 
 state0 :: State
-state0 = OsState.init fileSystem0
+state0 = OsState.init fs0
 
-fileSystem0 :: FileSystem
-fileSystem0 =
+fs0 :: FileSystem
+fs0 =
   FileSystem.create [(Path.create "words", File.create ["one","two","three"])]
 
 type Env = Map FD Target
