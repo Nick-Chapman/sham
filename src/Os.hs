@@ -3,13 +3,13 @@ module Os (FD(..),Prog(..),sim,Interaction(..)) where
 import Control.Monad (ap,liftM)
 import Data.Map (Map)
 import FileSystem (FileSystem)
-import FileTable (Fs)
+import OsState (State)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
 import qualified Data.Map.Strict as Map
 import qualified File (create)
 import qualified FileSystem (create)
-import qualified FileTable (init,ls) --,Key)
+import qualified OsState (init,ls) --,Key)
 import qualified Path (create)
 
 data Prog a where
@@ -51,18 +51,15 @@ sim p0 = loop state0 p0 (\_ _ -> Halt) where
       TraceLine message (k s ())
 
     Ls -> do
-      let State{fs} = s
-      let paths = FileTable.ls  fs
+      let paths = OsState.ls s
       k s paths
 
 
 newtype FD = FD Int
   deriving (Eq,Ord,Show)
 
-data State = State { fs :: Fs }
-
 state0 :: State
-state0 = State { fs = FileTable.init fileSystem0 }
+state0 = OsState.init fileSystem0
 
 fileSystem0 :: FileSystem
 fileSystem0 =
@@ -72,7 +69,7 @@ type Env = Map FD Target
 
 data Target
   = Console
---  | File FileTable.Key
+--  | File OsState.Key
 
 data Interaction where
   ReadLine :: (Either EOF String -> Interaction) -> Interaction

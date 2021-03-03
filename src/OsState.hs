@@ -1,6 +1,6 @@
-module FileTable ( -- TODO: rename OsState ?
+module OsState (
   init,
-  Fs,
+  State,
   Key,
   open, OpenMode(..),
   pipe, PipeEnds(..),
@@ -24,7 +24,7 @@ import qualified FileSystem (ls,read,link)
 import qualified PipeSystem (empty,createPipe,readPipe,writePipe,closeForReading,closeForWriting)
 
 
-data Fs = Fs
+data State = State
   { fileSystem :: FileSystem
   , pipeSystem :: PipeSystem
   , table :: FileTable
@@ -46,8 +46,8 @@ data What
   | FileContents [String] -- full contents read when opened
 
 
-init :: FileSystem -> Fs
-init fileSystem = Fs
+init :: FileSystem -> State
+init fileSystem = State
   { fileSystem
   , pipeSystem = PipeSystem.empty
   , table = Map.empty
@@ -59,8 +59,8 @@ data OpenMode
   = OpenForReading -- creating if doesn't exist
   | OpenForAppending -- creating if doesn't exist
 
-open :: Fs -> Path -> OpenMode -> Either NoSuchPath (Key,Fs)
-open fs@Fs{nextKey=key,fileSystem,table} path = \case
+open :: State -> Path -> OpenMode -> Either NoSuchPath (Key,State)
+open state@State{nextKey=key,fileSystem,table} path = \case
   OpenForReading{} -> do
     let nextKey = key+1
     case FileSystem.read fileSystem path of
@@ -68,60 +68,60 @@ open fs@Fs{nextKey=key,fileSystem,table} path = \case
       Right file -> do
         let entry = Entry { rc = 1, what = FileContents (File.lines file) }
         let table' = Map.insert key entry table
-        let fs' = fs { nextKey, table = table' }
-        Right (key,fs')
+        let state' = state { nextKey, table = table' }
+        Right (key,state')
   OpenForAppending{} -> do
     let nextKey = key+1
     -- fileSystem not accessed here
     -- we dont care if the path doesn't exist now, it will be create when writing
     let entry = Entry { rc = 1, what = FileAppend path }
     let table' = Map.insert key entry table
-    let fs' = fs { nextKey, table = table' }
-    Right (key,fs')
+    let state' = state { nextKey, table = table' }
+    Right (key,state')
 
 
 data PipeEnds = PipeEnds { r :: Key, w :: Key }
 
-pipe :: Fs -> (PipeEnds,Fs)
-pipe fs@Fs{nextKey=key,pipeSystem,table} = do
+pipe :: State -> (PipeEnds,State)
+pipe state@State{nextKey=key,pipeSystem,table} = do
   let (r,w,nextKey) = (key,key+1,key+2)
   let (pk,pipeSystem') = PipeSystem.createPipe pipeSystem
   let re = Entry { rc = 1, what = PipeRead pk}
   let we = Entry { rc = 1, what = PipeWrite pk }
   let table' = Map.insert r re (Map.insert w we table)
-  let fs' = fs { nextKey, table = table', pipeSystem = pipeSystem' }
+  let state' = state { nextKey, table = table', pipeSystem = pipeSystem' }
   let ends = PipeEnds { r, w }
-  (ends, fs')
+  (ends, state')
 
 
-dup :: Fs -> Key -> Fs
-dup fs@Fs{table} key = do
+dup :: State -> Key -> State
+dup state@State{table} key = do
   let e@Entry{rc} = look "dup" key table
   let e' = e { rc = rc + 1 }
   let table' = Map.insert key e' table
-  fs { table = table' }
+  state { table = table' }
 
 
-close :: Fs -> Key -> Fs
-close fs0@Fs{pipeSystem,table} key = do
+close :: State -> Key -> State
+close state0@State{pipeSystem,table} key = do
   let e@Entry{rc,what} = look "close" key table
   case rc > 1 of
     True -> do
       let e' = e { rc = rc + 1 }
       let table' = Map.insert key e' table
-      fs0 { table = table' }
+      state0 { table = table' }
     False -> do
       let table' = Map.delete key table
-      let fs = fs0 { table = table' }
+      let state = state0 { table = table' }
       case what of
-        PipeRead pk -> fs { pipeSystem = PipeSystem.closeForReading pipeSystem pk }
-        PipeWrite pk -> fs { pipeSystem = PipeSystem.closeForWriting pipeSystem pk }
-        FileAppend{} -> fs
-        FileContents{} -> fs
+        PipeRead pk -> state { pipeSystem = PipeSystem.closeForReading pipeSystem pk }
+        PipeWrite pk -> state { pipeSystem = PipeSystem.closeForWriting pipeSystem pk }
+        FileAppend{} -> state
+        FileContents{} -> state
 
 
-read :: Fs -> Key -> Either NotReadable (Either Block (Either EOF String, Fs))
-read fs@Fs{table,pipeSystem} key = do
+read :: State -> Key -> Either NotReadable (Either Block (Either EOF String, State))
+read state@State{table,pipeSystem} key = do
   let e@Entry{what} = look "write" key table
   case what of
     PipeWrite{} -> Left NotReadable
@@ -129,24 +129,24 @@ read fs@Fs{table,pipeSystem} key = do
     PipeRead pk  -> do
       case PipeSystem.readPipe pipeSystem pk of
         Left Block -> Right (Left Block)
-        Right (Left EOF) -> Right (Right (Left EOF, fs))
+        Right (Left EOF) -> Right (Right (Left EOF, state))
         Right (Right (line,pipeSystem)) -> do
-          let fs' = fs { pipeSystem  }
-          Right (Right (Right line, fs'))
+          let state' = state { pipeSystem  }
+          Right (Right (Right line, state'))
     FileContents xs -> do
       case xs of
-        [] -> Right (Right (Left EOF, fs))
+        [] -> Right (Right (Left EOF, state))
         line:xs' -> do
           let what' = FileContents xs'
           let e' = e { what = what' }
           let table' = Map.insert key e' table
-          let fs' = fs { table = table' }
-          Right (Right (Right line, fs'))
+          let state' = state { table = table' }
+          Right (Right (Right line, state'))
 
 
 
-write :: Fs -> Key -> String -> Either NotWritable (Either Block (Either EPIPE Fs))
-write fs@Fs{table,pipeSystem,fileSystem} key line = do
+write :: State -> Key -> String -> Either NotWritable (Either Block (Either EPIPE State))
+write state@State{table,pipeSystem,fileSystem} key line = do
   let Entry{what} = look "write" key table
   case what of
     PipeRead{} -> Left NotWritable
@@ -155,18 +155,18 @@ write fs@Fs{table,pipeSystem,fileSystem} key line = do
       case PipeSystem.writePipe pipeSystem pk line of
         Left Block -> Right (Left Block)
         Right (Left EPIPE) -> Right (Right (Left EPIPE))
-        Right (Right pipeSystem) -> Right (Right (Right fs { pipeSystem }))
+        Right (Right pipeSystem) -> Right (Right (Right state { pipeSystem }))
     FileAppend path -> do
       let file = case FileSystem.read fileSystem path of
             Left NoSuchPath -> File.empty
             Right file -> file
       let file' = File.append file line
       let fileSystem' = FileSystem.link fileSystem path file'
-      Right (Right (Right fs { fileSystem = fileSystem' }))
+      Right (Right (Right state { fileSystem = fileSystem' }))
 
 
-ls :: Fs -> [Path]
-ls Fs{fileSystem} = FileSystem.ls fileSystem
+ls :: State -> [Path]
+ls State{fileSystem} = FileSystem.ls fileSystem
 
 -- helper for map lookup
 look :: (Show k, Ord k) => String -> k -> Map k b -> b
