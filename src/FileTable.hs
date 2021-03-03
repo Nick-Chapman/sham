@@ -1,4 +1,3 @@
-
 module FileTable (
   empty,
   Fs,
@@ -14,7 +13,7 @@ module FileTable (
 
 import Data.Map (Map)
 import FileSystem (FileSystem,NoSuchPath(..))
-import Misc (Block(..),EOF(..),EPIPE(..))
+import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
 import PipeSystem (PipeSystem,PipeKey)
 import Prelude hiding (read)
@@ -120,8 +119,6 @@ close fs0@Fs{pipeSystem,table} key = do
         FileContents{} -> fs
 
 
-data NotReadable = NotReadable
-
 read :: Fs -> Key -> Either NotReadable (Either Block (Either EOF String, Fs))
 read fs@Fs{table,pipeSystem} key = do
   let e@Entry{what} = look "write" key table
@@ -146,7 +143,6 @@ read fs@Fs{table,pipeSystem} key = do
           Right (Right (Right line, fs'))
 
 
-data NotWritable = NotWritable
 
 write :: Fs -> Key -> String -> Either NotWritable (Either Block (Either EPIPE Fs))
 write fs@Fs{table,pipeSystem,fileSystem} key line = do
