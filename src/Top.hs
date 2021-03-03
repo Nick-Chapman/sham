@@ -2,9 +2,8 @@ module Top where
 
 import Misc (EOF(..))
 import Os (Prog,Interaction(..))
-import Bash (Script(..))
 import qualified Os (sim)
-import qualified Bash (interpret)
+import qualified Bash (console)
 import System.IO (hFlush,stdout)
 
 main :: IO ()
@@ -13,18 +12,14 @@ main = do
   runInteraction (Os.sim prog)
 
 prog :: Prog ()
-prog = Bash.interpret script
-
-script :: Script
---script = Echo "hello"
-script = ExecRev
+prog = Bash.console
 
 runInteraction :: Interaction -> IO ()
 runInteraction = loop where
   loop :: Interaction -> IO ()
   loop = \case
     ReadLine f -> do
-      putStr $ "ReadLine> "
+      putStr $ "> "
       hFlush stdout
       line <- getLine
       --putStr $ "[read:" ++ line ++ "]"
