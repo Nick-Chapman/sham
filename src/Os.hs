@@ -1,11 +1,16 @@
 module Os (FD(..),Prog(..),sim,Interaction(..)) where
 
-import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Control.Monad (ap,liftM)
 import Data.Map (Map)
+import FileSystem (FileSystem)
 import FileTable (Fs)
+import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
+import Path (Path)
 import qualified Data.Map.Strict as Map
-import qualified FileTable (empty) --,Key)
+import qualified File (create)
+import qualified FileSystem (create)
+import qualified FileTable (init,ls) --,Key)
+import qualified Path (create)
 
 data Prog a where
   Ret :: a -> Prog a
@@ -13,6 +18,7 @@ data Prog a where
   Read :: FD -> Prog (Either NotReadable (Either EOF String))
   Write :: FD -> String -> Prog (Either NotWritable (Either EPIPE ()))
   Trace :: String -> Prog ()
+  Ls :: Prog [Path]
 
 instance Functor Prog where fmap = liftM
 instance Applicative Prog where pure = return; (<*>) = ap
@@ -44,6 +50,11 @@ sim p0 = loop state0 p0 (\_ _ -> Halt) where
     Trace message -> do
       TraceLine message (k s ())
 
+    Ls -> do
+      let State{fs} = s
+      let paths = FileTable.ls  fs
+      k s paths
+
 
 newtype FD = FD Int
   deriving (Eq,Ord,Show)
@@ -51,7 +62,11 @@ newtype FD = FD Int
 data State = State { fs :: Fs }
 
 state0 :: State
-state0 = State { fs = FileTable.empty}
+state0 = State { fs = FileTable.init fileSystem0 }
+
+fileSystem0 :: FileSystem
+fileSystem0 =
+  FileSystem.create [(Path.create "words", File.create ["one","two","three"])]
 
 type Env = Map FD Target
 

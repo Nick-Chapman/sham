@@ -1,5 +1,5 @@
-module FileTable (
-  empty,
+module FileTable ( -- TODO: rename OsState ?
+  init,
   Fs,
   Key,
   open, OpenMode(..),
@@ -9,6 +9,7 @@ module FileTable (
   Block(..),
   read, EOF(..),
   write, EPIPE(..),
+  ls,
   ) where
 
 import Data.Map (Map)
@@ -16,10 +17,10 @@ import FileSystem (FileSystem,NoSuchPath(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
 import PipeSystem (PipeSystem,PipeKey)
-import Prelude hiding (read)
+import Prelude hiding (init,read)
 import qualified Data.Map.Strict as Map
 import qualified File (empty,append,lines)
-import qualified FileSystem (empty,read,link)
+import qualified FileSystem (ls,read,link)
 import qualified PipeSystem (empty,createPipe,readPipe,writePipe,closeForReading,closeForWriting)
 
 
@@ -45,9 +46,9 @@ data What
   | FileContents [String] -- full contents read when opened
 
 
-empty :: Fs
-empty = Fs
-  { fileSystem = FileSystem.empty
+init :: FileSystem -> Fs
+init fileSystem = Fs
+  { fileSystem
   , pipeSystem = PipeSystem.empty
   , table = Map.empty
   , nextKey = 100
@@ -163,6 +164,9 @@ write fs@Fs{table,pipeSystem,fileSystem} key line = do
       let fileSystem' = FileSystem.link fileSystem path file'
       Right (Right (Right fs { fileSystem = fileSystem' }))
 
+
+ls :: Fs -> [Path]
+ls Fs{fileSystem} = FileSystem.ls fileSystem
 
 -- helper for map lookup
 look :: (Show k, Ord k) => String -> k -> Map k b -> b

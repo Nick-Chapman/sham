@@ -1,7 +1,7 @@
-module Path (Path,create) where
+module Path (Path,create,toString) where
 
-newtype Path = Path { name :: String }
+newtype Path = Path { toString :: String }
   deriving (Eq,Ord)
 
 create :: String -> Path
-create name = Path { name }
+create name = Path { toString = name }

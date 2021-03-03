@@ -1,11 +1,15 @@
-module File (File,empty,lines,append) where
+module File (File,create,empty,lines,append) where
 
 import Prelude hiding (lines)
 
-data File
-
+create :: [String] -> File
 empty :: File
 lines :: File -> [String]
 append :: File -> String -> File
 
-(empty,lines,append) = undefined
+data File = File { reversedLines :: [String] }
+
+create lines = File { reversedLines = reverse lines }
+empty = create []
+lines File{reversedLines=xs} = reverse xs
+append File{reversedLines=xs} x = File { reversedLines = x:xs }

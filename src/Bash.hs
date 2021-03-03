@@ -4,6 +4,7 @@ module Bash (console) where
 import Prelude hiding (read)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Os (FD(..),Prog(..))
+import qualified Path (toString)
 
 console :: Prog ()
 console = loop where
@@ -21,20 +22,28 @@ parseLine s = case words s of
   [] -> Null
   ["echo",s] -> Echo s
   ["rev"] -> ExecRev
+  ["ls"] -> ExecLs
   xs -> Echo2 ("bash, unable to parse: " ++ show xs)
 
 data Script
-  = Echo String
+  = Null
+  | Echo String
   | Echo2 String
   | ExecRev
-  | Null
+  | ExecLs
 
 interpret :: Script -> Prog ()
 interpret = \case
+  Null  -> pure ()
   Echo line -> write (FD 1) line
   Echo2 line -> write (FD 2) line
   ExecRev -> revProg
-  Null  -> pure ()
+  ExecLs -> lsProg
+
+lsProg :: Prog ()
+lsProg = do
+  paths <- Ls
+  mapM_ (write (FD 1) . Path.toString) paths
 
 revProg :: Prog ()
 revProg = loop where
