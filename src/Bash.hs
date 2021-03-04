@@ -53,11 +53,16 @@ interpret = \case
   EchoRedirect line path -> echoRedirect line path
 
 
+-- TODO: capture Open/Close bracketing pattern, ensuring Close is called
+-- TODO: capture common "no such path" handling
+
 echoRedirect :: String -> Path -> Prog ()
 echoRedirect line path = do
   Open path OpenForAppending >>= \case
     Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
-    Right fd -> write fd line
+    Right fd -> do
+      write fd line
+      Close fd
 
 
 sourceProg :: Path -> Prog ()
@@ -75,7 +80,7 @@ sourceProg path = do
               interpret script
               loop
       loop
-      -- TODO: close fd
+      Close fd
 
 
 catProg :: Path -> Prog ()
@@ -92,7 +97,7 @@ catProg path = do
               write (FD 1) line
               loop
       loop
-      -- TODO: close fd
+      Close fd
 
 lsProg :: Prog ()
 lsProg = do

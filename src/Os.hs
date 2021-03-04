@@ -14,13 +14,14 @@ import Path (Path)
 import qualified Data.Map.Strict as Map
 import qualified File (create)
 import qualified FileSystem (create)
-import qualified OsState (init,ls,open,Key,read,write)
+import qualified OsState (init,ls,open,Key,close,read,write)
 import qualified Path (create)
 
 data Prog a where
   Ret :: a -> Prog a
   Bind :: Prog a -> (a -> Prog b) -> Prog b
   Open :: Path -> OpenMode -> Prog (Either NoSuchPath FD)
+  Close :: FD -> Prog ()
   Read :: FD -> Prog (Either NotReadable (Either EOF String))
   Write :: FD -> String -> Prog (Either NotWritable (Either EPIPE ()))
   Trace :: String -> Prog ()
@@ -45,13 +46,25 @@ sim p0 = loop env0 state0 p0 k0 where
     Bind prog f -> loop env s prog $ \env s a -> loop env s (f a) k
 
     Open path mode -> do
+      --TraceLine (show env) $ do
       case OsState.open s path mode of
         Left NoSuchPath -> k env s (Left NoSuchPath)
         Right (key,s) -> do
           let fd = smallestUnused env
           TraceLine (show ("open",path,mode,fd)) $ do
           let env' = Map.insert fd (File key) env
+          --TraceLine (show env') $ do
           k env' s (Right fd)
+
+    Close fd -> do
+      --TraceLine (show env) $ do
+      TraceLine (show ("close",fd)) $ do
+      let env' = Map.delete fd env
+      let s' = case look "sim,Close" fd env of
+            File key -> OsState.close s key
+            Console -> s
+      --TraceLine (show env') $ do
+      k env' s' ()
 
     Read fd -> do
       case look "sim,Read" fd env of
@@ -106,6 +119,7 @@ smallestUnused env = head [ fd | fd <- [FD 0..], fd `notElem` used ]
 data Target
   = Console
   | File OsState.Key
+  deriving Show
 
 data Interaction where
   ReadLine :: (Either EOF String -> Interaction) -> Interaction
@@ -116,4 +130,4 @@ data Interaction where
 
 -- helper for map lookup
 look :: (Show k, Ord k) => String -> k -> Map k b -> b
-look tag k env = maybe (error (show (tag,k))) id (Map.lookup k env)
+look tag k env = maybe (error (show ("look/error",tag,k))) id (Map.lookup k env)
