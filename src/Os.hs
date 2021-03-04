@@ -14,7 +14,7 @@ import Path (Path)
 import qualified Data.Map.Strict as Map
 import qualified File (create)
 import qualified FileSystem (create)
-import qualified OsState (init,ls,open,Key,read)
+import qualified OsState (init,ls,open,Key,read,write)
 import qualified Path (create)
 
 data Prog a where
@@ -67,7 +67,12 @@ sim p0 = loop env0 state0 p0 k0 where
 
     Write fd line -> do
       case look "sim,Write" fd env of
-        File{} -> undefined -- TODO: needed for redirection to file
+        File key -> do
+          case OsState.write s key line of
+            Left NotWritable -> k env s (Left NotWritable)
+            Right (Left Block) -> undefined -- TODO: blocking; when we have pipes
+            Right (Right (Left EPIPE)) -> k env s (Right (Left EPIPE))
+            Right (Right (Right s')) -> k env s' (Right (Right ()))
         Console -> do
           WriteLine line (k env s (Right (Right ())))
 
@@ -89,6 +94,7 @@ fs0 :: FileSystem
 fs0 = FileSystem.create
   [ (Path.create "words", File.create ["one","two","three"])
   , (Path.create "test1", File.create ["echo test1...","ls","cat words","cat xxx"])
+  , (Path.create "test2", File.create ["echo something >> newFile"])
   ]
 
 type Env = Map FD Target

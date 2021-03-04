@@ -1,6 +1,7 @@
 
 module Bash (console) where
 
+import Data.List (sort)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Os (FD(..),Prog(..),OpenMode(..),NoSuchPath(..))
 import Path (Path)
@@ -19,9 +20,11 @@ console = loop where
         loop
 
 parseLine :: String -> Script
-parseLine s = case words s of
+parseLine s = case words s of -- TODO: at some point I'll want a less hacky parser
   [] -> Null
+   -- TODO: allow echo of multiple words; so can create scripts
   ["echo",s] -> Echo s
+  ["echo",s,">>",out] -> EchoRedirect s (Path.create out)
   ["rev"] -> ExecRev
   ["ls"] -> ExecLs
   ["cat",s] -> ExecCat (Path.create s)
@@ -36,6 +39,7 @@ data Script
   | ExecLs
   | ExecCat Path
   | Source Path
+  | EchoRedirect String Path
 
 interpret :: Script -> Prog ()
 interpret = \case
@@ -46,12 +50,20 @@ interpret = \case
   ExecLs -> lsProg
   ExecCat path -> catProg path
   Source path -> sourceProg path
+  EchoRedirect line path -> echoRedirect line path
+
+
+echoRedirect :: String -> Path -> Prog ()
+echoRedirect line path = do
+  Open path OpenForAppending >>= \case
+    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
+    Right fd -> write fd line
 
 
 sourceProg :: Path -> Prog ()
 sourceProg path = do
   Open path OpenForReading >>= \case
-    Left NoSuchPath -> err2 $ "source, no such path: " ++ Path.toString path
+    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
     Right fd -> do
       let
         loop :: Prog ()
@@ -69,7 +81,7 @@ sourceProg path = do
 catProg :: Path -> Prog ()
 catProg path = do
   Open path OpenForReading >>= \case
-    Left NoSuchPath -> err2 $ "cat, no such path: " ++ Path.toString path
+    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
     Right fd -> do
       let
         loop :: Prog ()
@@ -85,7 +97,7 @@ catProg path = do
 lsProg :: Prog ()
 lsProg = do
   paths <- Ls
-  mapM_ (write (FD 1) . Path.toString) paths
+  mapM_ (write (FD 1) . Path.toString) (sort paths)
 
 revProg :: Prog ()
 revProg = loop where
@@ -101,21 +113,21 @@ read :: FD -> Prog (Either EOF String)
 read fd =
   Read fd >>= \case
     Left NotReadable -> do
-      err2 "echo, fd0 not readable"
+      err2 "fd0 not readable"
       pure (Left EOF) -- TODO: better to exit?
     Right eofOrLine -> do
       pure eofOrLine
 
 write :: FD -> String -> Prog ()
-write fd mes = do
-  Write fd mes >>= \case
-    Left NotWritable -> err2 "echo, fd1 not writable"
-    Right (Left EPIPE) -> err2 "echo, EPIPE when writing to fd1"
+write fd line = do
+  Write fd line >>= \case
+    Left NotWritable -> err2 "fd1 not writable"
+    Right (Left EPIPE) -> err2 "EPIPE when writing to fd1"
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()
-err2 mes = do
-  Write (FD 2) mes >>= \case
-    Left NotWritable -> Trace "echo, fd2 not writable"
-    Right (Left EPIPE) -> Trace "echo, EPIPE when writing to fd2"
+err2 line = do
+  Write (FD 2) line >>= \case
+    Left NotWritable -> Trace "fd2 not writable"
+    Right (Left EPIPE) -> Trace "EPIPE when writing to fd2"
     Right (Right ()) -> pure ()
