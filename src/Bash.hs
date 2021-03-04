@@ -20,84 +20,118 @@ console = loop where
         loop
 
 parseLine :: String -> Script
-parseLine s = case words s of -- TODO: at some point I'll want a less hacky parser
+parseLine line = case words line of -- TODO: at some point I'll want a less hacky parser
   [] -> Null
-   -- TODO: allow echo of multiple words; so can create scripts
   ["echo",s] -> Echo s
-  ["echo",s,">>",out] -> EchoRedirect s (Path.create out)
+  ["echo",s1,s2] -> Echo (unwords [s1,s2])
+  ["echo",s,">>",p] -> EchoR s (Redirect OpenForAppending (FD 1) (FromPath (Path.create p)))
+  ["echo",s1,s2,">>",p] -> EchoR (unwords [s1,s2]) (Redirect OpenForAppending (FD 1) (FromPath (Path.create p)))
   ["rev"] -> ExecRev
+  ["rev", "<", p] -> ExecRevR (Redirect OpenForReading (FD 0) (FromPath (Path.create p)))
+  ["rev", ">>", p] -> ExecRevR (Redirect OpenForAppending (FD 1) (FromPath (Path.create p)))
   ["ls"] -> ExecLs
   ["cat",s] -> ExecCat (Path.create s)
   [".",s] -> Source (Path.create s)
-  xs -> Echo2 ("bash, unable to parse: " ++ show xs)
+  [s] -> ExecWait (Path.create s)
+  [s, "<", p] -> ExecWaitR (Path.create s) (Redirect OpenForReading (FD 0) (FromPath (Path.create p)))
+  [s, ">>", p] -> ExecWaitR (Path.create s) (Redirect OpenForAppending (FD 1) (FromPath (Path.create p)))
+  xs ->
+    Echo2 ("bash, unable to parse: " ++ show xs)
 
 data Script
   = Null
   | Echo String
   | Echo2 String
   | ExecRev
+  | ExecRevR Redirect
   | ExecLs
   | ExecCat Path
   | Source Path
-  | EchoRedirect String Path
+  | EchoR String Redirect
+  | ExecWait Path
+  | ExecWaitR Path Redirect
+
+data Redirect
+  = Redirect OpenMode FD RedirectSource
+
+data RedirectSource
+  = FromPath Path
+--  | FromFD FD
 
 interpret :: Script -> Prog ()
 interpret = \case
   Null  -> pure ()
-  Echo line -> write (FD 1) line
-  Echo2 line -> write (FD 2) line
+  Echo line -> echoProg line
+  Echo2 line -> write (FD 2) line -- TODO: use redirect
   ExecRev -> revProg
+  ExecRevR r -> applyRedirect r revProg
   ExecLs -> lsProg
   ExecCat path -> catProg path
   Source path -> sourceProg path
-  EchoRedirect line path -> echoRedirect line path
+  EchoR line r -> applyRedirect r (echoProg line)
+  ExecWait path -> execWait path
+  ExecWaitR path r -> applyRedirect r (execWait path)
 
 
--- TODO: capture Open/Close bracketing pattern, ensuring Close is called
--- TODO: capture common "no such path" handling
+applyRedirect :: Redirect -> Prog () -> Prog ()
+applyRedirect r prog =
+  case r of
+    Redirect mode dFd (FromPath path) -> do
+      withOpen path mode $ \sFd -> do
+        SavingEnv $ do
+          Dup2 dFd sFd
+          prog
 
-echoRedirect :: String -> Path -> Prog ()
-echoRedirect line path = do
-  Open path OpenForAppending >>= \case
-    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
-    Right fd -> do
-      write fd line
-      Close fd
+echoProg :: String -> Prog ()
+echoProg line = write (FD 1) line
 
+execWait :: Path -> Prog ()
+execWait path = do
+  withOpen path OpenForReading $ \fd -> do
+    lines <- readAll fd
+    sequence_ [ interpret (parseLine line) | line <- lines ]
+
+readAll :: FD -> Prog [String]
+readAll fd = loop []
+  where
+    loop acc =
+      read fd >>= \case
+      Left EOF -> pure (reverse acc)
+      Right line -> loop (line:acc)
 
 sourceProg :: Path -> Prog ()
 sourceProg path = do
-  Open path OpenForReading >>= \case
-    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
-    Right fd -> do
-      let
-        loop :: Prog ()
-        loop = do
-          read fd >>= \case
-            Left EOF -> pure ()
-            Right line -> do
-              let script = parseLine line
-              interpret script
-              loop
-      loop
-      Close fd
-
+  withOpen path OpenForReading $ \fd -> do
+    let
+      loop :: Prog ()
+      loop = do
+        -- interleaves read and interpretation
+        read fd >>= \case
+          Left EOF -> pure ()
+          Right line -> do
+            let script = parseLine line
+            interpret script
+            loop
+    loop
 
 catProg :: Path -> Prog ()
 catProg path = do
-  Open path OpenForReading >>= \case
+  withOpen path OpenForReading $ \fd -> do
+    let
+      loop :: Prog ()
+      loop = do
+        read fd >>= \case
+          Left EOF -> pure ()
+          Right line -> do
+            write (FD 1) line
+            loop
+    loop
+
+withOpen :: Path -> OpenMode -> (FD -> Prog ()) -> Prog ()
+withOpen path mode action =
+  Open path mode >>= \case
     Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
-    Right fd -> do
-      let
-        loop :: Prog ()
-        loop = do
-          read fd >>= \case
-            Left EOF -> pure ()
-            Right line -> do
-              write (FD 1) line
-              loop
-      loop
-      Close fd
+    Right fd -> action fd
 
 lsProg :: Prog ()
 lsProg = do

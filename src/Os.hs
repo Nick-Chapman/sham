@@ -14,7 +14,7 @@ import Path (Path)
 import qualified Data.Map.Strict as Map
 import qualified File (create)
 import qualified FileSystem (create)
-import qualified OsState (init,ls,open,Key,close,read,write)
+import qualified OsState (init,ls,open,Key,close,dup,read,write)
 import qualified Path (create)
 
 data Prog a where
@@ -26,6 +26,15 @@ data Prog a where
   Write :: FD -> String -> Prog (Either NotWritable (Either EPIPE ()))
   Trace :: String -> Prog ()
   Ls :: Prog [Path]
+  Dup2 :: FD -> FD -> Prog ()
+  SavingEnv :: Prog a -> Prog a -- TEMP until we get Fork/Exec
+
+{- TODO
+- dup FDs
+- Fork processes (duping open FDs) & Exec
+- Exit/Wait
+-}
+
 
 instance Functor Prog where fmap = liftM
 instance Applicative Prog where pure = return; (<*>) = ap
@@ -51,20 +60,35 @@ sim p0 = loop env0 state0 p0 k0 where
         Left NoSuchPath -> k env s (Left NoSuchPath)
         Right (key,s) -> do
           let fd = smallestUnused env
-          TraceLine (show ("open",path,mode,fd)) $ do
+          TraceLine (show ("Open",path,mode,fd)) $ do
           let env' = Map.insert fd (File key) env
           --TraceLine (show env') $ do
           k env' s (Right fd)
 
     Close fd -> do
       --TraceLine (show env) $ do
-      TraceLine (show ("close",fd)) $ do
+      TraceLine (show ("Close",fd)) $ do
       let env' = Map.delete fd env
       let s' = case look "sim,Close" fd env of
             File key -> OsState.close s key
             Console -> s
       --TraceLine (show env') $ do
       k env' s' ()
+
+    Dup2 fdDest fdSrc -> do
+      TraceLine (show ("Dup2",fdDest,fdSrc)) $ do
+      let s' = case look "sim,Dup2,dest" fdDest env of
+            File key -> OsState.close s key
+            Console -> s
+      let target = look "sim,Dup2,src" fdSrc env
+      let s'' = case target of
+            File key -> OsState.dup s' key
+            Console -> s'
+      let env' = Map.insert fdDest target env
+      k env' s'' ()
+
+    SavingEnv prog ->
+      loop env s prog $ \_ s a -> k env s a
 
     Read fd -> do
       case look "sim,Read" fd env of
@@ -108,6 +132,9 @@ fs0 = FileSystem.create
   [ (Path.create "words", File.create ["one","two","three"])
   , (Path.create "test1", File.create ["echo test1...","ls","cat words","cat xxx"])
   , (Path.create "test2", File.create ["echo something >> newFile"])
+
+  , (Path.create "e3", File.create ["echo first","echo second"])
+  , (Path.create "test", File.create ["e3 >> newFile"])
   ]
 
 type Env = Map FD Target
