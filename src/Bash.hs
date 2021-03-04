@@ -101,6 +101,8 @@ echoProg line = write (FD 1) line
 execWait :: Path -> Prog ()
 execWait path = do
   withOpen path OpenForReading $ \fd -> do
+    -- would be better if open readAll was in the scope of withOpen
+    -- but withOpen doesn't have the right type: it's restricted to ()
     lines <- readAll fd
     sequence_ [ interpret (parseLine line) | line <- lines ]
 
