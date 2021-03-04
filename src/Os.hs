@@ -45,11 +45,11 @@ sim p0 = loop env0 state0 p0 k0 where
     Bind prog f -> loop env s prog $ \env s a -> loop env s (f a) k
 
     Open path mode -> do
-     TraceLine (show ("open",path,mode)) $
       case OsState.open s path mode of
         Left NoSuchPath -> k env s (Left NoSuchPath)
         Right (key,s) -> do
           let fd = smallestUnused env
+          TraceLine (show ("open",path,mode,fd)) $ do
           let env' = Map.insert fd (File key) env
           k env' s (Right fd)
 
@@ -67,7 +67,7 @@ sim p0 = loop env0 state0 p0 k0 where
 
     Write fd line -> do
       case look "sim,Write" fd env of
-        File{} -> undefined
+        File{} -> undefined -- TODO: needed for redirection to file
         Console -> do
           WriteLine line (k env s (Right (Right ())))
 
@@ -86,8 +86,10 @@ state0 :: State
 state0 = OsState.init fs0
 
 fs0 :: FileSystem
-fs0 =
-  FileSystem.create [(Path.create "words", File.create ["one","two","three"])]
+fs0 = FileSystem.create
+  [ (Path.create "words", File.create ["one","two","three"])
+  , (Path.create "test1", File.create ["echo test1...","ls","cat words","cat xxx"])
+  ]
 
 type Env = Map FD Target
 

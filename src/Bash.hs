@@ -25,6 +25,7 @@ parseLine s = case words s of
   ["rev"] -> ExecRev
   ["ls"] -> ExecLs
   ["cat",s] -> ExecCat (Path.create s)
+  [".",s] -> Source (Path.create s)
   xs -> Echo2 ("bash, unable to parse: " ++ show xs)
 
 data Script
@@ -34,6 +35,7 @@ data Script
   | ExecRev
   | ExecLs
   | ExecCat Path
+  | Source Path
 
 interpret :: Script -> Prog ()
 interpret = \case
@@ -43,11 +45,31 @@ interpret = \case
   ExecRev -> revProg
   ExecLs -> lsProg
   ExecCat path -> catProg path
+  Source path -> sourceProg path
+
+
+sourceProg :: Path -> Prog ()
+sourceProg path = do
+  Open path OpenForReading >>= \case
+    Left NoSuchPath -> err2 $ "source, no such path: " ++ Path.toString path
+    Right fd -> do
+      let
+        loop :: Prog ()
+        loop = do
+          read fd >>= \case
+            Left EOF -> pure ()
+            Right line -> do
+              let script = parseLine line
+              interpret script
+              loop
+      loop
+      -- TODO: close fd
+
 
 catProg :: Path -> Prog ()
 catProg path = do
   Open path OpenForReading >>= \case
-    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
+    Left NoSuchPath -> err2 $ "cat, no such path: " ++ Path.toString path
     Right fd -> do
       let
         loop :: Prog ()
@@ -58,6 +80,7 @@ catProg path = do
               write (FD 1) line
               loop
       loop
+      -- TODO: close fd
 
 lsProg :: Prog ()
 lsProg = do
