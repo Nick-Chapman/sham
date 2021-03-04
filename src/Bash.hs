@@ -1,10 +1,11 @@
 
 module Bash (console) where
 
-import Prelude hiding (read)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import Os (FD(..),Prog(..))
-import qualified Path (toString)
+import Os (FD(..),Prog(..),OpenMode(..))
+import Path (Path)
+import Prelude hiding (read)
+import qualified Path (create,toString)
 
 console :: Prog ()
 console = loop where
@@ -23,6 +24,7 @@ parseLine s = case words s of
   ["echo",s] -> Echo s
   ["rev"] -> ExecRev
   ["ls"] -> ExecLs
+  ["cat",s] -> ExecCat (Path.create s)
   xs -> Echo2 ("bash, unable to parse: " ++ show xs)
 
 data Script
@@ -31,6 +33,7 @@ data Script
   | Echo2 String
   | ExecRev
   | ExecLs
+  | ExecCat Path
 
 interpret :: Script -> Prog ()
 interpret = \case
@@ -39,6 +42,20 @@ interpret = \case
   Echo2 line -> write (FD 2) line
   ExecRev -> revProg
   ExecLs -> lsProg
+  ExecCat path -> catProg path
+
+catProg :: Path -> Prog ()
+catProg path = do
+  fd <- Open path OpenForReading
+  let
+    loop :: Prog ()
+    loop = do
+      read fd >>= \case
+        Left EOF -> pure ()
+        Right line -> do
+          write (FD 1) (reverse line)
+          loop
+  loop
 
 lsProg :: Prog ()
 lsProg = do

@@ -58,6 +58,7 @@ init fs = State
 data OpenMode
   = OpenForReading -- creating if doesn't exist
   | OpenForAppending -- creating if doesn't exist
+  deriving Show
 
 open :: State -> Path -> OpenMode -> Either NoSuchPath (Key,State)
 open state@State{nextKey=key,fs,table} path = \case
