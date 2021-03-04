@@ -2,7 +2,7 @@
 module Bash (console) where
 
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import Os (FD(..),Prog(..),OpenMode(..))
+import Os (FD(..),Prog(..),OpenMode(..),NoSuchPath(..))
 import Path (Path)
 import Prelude hiding (read)
 import qualified Path (create,toString)
@@ -46,16 +46,18 @@ interpret = \case
 
 catProg :: Path -> Prog ()
 catProg path = do
-  fd <- Open path OpenForReading
-  let
-    loop :: Prog ()
-    loop = do
-      read fd >>= \case
-        Left EOF -> pure ()
-        Right line -> do
-          write (FD 1) (reverse line)
-          loop
-  loop
+  Open path OpenForReading >>= \case
+    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
+    Right fd -> do
+      let
+        loop :: Prog ()
+        loop = do
+          read fd >>= \case
+            Left EOF -> pure ()
+            Right line -> do
+              write (FD 1) line
+              loop
+      loop
 
 lsProg :: Prog ()
 lsProg = do

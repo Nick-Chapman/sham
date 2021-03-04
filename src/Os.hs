@@ -1,4 +1,9 @@
-module Os (FD(..),Prog(..),OpenMode(..),sim,Interaction(..)) where
+module Os (
+  FD(..),Prog(..),
+  OpenMode(..),NoSuchPath(..),
+  sim,
+  Interaction(..)
+  ) where
 
 import Control.Monad (ap,liftM)
 import Data.Map (Map)
@@ -15,7 +20,7 @@ import qualified Path (create)
 data Prog a where
   Ret :: a -> Prog a
   Bind :: Prog a -> (a -> Prog b) -> Prog b
-  Open :: Path -> OpenMode -> Prog FD
+  Open :: Path -> OpenMode -> Prog (Either NoSuchPath FD)
   Read :: FD -> Prog (Either NotReadable (Either EOF String))
   Write :: FD -> String -> Prog (Either NotWritable (Either EPIPE ()))
   Trace :: String -> Prog ()
@@ -42,11 +47,11 @@ sim p0 = loop env0 state0 p0 k0 where
     Open path mode -> do
      TraceLine (show ("open",path,mode)) $
       case OsState.open s path mode of
-        Left NoSuchPath -> undefined -- TODO: NoSuchPath to caller
+        Left NoSuchPath -> k env s (Left NoSuchPath)
         Right (key,s) -> do
           let fd = smallestUnused env
           let env' = Map.insert fd (File key) env
-          k env' s fd
+          k env' s (Right fd)
 
     Read fd -> do
       case look "sim,Read" fd env of
