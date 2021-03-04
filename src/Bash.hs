@@ -29,6 +29,11 @@ parseLine line = case words line of -- TODO: at some point I'll want a less hack
   ["rev"] -> ExecRev
   ["rev", "<", p] -> ExecRevR (Redirect OpenForReading (FD 0) (FromPath (Path.create p)))
   ["rev", ">>", p] -> ExecRevR (Redirect OpenForAppending (FD 1) (FromPath (Path.create p)))
+
+  ["rev","<",p1,">>",p2] ->
+    ExecRevRs [ Redirect OpenForReading (FD 0) (FromPath (Path.create p1))
+              , Redirect OpenForAppending (FD 1) (FromPath (Path.create p2)) ]
+
   ["ls"] -> ExecLs
   ["cat",s] -> ExecCat (Path.create s)
   [".",s] -> Source (Path.create s)
@@ -44,6 +49,7 @@ data Script
   | Echo2 String
   | ExecRev
   | ExecRevR Redirect
+  | ExecRevRs [Redirect]
   | ExecLs
   | ExecCat Path
   | Source Path
@@ -65,6 +71,7 @@ interpret = \case
   Echo2 line -> write (FD 2) line -- TODO: use redirect
   ExecRev -> revProg
   ExecRevR r -> applyRedirect r revProg
+  ExecRevRs rs -> applyRedirects rs revProg
   ExecLs -> lsProg
   ExecCat path -> catProg path
   Source path -> sourceProg path
@@ -72,6 +79,11 @@ interpret = \case
   ExecWait path -> execWait path
   ExecWaitR path r -> applyRedirect r (execWait path)
 
+
+applyRedirects :: [Redirect] -> Prog () -> Prog ()
+applyRedirects = \case
+  [] -> \prog -> prog
+  r:rs -> applyRedirect r . applyRedirects rs
 
 applyRedirect :: Redirect -> Prog () -> Prog ()
 applyRedirect r prog =
@@ -131,7 +143,9 @@ withOpen :: Path -> OpenMode -> (FD -> Prog ()) -> Prog ()
 withOpen path mode action =
   Open path mode >>= \case
     Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
-    Right fd -> action fd
+    Right fd -> do
+      action fd
+      Close fd
 
 lsProg :: Prog ()
 lsProg = do

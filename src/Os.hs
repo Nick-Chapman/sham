@@ -130,11 +130,7 @@ state0 = OsState.init fs0
 fs0 :: FileSystem
 fs0 = FileSystem.create
   [ (Path.create "words", File.create ["one","two","three"])
-  , (Path.create "test1", File.create ["echo test1...","ls","cat words","cat xxx"])
-  , (Path.create "test2", File.create ["echo something >> newFile"])
-
-  , (Path.create "e3", File.create ["echo first","echo second"])
-  , (Path.create "test", File.create ["e3 >> newFile"])
+  , (Path.create "test", File.create ["rev < words >> rw", "cat rw"])
   ]
 
 type Env = Map FD Target
