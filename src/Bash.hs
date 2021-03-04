@@ -22,40 +22,41 @@ console = loop where
 parseLine :: String -> Script
 parseLine line = case words line of -- TODO: at some point I'll want a less hacky parser
   [] -> Null
-  ["echo",s] -> Echo s
-  ["echo",s1,s2] -> Echo (unwords [s1,s2])
-  ["echo",s,">>",p] -> EchoR s (Redirect OpenForAppending (FD 1) (FromPath (Path.create p)))
-  ["echo",s1,s2,">>",p] -> EchoR (unwords [s1,s2]) (Redirect OpenForAppending (FD 1) (FromPath (Path.create p)))
-  ["rev"] -> ExecRev
-  ["rev", "<", p] -> ExecRevR (Redirect OpenForReading (FD 0) (FromPath (Path.create p)))
-  ["rev", ">>", p] -> ExecRevR (Redirect OpenForAppending (FD 1) (FromPath (Path.create p)))
-
-  ["rev","<",p1,">>",p2] ->
-    ExecRevRs [ Redirect OpenForReading (FD 0) (FromPath (Path.create p1))
-              , Redirect OpenForAppending (FD 1) (FromPath (Path.create p2)) ]
-
-  ["ls"] -> ExecLs
-  ["cat",s] -> ExecCat (Path.create s)
   [".",s] -> Source (Path.create s)
-  [s] -> ExecWait (Path.create s)
-  [s, "<", p] -> ExecWaitR (Path.create s) (Redirect OpenForReading (FD 0) (FromPath (Path.create p)))
-  [s, ">>", p] -> ExecWaitR (Path.create s) (Redirect OpenForAppending (FD 1) (FromPath (Path.create p)))
+
+  ["ls"] -> Run Ls [] []
+  ["ls",">>",p] -> Run Ls [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+
+  ["echo",s] -> Run Echo [s] []
+  ["echo",s1,s2] -> Run Echo [s1,s2] []
+  ["echo",s,">>",p] -> Run Echo [s] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+  ["echo",s1,s2,">>",p] -> Run Echo [s1,s2] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+
+  ["cat",p1] -> Run Cat [p1] []
+  ["cat",p1,">>",p2] -> Run Cat [p1] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p2))]
+
+  ["rev", "<", p] -> Run Rev [] [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
+  ["rev", ">>", p] -> Run Rev [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+  ["rev","<",p1,">>",p2] ->
+    Run Rev [] [ Redirect OpenForReading (FD 0) (FromPath (Path.create p1))
+               , Redirect OpenForAppending (FD 1) (FromPath (Path.create p2)) ]
+
+  [s] -> Exec (Path.create s) []
+  [s, "<", p] -> Exec (Path.create s) [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
+  [s, ">>", p] -> Exec (Path.create s) [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+
   xs ->
     Echo2 ("bash, unable to parse: " ++ show xs)
 
 data Script
   = Null
-  | Echo String
   | Echo2 String
-  | ExecRev
-  | ExecRevR Redirect
-  | ExecRevRs [Redirect]
-  | ExecLs
-  | ExecCat Path
   | Source Path
-  | EchoR String Redirect
-  | ExecWait Path
-  | ExecWaitR Path Redirect
+  | Run Builtin [String] [Redirect]
+  | Exec Path [Redirect]
+
+data Builtin = Echo | Cat | Rev | Ls
+
 
 data Redirect
   = Redirect OpenMode FD RedirectSource
@@ -67,18 +68,18 @@ data RedirectSource
 interpret :: Script -> Prog ()
 interpret = \case
   Null  -> pure ()
-  Echo line -> echoProg line
   Echo2 line -> write (FD 2) line -- TODO: use redirect
-  ExecRev -> revProg
-  ExecRevR r -> applyRedirect r revProg
-  ExecRevRs rs -> applyRedirects rs revProg
-  ExecLs -> lsProg
-  ExecCat path -> catProg path
   Source path -> sourceProg path
-  EchoR line r -> applyRedirect r (echoProg line)
-  ExecWait path -> execWait path
-  ExecWaitR path r -> applyRedirect r (execWait path)
+  Run b args rs -> applyRedirects rs (builtinProg args b)
+  Exec path rs -> applyRedirects rs (execWait path)
 
+
+builtinProg :: [String] -> Builtin -> Prog ()
+builtinProg args = \case
+  Echo -> echoProg (unwords args)
+  Cat -> catProg args
+  Rev -> revProg -- ignores command line args
+  Ls -> lsProg -- ignores command line args
 
 applyRedirects :: [Redirect] -> Prog () -> Prog ()
 applyRedirects = \case
@@ -126,8 +127,13 @@ sourceProg path = do
             loop
     loop
 
-catProg :: Path -> Prog ()
-catProg path = do
+
+catProg :: [String] -> Prog ()
+catProg args =
+  sequence_ [ catProg1 (Path.create arg) | arg <- args ]
+
+catProg1 :: Path -> Prog ()
+catProg1 path = do
   withOpen path OpenForReading $ \fd -> do
     let
       loop :: Prog ()
@@ -149,7 +155,7 @@ withOpen path mode action =
 
 lsProg :: Prog ()
 lsProg = do
-  paths <- Ls
+  paths <- ListPaths
   mapM_ (write (FD 1) . Path.toString) (sort paths)
 
 revProg :: Prog ()

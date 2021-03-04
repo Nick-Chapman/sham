@@ -25,7 +25,7 @@ data Prog a where
   Read :: FD -> Prog (Either NotReadable (Either EOF String))
   Write :: FD -> String -> Prog (Either NotWritable (Either EPIPE ()))
   Trace :: String -> Prog ()
-  Ls :: Prog [Path]
+  ListPaths :: Prog [Path]
   Dup2 :: FD -> FD -> Prog ()
   SavingEnv :: Prog a -> Prog a -- TEMP until we get Fork/Exec
 
@@ -116,7 +116,7 @@ sim p0 = loop env0 state0 p0 k0 where
     Trace message -> do
       TraceLine message (k env s ())
 
-    Ls -> do
+    ListPaths -> do
       let paths = OsState.ls s
       k env s paths
 
