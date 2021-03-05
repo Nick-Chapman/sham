@@ -28,8 +28,8 @@ data Prog a where
   Bind :: Prog a -> (a -> Prog b) -> Prog b
   Trace :: String -> Prog ()
   --Exit :: Prog a
-  --Spawn :: Prog () -> (Pid -> Prog a) -> Prog a
-  --Wait :: Pid -> Prog ()
+  Spawn :: Prog () -> (Pid -> Prog a) -> Prog a
+  Wait :: Pid -> Prog ()
   Call :: SysCall a b -> a -> Prog b -- TODO: use Call, in place of next 6
 
   Open :: Path -> OpenMode -> Prog (Either NoSuchPath FD)
@@ -39,7 +39,7 @@ data Prog a where
   Write :: FD -> String -> Prog (Either NotWritable (Either EPIPE ()))
   ListPaths :: Prog [Path] -- TODO: rename Paths
 
-  SavingEnv :: Prog a -> Prog a -- TODO: kill when switch to use Spawn
+  --SavingEnv :: Prog a -> Prog a -- TODO: kill when switch to use Spawn
 
 
 sim :: Prog () -> Interaction
@@ -53,13 +53,11 @@ linearize p0 = case p0 of
   Ret a -> \k -> k a
   Bind p f -> \k ->linearize p $ \a -> linearize (f a) k
   Trace message -> \k -> A_Trace message (k ())
-{-
-  Exit -> \_ignoredK -> A_Done
+  --Exit -> \_ignoredK -> A_Done
   Spawn child f -> \k -> do
     let action = linearize child $ \() -> A_Done
     A_Spawn action $ \pid -> linearize (f pid) k
   Wait pid -> \k -> A_Wait pid (k ())
--}
   Call sys arg -> \k -> A_Call sys arg k
   Open path mode -> A_Call Sys_Open (path,mode)
   Close fd -> A_Call Sys_Close fd
@@ -68,22 +66,21 @@ linearize p0 = case p0 of
   Write fd line -> A_Call Sys_Write (fd,line)
   ListPaths -> A_Call Sys_Paths ()
 
-  SavingEnv prog -> \k -> do
+  {-SavingEnv prog -> \k -> do
     A_SaveEnv $ \env -> do
       linearize prog $ \a ->
-        A_RestoreEnv env (k a)
-
+        A_RestoreEnv env (k a)-}
 
 data Action where
   A_Done :: Action
   A_Trace :: String -> Action -> Action
-  --A_Spawn :: Action -> (Pid -> Action) -> Action
-  --A_Wait :: Pid -> Action -> Action
+  A_Spawn :: Action -> (Pid -> Action) -> Action
+  A_Wait :: Pid -> Action -> Action
   A_Call :: SysCall a b -> a -> (b -> Action) -> Action
 
   -- TEMP until we move to Spawn/Wait
-  A_SaveEnv :: (Env -> Action) -> Action
-  A_RestoreEnv :: Env -> Action -> Action
+  {-A_SaveEnv :: (Env -> Action) -> Action
+  A_RestoreEnv :: Env -> Action -> Action-}
 
 ----------------------------------------------------------------------
 
@@ -91,11 +88,14 @@ resume :: Pid -> Proc -> State -> Interaction
 resume me proc0@(Proc env action0) state@State{os} = case action0 of
 
   A_Done -> do
-    Halt
+    case choose state of
+      Nothing -> Halt
+      Just (state,other,proc2) ->
+        resume other proc2 state
 
   A_Trace message action ->
     TraceLine message (resume me (Proc env action) state)
-{-
+
   A_Spawn action f -> do
     -- TODO: dup all file-descriptors in env
     let child = Proc env action
@@ -107,7 +107,7 @@ resume me proc0@(Proc env action0) state@State{os} = case action0 of
     if running pid state
     then block me proc0 state
     else yield me (Proc env action) state
--}
+
   A_Call sys arg f -> do
     case runSysI sys os env arg of
       Left Block -> block me proc0 state
@@ -116,20 +116,21 @@ resume me proc0@(Proc env action0) state@State{os} = case action0 of
           let action = f res
           yield me (Proc env action) state { os }
 
-  A_SaveEnv f -> resume me (Proc env (f env)) state
-  A_RestoreEnv env action -> resume me (Proc env action) state
+  --A_SaveEnv f -> resume me (Proc env (f env)) state
+  --A_RestoreEnv env action -> resume me (Proc env action) state
 
 
 block :: Pid -> Proc -> State -> Interaction
-block = undefined --yield
+block = yield
 
 yield :: Pid -> Proc -> State -> Interaction
 yield me proc1 state = do
-  --TraceLine (show ("yield",me)) $ do
   case choose state of
-    Nothing -> resume me proc1 state -- nothing else to do, so continue
+    Nothing ->
+      --TraceLine (show ("yield",me)) $ do
+      resume me proc1 state -- nothing else to do, so continue
     Just (state,other,proc2) ->
-      TraceLine (show ("yield",me,other)) $ do
+      --TraceLine (show ("yield",me,other)) $ do
       resume other proc2 (suspend me proc1 state)
 
 ----------------------------------------------------------------------
@@ -153,8 +154,8 @@ state0 = State
   , suspended = Map.empty
   }
 
-_running :: Pid -> State -> Bool
-_running pid State{waiting,suspended} =
+running :: Pid -> State -> Bool
+running pid State{waiting,suspended} =
   Map.member pid waiting || Map.member pid suspended
 
 newPid :: State -> (State,Pid)
@@ -183,10 +184,12 @@ type OsState = OsState.State
 os0 :: OsState
 os0 = OsState.init fs0
 
+-- TODO: move to sep file
 fs0 :: FileSystem
 fs0 = FileSystem.create
   [ (Path.create "words", File.create ["one","two","three"])
   , (Path.create "test", File.create ["rev < words >> rw", "cat rw"])
+  , (Path.create "t", File.create ["echo foo >> xx", "echo bar"])
   ]
 
 ----------------------------------------------------------------------
@@ -215,14 +218,14 @@ runSysI sys s env arg = case sys of
       Right (key,s) -> do
         Right $ \k -> do
           let fd = smallestUnused env
-          TraceLine (show ("Open",path,mode,fd)) $ do
+          --TraceLine (show ("Open",path,mode,fd)) $ do
           let env' = Map.insert fd (File key) env
           k s env' (Right fd)
 
   Sys_Close -> do
     let fd = arg
     Right $ \k -> do
-      TraceLine (show ("Close",fd)) $ do
+      --TraceLine (show ("Close",fd)) $ do
       let env' = Map.delete fd env
       let s' = case look "sim,Close" fd env of
             File key -> OsState.close s key
@@ -232,7 +235,7 @@ runSysI sys s env arg = case sys of
   Sys_Dup2 -> do
     let (fdDest,fdSrc) = arg
     Right $ \k -> do
-      TraceLine (show ("Dup2",fdDest,fdSrc)) $ do
+      --TraceLine (show ("Dup2",fdDest,fdSrc)) $ do
       let s' = case look "sim,Dup2,dest" fdDest env of
             File key -> OsState.close s key
             Console -> s

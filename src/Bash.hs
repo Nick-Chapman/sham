@@ -52,58 +52,62 @@ parseLine line = case words line of -- TODO: at some point I'll want a less hack
 data Script
   = Null
   | Echo2 String
-  | Source Path
   | Run Builtin [String] [Redirect]
   | Exec Path [Redirect]
+  | Source Path
 
 data Builtin = Echo | Cat | Rev | Ls
-
 
 data Redirect
   = Redirect OpenMode FD RedirectSource
 
 data RedirectSource
   = FromPath Path
---  | FromFD FD
+--  | FromFD FD -- TODO
 
 interpret :: Script -> Prog ()
 interpret = \case
   Null  -> pure ()
   Echo2 line -> write (FD 2) line -- TODO: use redirect
+  Run b args rs -> executeBuiltin rs b args
+  Exec path rs -> executePath rs path
   Source path -> sourceProg path
-  Run b args rs -> applyRedirects rs (builtinProg args b)
-  Exec path rs -> applyRedirects rs (execWait path)
 
 
-builtinProg :: [String] -> Builtin -> Prog ()
-builtinProg args = \case
-  Echo -> echoProg (unwords args)
-  Cat -> catProg args
-  Rev -> revProg -- ignores command line args
-  Ls -> lsProg -- ignores command line args
+executePath :: [Redirect] -> Path -> Prog ()
+executePath rs path = spawnWait (execRedirects rs (runBashScript path))
 
-applyRedirects :: [Redirect] -> Prog () -> Prog ()
-applyRedirects = \case
+executeBuiltin :: [Redirect] -> Builtin -> [String] -> Prog ()
+executeBuiltin rs b args = spawnWait (execRedirects rs (builtinProg args b))
+
+
+spawnWait :: Prog () -> Prog ()
+spawnWait prog = do
+  --SavingEnv prog
+  Spawn prog (\childPid -> Wait childPid)
+
+
+execRedirects :: [Redirect] -> Prog () -> Prog ()
+execRedirects = \case
   [] -> \prog -> prog
-  r:rs -> applyRedirect r . applyRedirects rs
+  r:rs -> execRedirect r . execRedirects rs
 
-applyRedirect :: Redirect -> Prog () -> Prog ()
-applyRedirect r prog =
+execRedirect :: Redirect -> Prog () -> Prog ()
+execRedirect r prog =
   case r of
     Redirect mode dFd (FromPath path) -> do
       withOpen path mode $ \sFd -> do
-        SavingEnv $ do
-          Dup2 dFd sFd
-          prog
+        -- no saving env here!!!
+        Dup2 dFd sFd
+        prog
 
-echoProg :: String -> Prog ()
-echoProg line = write (FD 1) line
 
-execWait :: Path -> Prog ()
-execWait path = do
+runBashScript :: Path -> Prog ()
+runBashScript path = do
   withOpen path OpenForReading $ \fd -> do
     -- would be better if open readAll was in the scope of withOpen
     -- but withOpen doesn't have the right type: it's restricted to ()
+    -- TODO: do it when withOpen is changed to use Exit
     lines <- readAll fd
     sequence_ [ interpret (parseLine line) | line <- lines ]
 
@@ -115,21 +119,15 @@ readAll fd = loop []
       Left EOF -> pure (reverse acc)
       Right line -> loop (line:acc)
 
-sourceProg :: Path -> Prog ()
-sourceProg path = do
-  withOpen path OpenForReading $ \fd -> do
-    let
-      loop :: Prog ()
-      loop = do
-        -- interleaves read and interpretation
-        read fd >>= \case
-          Left EOF -> pure ()
-          Right line -> do
-            let script = parseLine line
-            interpret script
-            loop
-    loop
+builtinProg :: [String] -> Builtin -> Prog ()
+builtinProg args = \case
+  Echo -> echoProg (unwords args)
+  Cat -> catProg args
+  Rev -> revProg -- ignores command line args
+  Ls -> lsProg -- ignores command line args
 
+echoProg :: String -> Prog ()
+echoProg line = write (FD 1) line
 
 catProg :: [String] -> Prog ()
 catProg args =
@@ -148,14 +146,6 @@ catProg1 path = do
             loop
     loop
 
--- TODO: use Exit for better type
-withOpen :: Path -> OpenMode -> (FD -> Prog ()) -> Prog ()
-withOpen path mode action =
-  Open path mode >>= \case
-    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
-    Right fd -> do
-      action fd
-      Close fd
 
 lsProg :: Prog ()
 lsProg = do
@@ -171,6 +161,33 @@ revProg = loop where
       Right line -> do
         write (FD 1) (reverse line)
         loop
+
+
+
+sourceProg :: Path -> Prog () -- TODO: kill this. almostthe same as runBashScript
+sourceProg path = do
+  withOpen path OpenForReading $ \fd -> do
+    let
+      loop :: Prog ()
+      loop = do
+        -- interleaves read and interpretation
+        read fd >>= \case
+          Left EOF -> pure ()
+          Right line -> do
+            let script = parseLine line
+            interpret script
+            loop
+    loop
+
+
+-- TODO: use Exit for better type
+withOpen :: Path -> OpenMode -> (FD -> Prog ()) -> Prog ()
+withOpen path mode action =
+  Open path mode >>= \case
+    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
+    Right fd -> do
+      action fd
+      Close fd
 
 read :: FD -> Prog (Either EOF String)
 read fd =
