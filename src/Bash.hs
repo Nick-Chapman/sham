@@ -23,6 +23,7 @@ parseLine :: String -> Script
 parseLine line = case words line of -- TODO: at some point I'll want a less hacky parser
   [] -> Null
   [".",s] -> Source (Path.create s)
+  ["exit"] -> Exit
   ["ls"] -> Run Ls [] []
   ["ls",">>",p] ->
     Run Ls [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
@@ -57,6 +58,7 @@ data Script
   | Run Builtin [String] [Redirect]
   | Exec Path [Redirect]
   | Source Path
+  | Exit
 
 data Builtin = Echo | Cat | Rev | Ls
 
@@ -74,6 +76,7 @@ interpret = \case
   Run b args rs -> executeBuiltin rs b args
   Exec path rs -> executePath rs path
   Source path -> runBashScript path
+  Exit -> Die
 
 
 executePath :: [Redirect] -> Path -> Prog ()

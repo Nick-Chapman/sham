@@ -1,6 +1,5 @@
 module Top where
 
-import Misc (EOF(..))
 import Os (Prog,Interaction(..))
 import qualified Os (sim)
 import qualified Bash (console)
@@ -23,7 +22,8 @@ runInteraction = loop where
       hFlush stdout
       line <- getLine
       --putStr $ "[read:" ++ line ++ "]"
-      let res = if line == "" then Left EOF else Right line -- hack for Ctr-D
+      --let res = if line == "" then Left EOF else Right line -- hack for Ctr-D
+      let res = Right line
       loop (f res)
 
     WriteLine line i -> do

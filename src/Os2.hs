@@ -27,8 +27,8 @@ data Prog a where
   Ret :: a -> Prog a
   Bind :: Prog a -> (a -> Prog b) -> Prog b
   Trace :: String -> Prog ()
-  --Exit :: Prog a
   Spawn :: Prog () -> (Pid -> Prog a) -> Prog a
+  Die :: Prog a
   Wait :: Pid -> Prog ()
   Call :: SysCall a b -> a -> Prog b -- TODO: use Call, in place of next 6
 
@@ -50,10 +50,10 @@ linearize p0 = case p0 of
   Ret a -> \k -> k a
   Bind p f -> \k ->linearize p $ \a -> linearize (f a) k
   Trace message -> \k -> A_Trace message (k ())
-  --Exit -> \_ignoredK -> A_Done
   Spawn child f -> \k -> do
     let action = linearize child $ \() -> A_Done
     A_Spawn action $ \pid -> linearize (f pid) k
+  Die -> \_ignoredK -> A_Done
   Wait pid -> \k -> A_Wait pid (k ())
   Call sys arg -> \k -> A_Call sys arg k
   Open path mode -> A_Call Sys_Open (path,mode)
@@ -103,10 +103,6 @@ resume me proc0@(Proc env action0) state@State{os} = case action0 of
         proceed $ \os env res -> do
           let action = f res
           yield me (Proc env action) state { os }
-
-  --A_SaveEnv f -> resume me (Proc env (f env)) state
-  --A_RestoreEnv env action -> resume me (Proc env action) state
-
 
 block :: Pid -> Proc -> State -> Interaction
 block = yield
