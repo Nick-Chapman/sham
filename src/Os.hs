@@ -1,1 +1,1 @@
-module Os (module Os1) where import Os1
+module Os (module X) where import Os2 as X

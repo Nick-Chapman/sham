@@ -35,6 +35,7 @@ parseLine line = case words line of -- TODO: at some point I'll want a less hack
   ["cat",p1] -> Run Cat [p1] []
   ["cat",p1,">>",p2] -> Run Cat [p1] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p2))]
 
+  ["rev"] -> Run Rev [] []
   ["rev", "<", p] -> Run Rev [] [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
   ["rev", ">>", p] -> Run Rev [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
   ["rev","<",p1,">>",p2] ->
@@ -147,6 +148,7 @@ catProg1 path = do
             loop
     loop
 
+-- TODO: use Exit for better type
 withOpen :: Path -> OpenMode -> (FD -> Prog ()) -> Prog ()
 withOpen path mode action =
   Open path mode >>= \case

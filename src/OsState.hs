@@ -24,7 +24,7 @@ import qualified FileSystem (ls,read,link)
 import qualified PipeSystem (empty,createPipe,readPipe,writePipe,closeForReading,closeForWriting)
 
 
-data State = State
+data State = State -- TODO: rename OsState
   { fs :: FileSystem
   , pipeSystem :: PipeSystem
   , table :: FileTable
