@@ -1,7 +1,8 @@
 module Top where
 
 import FileSystem (fs0)
-import Os (Prog,Interaction(..))
+import Interaction (Interaction(..))
+import Os (Prog)
 import System.IO (hFlush,stdout)
 import qualified Bash (console)
 import qualified Os (sim)
@@ -19,18 +20,18 @@ runInteraction = loop where
   loop :: Interaction -> IO ()
   loop = \case
 
-    ReadLine f -> do
+    I_Read f -> do
       putStr $ "> "
       hFlush stdout
       line <- getLine
       let res = Right line
       loop (f res)
 
-    WriteLine line i -> do
+    I_Write line i -> do
       putStrLn line
       loop i
-    TraceLine s i -> do
+    I_Trace s i -> do
       putStrLn $ "*trace[" ++ s ++ "]*"
       loop i
-    Halt -> do
+    I_Halt -> do
       putStrLn "*halt*"

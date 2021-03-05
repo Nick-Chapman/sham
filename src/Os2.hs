@@ -4,7 +4,6 @@ module Os2 ( -- with support for co-operatove threading!
   SysCall(..),
   OpenMode(..),NoSuchPath(..),FD(..),
   sim,
-  Interaction(..)
   ) where
 
 import Control.Monad (ap,liftM)
@@ -13,6 +12,7 @@ import FileSystem (FileSystem,NoSuchPath(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import OsState (OsState,OpenMode(..))
 import Path (Path)
+import Interaction (Interaction(..))
 import qualified Data.Map.Strict as Map
 import qualified OsState (init,ls,open,Key,close,dup,read,write)
 
@@ -31,7 +31,7 @@ data Prog a where
 
 sim :: FileSystem -> Prog () -> Interaction
 sim fs prog = do
-  let action = linearize prog (\() -> A_Done)
+  let action = linearize prog (\() -> A_Halt)
   let (state,pid) = newPid (initState fs)
   resume pid (Proc env0 action) state
 
@@ -39,16 +39,16 @@ linearize :: Prog a -> (a -> Action) -> Action
 linearize p0 = case p0 of
   Ret a -> \k -> k a
   Bind p f -> \k ->linearize p $ \a -> linearize (f a) k
-  Exit -> \_ignoredK -> A_Done
+  Exit -> \_ignoredK -> A_Halt
   Trace message -> \k -> A_Trace message (k ())
   Spawn child f -> \k -> do
-    let action = linearize child $ \() -> A_Done
+    let action = linearize child $ \() -> A_Halt
     A_Spawn action $ \pid -> linearize (f pid) k
   Wait pid -> \k -> A_Wait pid (k ())
   Call sys arg -> \k -> A_Call sys arg k
 
 data Action where
-  A_Done :: Action
+  A_Halt :: Action
   A_Trace :: String -> Action -> Action
   A_Spawn :: Action -> (Pid -> Action) -> Action
   A_Wait :: Pid -> Action -> Action
@@ -59,14 +59,14 @@ data Action where
 resume :: Pid -> Proc -> State -> Interaction
 resume me proc0@(Proc env action0) state@State{os} = case action0 of
 
-  A_Done -> do
+  A_Halt -> do
     case choose state of
-      Nothing -> Halt
+      Nothing -> I_Halt
       Just (state,other,proc2) ->
         resume other proc2 state
 
   A_Trace message action ->
-    TraceLine message (resume me (Proc env action) state)
+    I_Trace message (resume me (Proc env action) state)
 
   A_Spawn action f -> do
     -- TODO: dup all file-descriptors in env
@@ -97,7 +97,7 @@ yield me proc1 state = do
     Nothing ->
       resume me proc1 state -- nothing else to do, so continue
     Just (state,other,proc2) ->
-      --TraceLine (show ("yield",me,other)) $ do
+      --I_Trace (show ("yield",me,other)) $ do
       resume other proc2 (suspend me proc1 state)
 
 ----------------------------------------------------------------------
@@ -170,14 +170,14 @@ runSysI sys s env arg = case sys of
       Right (key,s) -> do
         Right $ \k -> do
           let fd = smallestUnused env
-          --TraceLine (show ("Open",path,mode,fd)) $ do
+          --I_Trace (show ("Open",path,mode,fd)) $ do
           let env' = Map.insert fd (File key) env
           k s env' (Right fd)
 
   Close -> do
     let fd = arg
     Right $ \k -> do
-      --TraceLine (show ("Close",fd)) $ do
+      --I_Trace (show ("Close",fd)) $ do
       let env' = Map.delete fd env
       let s' = case look "sim,Close" fd env of
             File key -> OsState.close s key
@@ -187,7 +187,7 @@ runSysI sys s env arg = case sys of
   Dup2 -> do
     let (fdDest,fdSrc) = arg
     Right $ \k -> do
-      --TraceLine (show ("Dup2",fdDest,fdSrc)) $ do
+      --I_Trace (show ("Dup2",fdDest,fdSrc)) $ do
       let s' = case look "sim,Dup2,dest" fdDest env of
             File key -> OsState.close s key
             Console -> s
@@ -213,7 +213,7 @@ runSysI sys s env arg = case sys of
               k s env (Right dat)
       Console -> do
         Right $ \k -> do
-          ReadLine $ \case -- TODO: share alts
+          I_Read $ \case -- TODO: share alts
             Left EOF ->
               k s env (Right (Left EOF))
             Right line ->
@@ -238,7 +238,7 @@ runSysI sys s env arg = case sys of
               k s env (Right (Right ()))
       Console -> do
         Right $ \k ->
-          WriteLine line (k s env (Right (Right ())))
+          I_Write line (k s env (Right (Right ())))
 
   Paths{} -> do
     Right $ \k -> do
@@ -267,12 +267,3 @@ smallestUnused env = head [ fd | fd <- [FD 0..], fd `notElem` used ]
 -- helper for map lookup
 look :: (Show k, Ord k) => String -> k -> Map k b -> b
 look tag k env = maybe (error (show ("look/error",tag,k))) id (Map.lookup k env)
-
-----------------------------------------------------------------------
--- TODO: sep file
-
-data Interaction where
-  ReadLine :: (Either EOF String -> Interaction) -> Interaction
-  WriteLine :: String -> Interaction -> Interaction
-  TraceLine :: String -> Interaction -> Interaction
-  Halt :: Interaction
