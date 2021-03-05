@@ -37,10 +37,7 @@ data Prog a where
   Dup2 :: FD -> FD -> Prog ()
   Read :: FD -> Prog (Either NotReadable (Either EOF String))
   Write :: FD -> String -> Prog (Either NotWritable (Either EPIPE ()))
-  ListPaths :: Prog [Path] -- TODO: rename Paths
-
-  --SavingEnv :: Prog a -> Prog a -- TODO: kill when switch to use Spawn
-
+  Paths :: Prog [Path]
 
 sim :: Prog () -> Interaction
 sim prog = do
@@ -64,12 +61,7 @@ linearize p0 = case p0 of
   Dup2 fd1 fd2 -> A_Call Sys_Dup2 (fd1,fd2)
   Read fd -> A_Call Sys_Read fd
   Write fd line -> A_Call Sys_Write (fd,line)
-  ListPaths -> A_Call Sys_Paths ()
-
-  {-SavingEnv prog -> \k -> do
-    A_SaveEnv $ \env -> do
-      linearize prog $ \a ->
-        A_RestoreEnv env (k a)-}
+  Paths -> A_Call Sys_Paths ()
 
 data Action where
   A_Done :: Action
@@ -77,10 +69,6 @@ data Action where
   A_Spawn :: Action -> (Pid -> Action) -> Action
   A_Wait :: Pid -> Action -> Action
   A_Call :: SysCall a b -> a -> (b -> Action) -> Action
-
-  -- TEMP until we move to Spawn/Wait
-  {-A_SaveEnv :: (Env -> Action) -> Action
-  A_RestoreEnv :: Env -> Action -> Action-}
 
 ----------------------------------------------------------------------
 

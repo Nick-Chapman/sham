@@ -23,29 +23,31 @@ parseLine :: String -> Script
 parseLine line = case words line of -- TODO: at some point I'll want a less hacky parser
   [] -> Null
   [".",s] -> Source (Path.create s)
-
   ["ls"] -> Run Ls [] []
-  ["ls",">>",p] -> Run Ls [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
-
+  ["ls",">>",p] ->
+    Run Ls [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
   ["echo",s] -> Run Echo [s] []
   ["echo",s1,s2] -> Run Echo [s1,s2] []
-  ["echo",s,">>",p] -> Run Echo [s] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
-  ["echo",s1,s2,">>",p] -> Run Echo [s1,s2] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
-
+  ["echo",s,">>",p] ->
+    Run Echo [s] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+  ["echo",s1,s2,">>",p] ->
+    Run Echo [s1,s2] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
   ["cat",p1] -> Run Cat [p1] []
-  ["cat",p1,">>",p2] -> Run Cat [p1] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p2))]
-
+  ["cat",p1,">>",p2] ->
+    Run Cat [p1] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p2))]
   ["rev"] -> Run Rev [] []
-  ["rev", "<", p] -> Run Rev [] [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
-  ["rev", ">>", p] -> Run Rev [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+  ["rev", "<", p] ->
+    Run Rev [] [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
+  ["rev", ">>", p] ->
+    Run Rev [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
   ["rev","<",p1,">>",p2] ->
     Run Rev [] [ Redirect OpenForReading (FD 0) (FromPath (Path.create p1))
                , Redirect OpenForAppending (FD 1) (FromPath (Path.create p2)) ]
-
   [s] -> Exec (Path.create s) []
-  [s, "<", p] -> Exec (Path.create s) [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
-  [s, ">>", p] -> Exec (Path.create s) [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
-
+  [s, "<", p] ->
+    Exec (Path.create s) [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
+  [s, ">>", p] ->
+    Exec (Path.create s) [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
   xs ->
     Echo2 ("bash, unable to parse: " ++ show xs)
 
@@ -71,7 +73,7 @@ interpret = \case
   Echo2 line -> write (FD 2) line -- TODO: use redirect
   Run b args rs -> executeBuiltin rs b args
   Exec path rs -> executePath rs path
-  Source path -> sourceProg path
+  Source path -> runBashScript path
 
 
 executePath :: [Redirect] -> Path -> Prog ()
@@ -146,10 +148,9 @@ catProg1 path = do
             loop
     loop
 
-
 lsProg :: Prog ()
 lsProg = do
-  paths <- ListPaths
+  paths <- Paths
   mapM_ (write (FD 1) . Path.toString) (sort paths)
 
 revProg :: Prog ()
@@ -161,24 +162,6 @@ revProg = loop where
       Right line -> do
         write (FD 1) (reverse line)
         loop
-
-
-
-sourceProg :: Path -> Prog () -- TODO: kill this. almostthe same as runBashScript
-sourceProg path = do
-  withOpen path OpenForReading $ \fd -> do
-    let
-      loop :: Prog ()
-      loop = do
-        -- interleaves read and interpretation
-        read fd >>= \case
-          Left EOF -> pure ()
-          Right line -> do
-            let script = parseLine line
-            interpret script
-            loop
-    loop
-
 
 -- TODO: use Exit for better type
 withOpen :: Path -> OpenMode -> (FD -> Prog ()) -> Prog ()
