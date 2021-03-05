@@ -1,8 +1,8 @@
 
 module Os2 ( -- with support for co-operatove threading!
-  FD(..),
   Prog(..),
-  OpenMode(..),NoSuchPath(..),
+  SysCall(..),
+  OpenMode(..),NoSuchPath(..),FD(..),
   sim,
   Interaction(..)
   ) where
@@ -30,14 +30,7 @@ data Prog a where
   Trace :: String -> Prog ()
   Spawn :: Prog () -> (Pid -> Prog a) -> Prog a
   Wait :: Pid -> Prog ()
-  Call :: SysCall a b -> a -> Prog b -- TODO: use Call, in place of next 6
-
-  Open :: Path -> OpenMode -> Prog (Either NoSuchPath FD)
-  Close :: FD -> Prog ()
-  Dup2 :: FD -> FD -> Prog ()
-  Read :: FD -> Prog (Either NotReadable (Either EOF String))
-  Write :: FD -> String -> Prog (Either NotWritable (Either EPIPE ()))
-  Paths :: Prog [Path]
+  Call :: SysCall a b -> a -> Prog b
 
 sim :: Prog () -> Interaction
 sim prog = do
@@ -56,12 +49,6 @@ linearize p0 = case p0 of
     A_Spawn action $ \pid -> linearize (f pid) k
   Wait pid -> \k -> A_Wait pid (k ())
   Call sys arg -> \k -> A_Call sys arg k
-  Open path mode -> A_Call Sys_Open (path,mode)
-  Close fd -> A_Call Sys_Close fd
-  Dup2 fd1 fd2 -> A_Call Sys_Dup2 (fd1,fd2)
-  Read fd -> A_Call Sys_Read fd
-  Write fd line -> A_Call Sys_Write (fd,line)
-  Paths -> A_Call Sys_Paths ()
 
 data Action where
   A_Done :: Action
@@ -179,12 +166,12 @@ fs0 = FileSystem.create
 -- TODO: sep file
 
 data SysCall a b where
-  Sys_Open :: SysCall (Path,OpenMode) (Either NoSuchPath FD)
-  Sys_Close :: SysCall FD ()
-  Sys_Dup2 :: SysCall (FD,FD) ()
-  Sys_Read :: SysCall FD (Either NotReadable (Either EOF String))
-  Sys_Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
-  Sys_Paths :: SysCall () [Path]
+  Open :: SysCall (Path,OpenMode) (Either NoSuchPath FD)
+  Close :: SysCall FD ()
+  Dup2 :: SysCall (FD,FD) ()
+  Read :: SysCall FD (Either NotReadable (Either EOF String))
+  Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
+  Paths :: SysCall () [Path]
 
 runSysI :: SysCall a b ->
   OsState -> Env -> a ->
@@ -192,7 +179,7 @@ runSysI :: SysCall a b ->
 
 runSysI sys s env arg = case sys of
 
-  Sys_Open -> do
+  Open -> do
     let (path,mode) = arg
     case OsState.open s path mode of
       Left NoSuchPath -> do
@@ -205,7 +192,7 @@ runSysI sys s env arg = case sys of
           let env' = Map.insert fd (File key) env
           k s env' (Right fd)
 
-  Sys_Close -> do
+  Close -> do
     let fd = arg
     Right $ \k -> do
       --TraceLine (show ("Close",fd)) $ do
@@ -215,7 +202,7 @@ runSysI sys s env arg = case sys of
             Console -> s
       k s' env' ()
 
-  Sys_Dup2 -> do
+  Dup2 -> do
     let (fdDest,fdSrc) = arg
     Right $ \k -> do
       --TraceLine (show ("Dup2",fdDest,fdSrc)) $ do
@@ -229,7 +216,7 @@ runSysI sys s env arg = case sys of
       let env' = Map.insert fdDest target env
       k s'' env' ()
 
-  Sys_Read -> do
+  Read -> do
     let fd = arg
     case look "sim,Read" fd env of
       File key -> do
@@ -250,7 +237,7 @@ runSysI sys s env arg = case sys of
             Right line ->
               k s env (Right (Right line))
 
-  Sys_Write -> do
+  Write -> do
     let (fd,line) = arg
     case look "sim,Write" fd env of
       File key -> do
@@ -271,7 +258,7 @@ runSysI sys s env arg = case sys of
         Right $ \k ->
           WriteLine line (k s env (Right (Right ())))
 
-  Sys_Paths{} -> do
+  Paths{} -> do
     Right $ \k -> do
       let paths = OsState.ls s
       k s env paths
@@ -307,4 +294,3 @@ data Interaction where
   WriteLine :: String -> Interaction -> Interaction
   TraceLine :: String -> Interaction -> Interaction
   Halt :: Interaction
-

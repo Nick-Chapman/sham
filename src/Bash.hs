@@ -3,7 +3,7 @@ module Bash (console) where
 
 import Data.List (sort)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import Os (FD(..),Prog(..),OpenMode(..),NoSuchPath(..))
+import Os (Prog(..),SysCall(..),OpenMode(..),NoSuchPath(..),FD(..))
 import Path (Path)
 import Prelude hiding (read)
 import qualified Path (create,toString)
@@ -44,6 +44,7 @@ parseLine line = case words line of -- TODO: at some point I'll want a less hack
   ["rev","<",p1,">>",p2] ->
     Run Rev [] [ Redirect OpenForReading (FD 0) (FromPath (Path.create p1))
                , Redirect OpenForAppending (FD 1) (FromPath (Path.create p2)) ]
+  -- TODO: support command line args in scripts
   [s] -> Exec (Path.create s) []
   [s, "<", p] ->
     Exec (Path.create s) [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
@@ -78,19 +79,14 @@ interpret = \case
   Source path -> runBashScript path
   BashExit -> Exit
 
-
 executePath :: [Redirect] -> Path -> Prog ()
 executePath rs path = spawnWait (execRedirects rs (runBashScript path))
 
 executeBuiltin :: [Redirect] -> Builtin -> [String] -> Prog ()
 executeBuiltin rs b args = spawnWait (execRedirects rs (builtinProg args b))
 
-
 spawnWait :: Prog () -> Prog ()
-spawnWait prog = do
-  --SavingEnv prog
-  Spawn prog (\childPid -> Wait childPid)
-
+spawnWait prog = do Spawn prog (\childPid -> Wait childPid)
 
 execRedirects :: [Redirect] -> Prog () -> Prog ()
 execRedirects = \case
@@ -102,7 +98,7 @@ execRedirect r prog =
   case r of
     Redirect mode dFd (FromPath path) -> do
       withOpen path mode $ \sFd -> do
-        Dup2 dFd sFd
+        Call Dup2 (dFd,sFd)
         prog
 
 runBashScript :: Path -> Prog ()
@@ -149,7 +145,7 @@ catProg1 path = do
 
 lsProg :: Prog ()
 lsProg = do
-  paths <- Paths
+  paths <- Call Paths ()
   mapM_ (write (FD 1) . Path.toString) (sort paths)
 
 revProg :: Prog ()
@@ -164,18 +160,18 @@ revProg = loop where
 
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
-  Open path mode >>= \case
+  Call Open (path,mode) >>= \case
     Left NoSuchPath -> do
       err2 $ "no such path: " ++ Path.toString path
       Exit
     Right fd -> do
       res <- action fd
-      Close fd
+      Call Close fd
       pure res
 
 read :: FD -> Prog (Either EOF String)
 read fd =
-  Read fd >>= \case
+  Call Read fd >>= \case
     Left NotReadable -> do
       err2 "fd0 not readable"
       pure (Left EOF) -- TODO: better to exit?
@@ -184,14 +180,14 @@ read fd =
 
 write :: FD -> String -> Prog ()
 write fd line = do
-  Write fd line >>= \case
+  Call Write (fd,line) >>= \case
     Left NotWritable -> err2 "fd1 not writable"
     Right (Left EPIPE) -> err2 "EPIPE when writing to fd1"
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()
 err2 line = do
-  Write (FD 2) line >>= \case
+  Call Write (FD 2, line) >>= \case
     Left NotWritable -> Trace "fd2 not writable"
     Right (Left EPIPE) -> Trace "EPIPE when writing to fd2"
     Right (Right ()) -> pure ()
