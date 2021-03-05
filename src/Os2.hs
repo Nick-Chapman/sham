@@ -11,12 +11,12 @@ import Control.Monad (ap,liftM)
 import Data.Map (Map)
 import FileSystem (FileSystem,NoSuchPath(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import OsState (OpenMode(..))
+import OsState (OsState,OpenMode(..))
 import Path (Path)
 import qualified Data.Map.Strict as Map
 import qualified File (create)
 import qualified FileSystem (create)
-import qualified OsState (State,init,ls,open,Key,close,dup,read,write)
+import qualified OsState (init,ls,open,Key,close,dup,read,write)
 import qualified Path (create)
 
 instance Functor Prog where fmap = liftM
@@ -148,8 +148,6 @@ choose s@State{waiting,suspended} =
           Nothing
 
 ----------------------------------------------------------------------
-
-type OsState = OsState.State
 
 os0 :: OsState
 os0 = OsState.init fs0
