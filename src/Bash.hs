@@ -23,7 +23,7 @@ parseLine :: String -> Script
 parseLine line = case words line of -- TODO: at some point I'll want a less hacky parser
   [] -> Null
   [".",s] -> Source (Path.create s)
-  ["exit"] -> Exit
+  ["exit"] -> BashExit
   ["ls"] -> Run Ls [] []
   ["ls",">>",p] ->
     Run Ls [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
@@ -58,7 +58,7 @@ data Script
   | Run Builtin [String] [Redirect]
   | Exec Path [Redirect]
   | Source Path
-  | Exit
+  | BashExit
 
 data Builtin = Echo | Cat | Rev | Ls
 
@@ -76,7 +76,7 @@ interpret = \case
   Run b args rs -> executeBuiltin rs b args
   Exec path rs -> executePath rs path
   Source path -> runBashScript path
-  Exit -> Die
+  BashExit -> Exit
 
 
 executePath :: [Redirect] -> Path -> Prog ()
@@ -102,19 +102,15 @@ execRedirect r prog =
   case r of
     Redirect mode dFd (FromPath path) -> do
       withOpen path mode $ \sFd -> do
-        -- no saving env here!!!
         Dup2 dFd sFd
         prog
 
-
 runBashScript :: Path -> Prog ()
 runBashScript path = do
-  withOpen path OpenForReading $ \fd -> do
-    -- would be better if open readAll was in the scope of withOpen
-    -- but withOpen doesn't have the right type: it's restricted to ()
-    -- TODO: do it when withOpen is changed to use Exit
-    lines <- readAll fd
-    sequence_ [ interpret (parseLine line) | line <- lines ]
+  lines <- do
+    withOpen path OpenForReading $ \fd -> do
+      readAll fd
+  sequence_ [ interpret (parseLine line) | line <- lines ]
 
 readAll :: FD -> Prog [String]
 readAll fd = loop []
@@ -166,14 +162,16 @@ revProg = loop where
         write (FD 1) (reverse line)
         loop
 
--- TODO: use Exit for better type
-withOpen :: Path -> OpenMode -> (FD -> Prog ()) -> Prog ()
+withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
   Open path mode >>= \case
-    Left NoSuchPath -> err2 $ "no such path: " ++ Path.toString path
+    Left NoSuchPath -> do
+      err2 $ "no such path: " ++ Path.toString path
+      Exit
     Right fd -> do
-      action fd
+      res <- action fd
       Close fd
+      pure res
 
 read :: FD -> Prog (Either EOF String)
 read fd =

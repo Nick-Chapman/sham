@@ -26,9 +26,9 @@ instance Monad Prog where return = Ret; (>>=) = Bind
 data Prog a where
   Ret :: a -> Prog a
   Bind :: Prog a -> (a -> Prog b) -> Prog b
+  Exit :: Prog a
   Trace :: String -> Prog ()
   Spawn :: Prog () -> (Pid -> Prog a) -> Prog a
-  Die :: Prog a
   Wait :: Pid -> Prog ()
   Call :: SysCall a b -> a -> Prog b -- TODO: use Call, in place of next 6
 
@@ -49,11 +49,11 @@ linearize :: Prog a -> (a -> Action) -> Action
 linearize p0 = case p0 of
   Ret a -> \k -> k a
   Bind p f -> \k ->linearize p $ \a -> linearize (f a) k
+  Exit -> \_ignoredK -> A_Done
   Trace message -> \k -> A_Trace message (k ())
   Spawn child f -> \k -> do
     let action = linearize child $ \() -> A_Done
     A_Spawn action $ \pid -> linearize (f pid) k
-  Die -> \_ignoredK -> A_Done
   Wait pid -> \k -> A_Wait pid (k ())
   Call sys arg -> \k -> A_Call sys arg k
   Open path mode -> A_Call Sys_Open (path,mode)
@@ -111,7 +111,6 @@ yield :: Pid -> Proc -> State -> Interaction
 yield me proc1 state = do
   case choose state of
     Nothing ->
-      --TraceLine (show ("yield",me)) $ do
       resume me proc1 state -- nothing else to do, so continue
     Just (state,other,proc2) ->
       --TraceLine (show ("yield",me,other)) $ do
