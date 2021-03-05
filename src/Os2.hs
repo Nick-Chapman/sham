@@ -14,10 +14,7 @@ import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import OsState (OsState,OpenMode(..))
 import Path (Path)
 import qualified Data.Map.Strict as Map
-import qualified File (create)
-import qualified FileSystem (create)
 import qualified OsState (init,ls,open,Key,close,dup,read,write)
-import qualified Path (create)
 
 instance Functor Prog where fmap = liftM
 instance Applicative Prog where pure = return; (<*>) = ap
@@ -32,10 +29,10 @@ data Prog a where
   Wait :: Pid -> Prog ()
   Call :: SysCall a b -> a -> Prog b
 
-sim :: Prog () -> Interaction
-sim prog = do
+sim :: FileSystem -> Prog () -> Interaction
+sim fs prog = do
   let action = linearize prog (\() -> A_Done)
-  let (state,pid) = newPid state0
+  let (state,pid) = newPid (initState fs)
   resume pid (Proc env0 action) state
 
 linearize :: Prog a -> (a -> Action) -> Action
@@ -116,9 +113,9 @@ data State = State
   , suspended :: Map Pid Proc
   }
 
-state0 :: State
-state0 = State
-  { os = os0
+initState :: FileSystem -> State
+initState fs = State
+  { os = OsState.init fs
   , nextPid = 1000
   , waiting = Map.empty
   , suspended = Map.empty
@@ -146,19 +143,6 @@ choose s@State{waiting,suspended} =
           Just (s { waiting = suspended, suspended = Map.empty }, pid1, proc1)
         Nothing ->
           Nothing
-
-----------------------------------------------------------------------
-
-os0 :: OsState
-os0 = OsState.init fs0
-
--- TODO: move to sep file
-fs0 :: FileSystem
-fs0 = FileSystem.create
-  [ (Path.create "words", File.create ["one","two","three"])
-  , (Path.create "test", File.create ["rev < words >> rw", "cat rw"])
-  , (Path.create "t", File.create ["echo foo >> xx", "echo bar"])
-  ]
 
 ----------------------------------------------------------------------
 -- TODO: sep file
