@@ -16,7 +16,7 @@ import qualified Data.Map.Strict as Map
 import qualified Path (create)
 import qualified File (create)
 
-data NoSuchPath = NoSuchPath
+data NoSuchPath = NoSuchPath deriving Show
 
 create :: [(Path,File)] -> FileSystem
 ls :: FileSystem -> [Path]
@@ -37,5 +37,7 @@ fs0 :: FileSystem
 fs0 = FileSystem.create
   [ (Path.create "words", File.create ["one","two","three"])
   , (Path.create "test", File.create ["rev < words >> rw", "cat rw"])
-  , (Path.create "t", File.create ["echo foo >> xx", "echo bar"])
+  , (Path.create "oe", File.create ["this is wrong", "echo to-out", "echo to-err 1>>&2"])
+  , (Path.create "t1", File.create ["oe >> xx"])
+  , (Path.create "t2", File.create ["oe 2>> yy"])
   ]

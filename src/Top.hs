@@ -15,6 +15,7 @@ main = do
 prog :: Prog ()
 prog = Bash.console
 
+-- TODO: use haskeline so get a nice console, with history!
 runInteraction :: Interaction -> IO ()
 runInteraction = loop where
   loop :: Interaction -> IO ()

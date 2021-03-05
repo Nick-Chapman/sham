@@ -22,6 +22,15 @@ data SysCall a b where
   Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
   Paths :: SysCall () [Path]
 
+instance Show (SysCall a b) where -- TODO: automate?
+  show = \case
+    Open -> "Open"
+    Close -> "Close"
+    Dup2 -> "Dup2"
+    Read -> "Read"
+    Write -> "Write"
+    Paths -> "Paths"
+
 runSys :: SysCall a b ->
   OsState -> Env -> a ->
   Either Block ((OsState -> Env -> b -> Interaction) -> Interaction)
@@ -37,31 +46,28 @@ runSys sys s env arg = case sys of
       Right (key,s) -> do
         Right $ \k -> do
           let fd = smallestUnused env
-          --I_Trace (show ("Open",path,mode,fd)) $ do
           let env' = Map.insert fd (File key) env
           k s env' (Right fd)
 
   Close -> do
     let fd = arg
     Right $ \k -> do
-      --I_Trace (show ("Close",fd)) $ do
       let env' = Map.delete fd env
       let s' = case look "sim,Close" fd env of
             File key -> OsState.close s key
-            Console -> s
+            Console{} -> s
       k s' env' ()
 
   Dup2 -> do
     let (fdDest,fdSrc) = arg
     Right $ \k -> do
-      --I_Trace (show ("Dup2",fdDest,fdSrc)) $ do
       let s' = case look "sim,Dup2,dest" fdDest env of
             File key -> OsState.close s key
-            Console -> s
+            Console{} -> s
       let target = look "sim,Dup2,src" fdSrc env
       let s'' = case target of
             File key -> OsState.dup s' key
-            Console -> s'
+            Console{}-> s'
       let env' = Map.insert fdDest target env
       k s'' env' ()
 
@@ -78,7 +84,7 @@ runSys sys s env arg = case sys of
           Right (Right (dat,s)) -> do
             Right $ \k ->
               k s env (Right dat)
-      Console -> do
+      Console{} -> do
         Right $ \k -> do
           I_Read $ \case -- TODO: share alts
             Left EOF ->
@@ -103,9 +109,10 @@ runSys sys s env arg = case sys of
           Right (Right (Right s)) -> do
             Right $ \k ->
               k s env (Right (Right ()))
-      Console -> do
+      Console consoleMode -> do
         Right $ \k ->
-          I_Write line (k s env (Right (Right ())))
+          I_Write (tag++line) (k s env (Right (Right ())))
+            where tag = case consoleMode of Normal -> ""; StdErr -> "(stderr) "
 
   Paths{} -> do
     Right $ \k -> do
@@ -115,12 +122,15 @@ runSys sys s env arg = case sys of
 type Env = Map FD Target -- per process state, currently just FD map
 
 data Target
-  = Console
+  = Console ConsoleMode
   | File OsState.Key
   deriving Show
 
+data ConsoleMode = Normal | StdErr
+  deriving Show
+
 env0 :: Env
-env0 = Map.fromList [ (FD n, Console) | n <- [0,1,2] ]
+env0 = Map.fromList [ (FD n, Console m) | (n,m) <- [(0,Normal),(1,Normal),(2,StdErr)] ]
 
 newtype FD = FD Int
   deriving (Eq,Ord,Enum,Show)

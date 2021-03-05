@@ -7,7 +7,7 @@ module Misc (
   ) where
 
 data Block = Block
-data EOF = EOF
-data EPIPE = EPIPE
-data NotReadable = NotReadable
-data NotWritable = NotWritable
+data EOF = EOF deriving Show
+data EPIPE = EPIPE deriving Show
+data NotReadable = NotReadable deriving Show
+data NotWritable = NotWritable deriving Show

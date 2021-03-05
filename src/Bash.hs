@@ -19,20 +19,26 @@ console = loop where
         interpret (parseLine line)
         loop
 
+-- TODO: at some point I'll want a less proper parser
+-- but even before then, lets avoid the nee to duplicate all the cases!
 parseLine :: String -> Script
-parseLine line = case words line of -- TODO: at some point I'll want a less hacky parser
+parseLine line = case words line of
   [] -> Null
   [".",s] -> Source (Path.create s)
   ["exit"] -> BashExit
   ["ls"] -> Run Ls [] []
+  -- TODO: support '>' as 'rm/>>'
   ["ls",">>",p] ->
     Run Ls [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
   ["echo",s] -> Run Echo [s] []
+  ["echo",s,"1>>&2"] ->
+    Run Echo [s] [Redirect OpenForAppending (FD 1) (FromFD (FD 2))]
   ["echo",s1,s2] -> Run Echo [s1,s2] []
   ["echo",s,">>",p] ->
     Run Echo [s] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
   ["echo",s1,s2,">>",p] ->
     Run Echo [s1,s2] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+
   ["cat",p1] -> Run Cat [p1] []
   ["cat",p1,">>",p2] ->
     Run Cat [p1] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p2))]
@@ -50,6 +56,8 @@ parseLine line = case words line of -- TODO: at some point I'll want a less hack
     Exec (Path.create s) [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
   [s, ">>", p] ->
     Exec (Path.create s) [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+  [s, "2>>", p] ->
+    Exec (Path.create s) [Redirect OpenForAppending (FD 2) (FromPath (Path.create p))]
   xs ->
     Echo2 ("bash, unable to parse: " ++ show xs)
 
@@ -68,7 +76,7 @@ data Redirect
 
 data RedirectSource
   = FromPath Path
---  | FromFD FD -- TODO
+  | FromFD FD
 
 interpret :: Script -> Prog ()
 interpret = \case
@@ -94,12 +102,15 @@ execRedirects = \case
   r:rs -> execRedirect r . execRedirects rs
 
 execRedirect :: Redirect -> Prog () -> Prog ()
-execRedirect r prog =
+execRedirect r prog = -- TODO: doesn't need to take prog..
   case r of
     Redirect mode dFd (FromPath path) -> do
       withOpen path mode $ \sFd -> do
         Call Dup2 (dFd,sFd)
         prog
+    Redirect _mode dFd (FromFD sFd) -> do -- do we care what the mode is?
+      Call Dup2 (dFd,sFd)
+      prog -- ..very easy to forget & cause a bug hunt!
 
 runBashScript :: Path -> Prog ()
 runBashScript path = do

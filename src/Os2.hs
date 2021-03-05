@@ -27,7 +27,7 @@ data Prog a where
   Trace :: String -> Prog ()
   Spawn :: Prog () -> (Pid -> Prog a) -> Prog a
   Wait :: Pid -> Prog ()
-  Call :: SysCall a b -> a -> Prog b
+  Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
 
 sim :: FileSystem -> Prog () -> Interaction
 sim fs prog = do
@@ -52,7 +52,7 @@ data Action where
   A_Trace :: String -> Action -> Action
   A_Spawn :: Action -> (Pid -> Action) -> Action
   A_Wait :: Pid -> Action -> Action
-  A_Call :: SysCall a b -> a -> (b -> Action) -> Action
+  A_Call :: (Show a, Show b) => SysCall a b -> a -> (b -> Action) -> Action
 
 ----------------------------------------------------------------------
 
@@ -81,10 +81,14 @@ resume me proc0@(Proc env action0) state@State{os} = case action0 of
     else yield me (Proc env action) state
 
   A_Call sys arg f -> do
+    --I_Trace (show ("Call",sys,arg)) $ do
     case runSys sys os env arg of
-      Left Block -> block me proc0 state
+      Left Block ->
+        --I_Trace (show ("Call/blocked",sys,arg)) $ do
+        block me proc0 state
       Right proceed -> do
         proceed $ \os env res -> do
+          --I_Trace (show ("Call/proceed",sys,arg,res)) $ do
           let action = f res
           yield me (Proc env action) state { os }
 
