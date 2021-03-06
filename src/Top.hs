@@ -6,10 +6,12 @@ import Os (Prog)
 import System.IO (hFlush,stdout)
 import qualified Bash (console)
 import qualified Os (sim)
+import qualified Tests (run)
 
 main :: IO ()
 main = do
   putStrLn "*bash-sim*"
+  Tests.run
   runInteraction (Os.sim fs0 prog)
 
 prog :: Prog ()

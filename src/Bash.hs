@@ -13,7 +13,7 @@ console :: Prog ()
 console = loop where
   loop :: Prog ()
   loop = do
-    write (FD 1) "prompt $"
+    --write (FD 1) "prompt $"
     read (FD 0) >>= \case
       Left EOF -> pure ()
       Right line -> do
