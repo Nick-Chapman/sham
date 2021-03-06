@@ -74,6 +74,12 @@ parseAsRedirect = \case
   "1>>&2":xs -> Just (Redirect ap (FD 1) (dup 2), xs)
   "2>>&1":xs -> Just (Redirect ap (FD 2) (dup 1), xs)
 
+  -- provoke unusual conditions
+  "0>":p:xs -> Just (Redirect wr (FD 0) (path p), xs)
+  ">&0":xs -> Just (Redirect wr (FD 1) (dup 0), xs)
+  "1>&0":xs -> Just (Redirect wr (FD 1) (dup 0), xs)
+  "2>&0":xs -> Just (Redirect wr (FD 2) (dup 0), xs)
+
   _ ->
     Nothing
   where
@@ -217,7 +223,7 @@ read :: FD -> Prog (Either EOF String)
 read fd =
   Call Read fd >>= \case
     Left NotReadable -> do
-      err2 "fd0 not readable"
+      err2 (show fd ++ " not readable")
       pure (Left EOF) -- TODO: better to exit?
     Right eofOrLine -> do
       pure eofOrLine
@@ -225,13 +231,13 @@ read fd =
 write :: FD -> String -> Prog ()
 write fd line = do
   Call Write (fd,line) >>= \case
-    Left NotWritable -> err2 "fd1 not writable"
+    Left NotWritable -> err2 (show fd ++ " not writable")
     Right (Left EPIPE) -> err2 "EPIPE when writing to fd1"
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()
 err2 line = do
   Call Write (FD 2, line) >>= \case
-    Left NotWritable -> Trace "fd2 not writable"
+    Left NotWritable -> Trace (show (FD 2) ++ " not writable")
     Right (Left EPIPE) -> Trace "EPIPE when writing to fd2"
     Right (Right ()) -> pure ()

@@ -133,7 +133,9 @@ env0 :: Env
 env0 = Map.fromList [ (FD n, Console m) | (n,m) <- [(0,Normal),(1,Normal),(2,StdErr)] ]
 
 newtype FD = FD Int
-  deriving (Eq,Ord,Enum,Show)
+  deriving (Eq,Ord,Enum)
+
+instance Show FD where show (FD n) = "&" ++ show n
 
 smallestUnused :: Env -> FD
 smallestUnused env = head [ fd | fd <- [FD 0..], fd `notElem` used ]
