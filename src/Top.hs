@@ -2,6 +2,7 @@ module Top where
 
 import FileSystem (fs0)
 import Interaction (Interaction(..))
+import Misc (EOF(..))
 import Os (Prog)
 import System.IO (hFlush,stdout)
 import qualified Bash (console)
@@ -10,8 +11,8 @@ import qualified Tests (run)
 
 main :: IO ()
 main = do
-  putStrLn "*bash-sim*"
   Tests.run
+  putStrLn "*bash-sim* (try typing help)"
   runInteraction (Os.sim fs0 prog)
 
 prog :: Prog ()
@@ -27,14 +28,14 @@ runInteraction = loop where
       putStr $ "> "
       hFlush stdout
       line <- getLine
-      let res = Right line
+      let res = if line == "" then Left EOF else Right line
       loop (f res)
 
     I_Write line i -> do
       putStrLn line
       loop i
     I_Trace s i -> do
-      putStrLn $ "*trace[" ++ s ++ "]*"
+      putStrLn $ "(trace) " ++ s
       loop i
     I_Halt -> do
       putStrLn "*halt*"

@@ -84,7 +84,10 @@ parseAsRedirect = \case
   -- FD 3...
   ">&3":xs -> Just (Redirect wr (FD 1) (dup 3), xs)
   "1>&3":xs -> Just (Redirect wr (FD 1) (dup 3), xs)
+  "2>&3":xs -> Just (Redirect wr (FD 2) (dup 3), xs)
+  "3>&1":xs -> Just (Redirect wr (FD 3) (dup 1), xs)
   "3>&2":xs -> Just (Redirect wr (FD 3) (dup 2), xs)
+  "3<":p:xs -> Just (Redirect rd (FD 3) (path p), xs)
 
   _ ->
     Nothing

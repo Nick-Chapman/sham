@@ -39,18 +39,12 @@ safeUnlink fs path = Map.delete path fs
 fs0 :: FileSystem
 fs0 = FileSystem.create
   [ (Path.create "words", File.create ["one","two","three"])
-  , (Path.create "test", File.create ["rev < words >> rw", "cat rw"])
-  , (Path.create "oe", File.create ["this is wrong", "echo to-out", "echo to-err 1>>&2"])
-  , (Path.create "t1", File.create ["oe >> xx"])
-  , (Path.create "t2", File.create ["oe 2>> yy"])
-  , (Path.create "t3", File.create ["oe > xx"])
-  , (Path.create "t4", File.create ["cat words &", "cat words"])
+  , (Path.create "README", File.create readmeLines)
+  , (Path.create "help", File.create ["cat README"])
+  ]
 
-  , (Path.create "bad0", File.create ["rev 0> x"])
-  , (Path.create "bad1", File.create ["echo hey < words >&0"])
-  , (Path.create "err", File.create ["echo ERR >&2"])
-  , (Path.create "bad2", File.create ["err < words 2>&0"])
-  , (Path.create "bad3", File.create ["echo foo >&3"])
-
-  , (Path.create "t", File.create ["echo foo 3>&2 1>&3"])
+readmeLines :: [String]
+readmeLines =
+  [ "Welcome to Nick's simulated bash."
+  , "Some available commands: echo, cat, rev, ls, exit."
   ]

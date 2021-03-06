@@ -69,6 +69,7 @@ runInteraction i (Lines xs0) = loop xs0 [] i where
     I_Read f -> do
       case xs of
         [] -> loop xs ys (f (Left EOF))
+        "":xs -> loop xs ys (f (Left EOF))
         line:xs -> loop xs ys (f (Right line))
     I_Write line i -> do
       loop xs (line:ys) i
