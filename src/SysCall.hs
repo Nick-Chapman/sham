@@ -2,7 +2,7 @@
 module SysCall (
   SysCall(..),runSys,
   Env,env0,
-  FD(..)
+  FD(..), BadFileDescriptor(..),
   ) where
 
 import Data.Map (Map)
@@ -17,10 +17,12 @@ import qualified OsState (ls,open,Key,close,dup,read,write)
 data SysCall a b where
   Open :: SysCall (Path,OpenMode) (Either NoSuchPath FD)
   Close :: SysCall FD ()
-  Dup2 :: SysCall (FD,FD) ()
+  Dup2 :: SysCall (FD,FD) (Either BadFileDescriptor ())
   Read :: SysCall FD (Either NotReadable (Either EOF String))
   Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
   Paths :: SysCall () [Path]
+
+data BadFileDescriptor = BadFileDescriptor deriving Show
 
 instance Show (SysCall a b) where -- TODO: automate?
   show = \case
@@ -61,15 +63,24 @@ runSys sys s env arg = case sys of
   Dup2 -> do
     let (fdDest,fdSrc) = arg
     Right $ \k -> do
-      let s' = case look "sim,Dup2,dest" fdDest env of
-            File key -> OsState.close s key
-            Console{} -> s
-      let target = look "sim,Dup2,src" fdSrc env
-      let s'' = case target of
-            File key -> OsState.dup s' key
-            Console{}-> s'
-      let env' = Map.insert fdDest target env
-      k s'' env' ()
+      --I_Trace (show ("Dup2",fdDest,fdSrc,env)) $ do
+      let
+        s' = --TODO: does this always get forced?
+          case Map.lookup fdDest env of
+            Nothing -> s
+            Just oldTarget ->
+              case oldTarget of
+                File key -> OsState.close s key
+                Console{} -> s
+
+      case Map.lookup fdSrc env of
+        Nothing -> k s' env (Left BadFileDescriptor)
+        Just target -> do
+          let s'' = case target of
+                File key -> OsState.dup s' key
+                Console{}-> s'
+          let env' = Map.insert fdDest target env
+          k s'' env' (Right ())
 
   Read -> do
     let fd = arg
@@ -141,6 +152,6 @@ smallestUnused :: Env -> FD
 smallestUnused env = head [ fd | fd <- [FD 0..], fd `notElem` used ]
   where used = Map.keys env
 
--- helper for map lookup
+-- TODO: dont error if file-descriptor cannot be found. user can cause this
 look :: (Show k, Ord k) => String -> k -> Map k b -> b
 look tag k env = maybe (error (show ("look/error",tag,k))) id (Map.lookup k env)

@@ -4,6 +4,7 @@ module Bash (console) where
 import Data.List (sort)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Os (Prog(..),SysCall(..),OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..))
+import SysCall (BadFileDescriptor(..))
 import Path (Path)
 import Prelude hiding (read)
 import qualified Path (create,toString)
@@ -80,6 +81,11 @@ parseAsRedirect = \case
   "1>&0":xs -> Just (Redirect wr (FD 1) (dup 0), xs)
   "2>&0":xs -> Just (Redirect wr (FD 2) (dup 0), xs)
 
+  -- FD 3...
+  ">&3":xs -> Just (Redirect wr (FD 1) (dup 3), xs)
+  "1>&3":xs -> Just (Redirect wr (FD 1) (dup 3), xs)
+  "3>&2":xs -> Just (Redirect wr (FD 3) (dup 2), xs)
+
   _ ->
     Nothing
   where
@@ -140,13 +146,20 @@ execRedirects = \case
 execRedirect :: Redirect -> Prog () -> Prog ()
 execRedirect r prog = -- TODO: doesn't need to take prog..
   case r of
-    Redirect mode dFd (FromPath path) -> do
-      withOpen path mode $ \sFd -> do
-        Call Dup2 (dFd,sFd)
+    Redirect mode dest (FromPath path) -> do
+      withOpen path mode $ \src -> do
+        dup2 dest src
         prog
-    Redirect _mode dFd (FromFD sFd) -> do -- do we care what the mode is?
-      Call Dup2 (dFd,sFd)
+    Redirect _mode dest (FromFD src) -> do -- do we care what the mode is?
+      dup2 dest src
       prog -- ..very easy to forget & cause a bug hunt!
+
+
+dup2 :: FD -> FD -> Prog ()
+dup2 d s = do
+  Call Dup2 (d,s) >>= \case
+    Left BadFileDescriptor -> err2 $ "bad file descriptor: " ++ show s
+    Right () -> pure ()
 
 runBashScript :: Path -> Prog ()
 runBashScript path = do
