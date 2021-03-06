@@ -163,7 +163,9 @@ execRedirect r prog = -- TODO: doesn't need to take prog..
 dup2 :: FD -> FD -> Prog ()
 dup2 d s = do
   Call Dup2 (d,s) >>= \case
-    Left BadFileDescriptor -> err2 $ "bad file descriptor: " ++ show s
+    Left BadFileDescriptor -> do
+      err2 $ "bad file descriptor: " ++ show s
+      Exit
     Right () -> pure ()
 
 runBashScript :: Path -> Prog ()

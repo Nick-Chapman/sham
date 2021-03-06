@@ -43,7 +43,7 @@ run = Testing.run $ do
   test ["rev 0> x"] ["(stderr) &0 not readable"]
   test ["echo hey < words >&0"] ["(stderr) &1 not writable"]
 
-  --test ["echo foo >&3"] ["(stderr) bad file descriptor: &3"] -- TODO: fail, get stray foo
+  test ["echo foo >&3"] ["(stderr) bad file descriptor: &3"]
   --test ["echo AA 3< words >&3"] [] -- TODO this crashes!
 
   test ["cat words &", "cat words"] ["one","two","one","three","two","three"]
