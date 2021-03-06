@@ -81,7 +81,7 @@ resume me proc0@(Proc env action0) state@State{os} = case action0 of
     else yield me (Proc env action) state
 
   A_Call sys arg f -> do
-    --I_Trace (show ("Call",sys,arg)) $ do
+    --I_Trace (show ("Call",sys,arg)) $ do -- trace all system calls
     case runSys sys os env arg of
       Left Block ->
         --I_Trace (show ("Call/blocked",sys,arg)) $ do

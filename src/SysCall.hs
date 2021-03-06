@@ -63,7 +63,7 @@ runSys sys s env arg = case sys of
   Dup2 -> do
     let (fdDest,fdSrc) = arg
     Right $ \k -> do
-      --I_Trace (show ("Dup2",fdDest,fdSrc,env)) $ do
+      if fdDest == fdSrc then k s env (Right ()) else do
       let
         s' = --TODO: does this always get forced?
           case Map.lookup fdDest env of
