@@ -8,8 +8,6 @@ run = Testing.run $ do
   let words = ["one","two","three"]
   let rw = map reverse words
 
-  test ["ls"] ["README","help","words"]
-
   test [] []
   test ["doh"] ["(stderr) no such path: doh"]
 
@@ -59,3 +57,9 @@ run = Testing.run $ do
   test ["cat > x","echo 1","exit","echo 2","","x"] ["1"]
   test ["echo exit > y","cat > x","echo 1","y","echo 2","","x"] ["1","2"]
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
+
+  test ["ls"] ["README","help","words"]
+
+  test ["ps"] ["[1]"]
+  test ["echo ps > x","x"] ["[1]","[3]"]
+  test ["echo ps > x","echo x > y","y"] ["[1]","[4]","[5]"]

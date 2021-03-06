@@ -40,6 +40,7 @@ parseLine line = loop [] [] (words line)
         ("echo":args,_) -> makeBuiltin Echo args rs
         ("cat":args,_) -> makeBuiltin Cat args rs
         ("ls":args,_) -> makeBuiltin Ls args rs
+        ("ps":args,_) -> makeBuiltin Ps args rs
         ("rev":args,_) -> makeBuiltin Rev args rs
         ([],[]) -> Null
         ([w],_) -> Exec (Path.create w) rs
@@ -119,7 +120,7 @@ data Script
 
 data NoWait = NoWait
 
-data Builtin = Echo | Cat | Rev | Ls
+data Builtin = Echo | Cat | Rev | Ls | Ps
 
 data Redirect
   = Redirect OpenMode FD RedirectSource
@@ -197,6 +198,7 @@ builtinProg args = \case
   Cat -> catProg args
   Rev -> revProg -- ignores command line args
   Ls -> lsProg -- ignores command line args
+  Ps -> psProg
 
 echoProg :: String -> Prog ()
 echoProg line = write (FD 1) line
@@ -225,6 +227,11 @@ lsProg :: Prog ()
 lsProg = do
   paths <- Call Paths ()
   mapM_ (write (FD 1) . Path.toString) (sort paths)
+
+psProg :: Prog ()
+psProg = do
+  pids <- Pids
+  mapM_ (write (FD 1) . show) (sort pids)
 
 revProg :: Prog ()
 revProg = loop where

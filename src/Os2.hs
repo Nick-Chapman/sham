@@ -27,6 +27,7 @@ data Prog a where
   Trace :: String -> Prog ()
   Spawn :: Prog () -> (Pid -> Prog a) -> Prog a
   Wait :: Pid -> Prog ()
+  Pids :: Prog [Pid]
   Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
 
 sim :: FileSystem -> Prog () -> Interaction
@@ -45,6 +46,7 @@ linearize p0 = case p0 of
     let action = linearize child $ \() -> A_Halt
     A_Spawn action $ \pid -> linearize (f pid) k
   Wait pid -> \k -> A_Wait pid (k ())
+  Pids -> \k -> A_Pids k
   Call sys arg -> \k -> A_Call sys arg k
 
 data Action where
@@ -52,6 +54,7 @@ data Action where
   A_Trace :: String -> Action -> Action
   A_Spawn :: Action -> (Pid -> Action) -> Action
   A_Wait :: Pid -> Action -> Action
+  A_Pids :: ([Pid] -> Action) -> Action
   A_Call :: (Show a, Show b) => SysCall a b -> a -> (b -> Action) -> Action
 
 ----------------------------------------------------------------------
@@ -79,6 +82,10 @@ resume me proc0@(Proc env action0) state@State{os} = case action0 of
     if running pid state
     then block me proc0 state
     else yield me (Proc env action) state
+
+  A_Pids f -> do
+    let action = f (allPids state)
+    yield me (Proc env action) state
 
   A_Call sys arg f -> do
     --I_Trace (show ("Call",sys,arg)) $ do -- trace all system calls
@@ -108,7 +115,8 @@ yield me proc1 state = do
 
 data Proc = Proc Env Action
 
-newtype Pid = Pid Int deriving (Eq,Ord,Num,Show)
+newtype Pid = Pid Int deriving (Eq,Ord,Num)
+instance Show Pid where show (Pid n) = "[" ++ show n ++ "]"
 
 data State = State
   { os :: OsState
@@ -117,10 +125,13 @@ data State = State
   , suspended :: Map Pid Proc
   }
 
+allPids :: State -> [Pid]
+allPids State{waiting,suspended} = Map.keys waiting ++ Map.keys suspended
+
 initState :: FileSystem -> State
 initState fs = State
   { os = OsState.init fs
-  , nextPid = 1000
+  , nextPid = 1
   , waiting = Map.empty
   , suspended = Map.empty
   }
