@@ -5,6 +5,7 @@ module FileSystem (
   link,
   exists,
   read, unlink, NoSuchPath(..),
+  safeUnlink,
   fs0
   ) where
 
@@ -24,6 +25,7 @@ link :: FileSystem -> Path -> File -> FileSystem
 exists :: FileSystem -> Path -> Bool
 read :: FileSystem -> Path -> Either NoSuchPath File
 unlink :: FileSystem -> Path -> Either NoSuchPath FileSystem
+safeUnlink :: FileSystem -> Path -> FileSystem
 
 type FileSystem = Map Path File
 create = Map.fromList
@@ -32,6 +34,7 @@ link fs path file = Map.insert path file fs
 exists fs path = Map.member path fs
 read fs path = maybe (Left NoSuchPath) Right (Map.lookup path fs)
 unlink fs path = if exists fs path then Right (Map.delete path fs) else Left NoSuchPath
+safeUnlink fs path = Map.delete path fs
 
 fs0 :: FileSystem
 fs0 = FileSystem.create
@@ -40,4 +43,5 @@ fs0 = FileSystem.create
   , (Path.create "oe", File.create ["this is wrong", "echo to-out", "echo to-err 1>>&2"])
   , (Path.create "t1", File.create ["oe >> xx"])
   , (Path.create "t2", File.create ["oe 2>> yy"])
+  , (Path.create "t", File.create ["oe > xx"])
   ]

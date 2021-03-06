@@ -2,7 +2,7 @@
 module Os2 ( -- with support for co-operatove threading!
   Prog(..),
   SysCall(..),
-  OpenMode(..),NoSuchPath(..),FD(..),
+  OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..),
   sim,
   ) where
 
@@ -11,7 +11,7 @@ import Data.Map (Map)
 import FileSystem (FileSystem,NoSuchPath(..))
 import Interaction (Interaction(..))
 import Misc (Block(..))
-import OsState (OsState,OpenMode(..))
+import OsState (OsState,OpenMode(..),WriteOpenMode(..))
 import SysCall (SysCall(..),Env,env0,runSys,FD(..))
 import qualified Data.Map.Strict as Map
 import qualified OsState (init)

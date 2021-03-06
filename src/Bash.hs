@@ -3,7 +3,7 @@ module Bash (console) where
 
 import Data.List (sort)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import Os (Prog(..),SysCall(..),OpenMode(..),NoSuchPath(..),FD(..))
+import Os (Prog(..),SysCall(..),OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..))
 import Path (Path)
 import Prelude hiding (read)
 import qualified Path (create,toString)
@@ -45,26 +45,35 @@ parseLine line = loop [] [] (words line)
         _ ->
           Echo2 ("bash, unable to parse: " ++ show line)
 
--- TODO: support '>' as 'rm/>>'
 -- TODO: support fd 3,4.. (need 3 for swap stderr/stdout)
 -- TODO: allow no space before path redirect: >xx
 parseAsRedirect :: [String] -> Maybe (Redirect,[String])
 parseAsRedirect = \case
-  "<":p:xs -> Just (Redirect read (FD 0) (path p), xs)
-  "0<":p:xs -> Just (Redirect read (FD 0) (path p), xs)
-  ">>":p:xs -> Just (Redirect app (FD 1) (path p), xs)
-  "1>>":p:xs -> Just (Redirect app (FD 1) (path p), xs)
-  "2>>":p:xs -> Just (Redirect app (FD 2) (path p), xs)
-  ">>&2":xs -> Just (Redirect app (FD 1) (dup 2), xs)
-  "1>>&2":xs -> Just (Redirect app (FD 1) (dup 2), xs)
-  "2>>&1":xs -> Just (Redirect app (FD 2) (dup 1), xs)
+  "<":p:xs -> Just (Redirect rd (FD 0) (path p), xs)
+  "0<":p:xs -> Just (Redirect rd (FD 0) (path p), xs)
+
+  ">":p:xs -> Just (Redirect wr (FD 1) (path p), xs)
+  "1>":p:xs -> Just (Redirect wr (FD 1) (path p), xs)
+  "2>":p:xs -> Just (Redirect wr (FD 2) (path p), xs)
+  ">&2":xs -> Just (Redirect wr (FD 1) (dup 2), xs)
+  "1>&2":xs -> Just (Redirect wr (FD 1) (dup 2), xs)
+  "2>&1":xs -> Just (Redirect wr (FD 2) (dup 1), xs)
+
+  ">>":p:xs -> Just (Redirect ap (FD 1) (path p), xs)
+  "1>>":p:xs -> Just (Redirect ap (FD 1) (path p), xs)
+  "2>>":p:xs -> Just (Redirect ap (FD 2) (path p), xs)
+  ">>&2":xs -> Just (Redirect ap (FD 1) (dup 2), xs)
+  "1>>&2":xs -> Just (Redirect ap (FD 1) (dup 2), xs)
+  "2>>&1":xs -> Just (Redirect ap (FD 2) (dup 1), xs)
+
   _ ->
     Nothing
   where
     dup n = FromFD (FD n)
     path p = FromPath (Path.create p)
-    read = OpenForReading
-    app = OpenForAppending
+    rd = OpenForReading
+    wr = OpenForWriting Truncate
+    ap = OpenForWriting Append
 
 
 data Script

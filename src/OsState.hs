@@ -2,7 +2,7 @@ module OsState (
   init,
   OsState,
   Key,
-  open, OpenMode(..),
+  open, OpenMode(..), WriteOpenMode(..),
   pipe, PipeEnds(..),
   dup,
   close,
@@ -20,7 +20,7 @@ import PipeSystem (PipeSystem,PipeKey)
 import Prelude hiding (init,read)
 import qualified Data.Map.Strict as Map
 import qualified File (empty,append,lines)
-import qualified FileSystem (ls,read,link)
+import qualified FileSystem (ls,read,link,safeUnlink)
 import qualified PipeSystem (empty,createPipe,readPipe,writePipe,closeForReading,closeForWriting)
 
 data OsState = OsState
@@ -53,11 +53,12 @@ init fs = OsState
   , nextKey = 100
   }
 
-
 data OpenMode
   = OpenForReading -- creating if doesn't exist
-  | OpenForAppending -- creating if doesn't exist
+  | OpenForWriting WriteOpenMode -- rm, then append
   deriving Show
+
+data WriteOpenMode = Truncate | Append deriving Show
 
 open :: OsState -> Path -> OpenMode -> Either NoSuchPath (Key,OsState)
 open state@OsState{nextKey=key,fs,table} path = \case
@@ -70,13 +71,15 @@ open state@OsState{nextKey=key,fs,table} path = \case
         let table' = Map.insert key entry table
         let state' = state { nextKey, table = table' }
         Right (key,state')
-  OpenForAppending{} -> do
+  OpenForWriting wom -> do
+    let
+      fs' = case wom of
+        Truncate -> FileSystem.safeUnlink fs path
+        Append -> fs
     let nextKey = key+1
-    -- fs not accessed here
-    -- we dont care if the path doesn't exist now, it will be create when writing
     let entry = Entry { rc = 1, what = FileAppend path }
     let table' = Map.insert key entry table
-    let state' = state { nextKey, table = table' }
+    let state' = state { nextKey, fs = fs', table = table' }
     Right (key,state')
 
 
