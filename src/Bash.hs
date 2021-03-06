@@ -100,9 +100,11 @@ data Script
   = Null
   | Echo2 String
   | Run Builtin [String] [Redirect] (Maybe NoWait)
-  | Exec Path [Redirect]
+  | Exec Path [Redirect] -- TODO: NoWait on Exec
   | Source Path
   | BashExit
+  -- TODO: sequencing operator ";"
+  -- TODO: pipe operator "|"
 
 data NoWait = NoWait
 
