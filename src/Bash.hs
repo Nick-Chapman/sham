@@ -19,47 +19,53 @@ console = loop where
         interpret (parseLine line)
         loop
 
--- TODO: at some point I'll want a less proper parser
--- but even before then, lets avoid the nee to duplicate all the cases!
+-- TODO: at some point we'll want a proper parser!
 parseLine :: String -> Script
-parseLine line = case words line of
-  [] -> Null
-  [".",s] -> Source (Path.create s)
-  ["exit"] -> BashExit
-  ["ls"] -> Run Ls [] []
-  -- TODO: support '>' as 'rm/>>'
-  ["ls",">>",p] ->
-    Run Ls [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
-  ["echo",s] -> Run Echo [s] []
-  ["echo",s,"1>>&2"] ->
-    Run Echo [s] [Redirect OpenForAppending (FD 1) (FromFD (FD 2))]
-  ["echo",s1,s2] -> Run Echo [s1,s2] []
-  ["echo",s,">>",p] ->
-    Run Echo [s] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
-  ["echo",s1,s2,">>",p] ->
-    Run Echo [s1,s2] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
+parseLine line = loop [] [] (words line)
+  where
+    loop ws rs xs =
+      case parseAsRedirect xs of
+        Just (r,xs) -> loop ws (r:rs) xs
+        Nothing ->
+          case xs of
+            x:xs -> loop (x:ws) rs xs
+            [] -> makeScript (reverse ws) (reverse rs)
 
-  ["cat",p1] -> Run Cat [p1] []
-  ["cat",p1,">>",p2] ->
-    Run Cat [p1] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p2))]
-  ["rev"] -> Run Rev [] []
-  ["rev", "<", p] ->
-    Run Rev [] [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
-  ["rev", ">>", p] ->
-    Run Rev [] [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
-  ["rev","<",p1,">>",p2] ->
-    Run Rev [] [ Redirect OpenForReading (FD 0) (FromPath (Path.create p1))
-               , Redirect OpenForAppending (FD 1) (FromPath (Path.create p2)) ]
-  -- TODO: support command line args in scripts
-  [s] -> Exec (Path.create s) []
-  [s, "<", p] ->
-    Exec (Path.create s) [Redirect OpenForReading (FD 0) (FromPath (Path.create p))]
-  [s, ">>", p] ->
-    Exec (Path.create s) [Redirect OpenForAppending (FD 1) (FromPath (Path.create p))]
-  [s, "2>>", p] ->
-    Exec (Path.create s) [Redirect OpenForAppending (FD 2) (FromPath (Path.create p))]
-  xs ->
-    Echo2 ("bash, unable to parse: " ++ show xs)
+    makeScript :: [String] -> [Redirect] -> Script
+    makeScript ws rs =
+      case (ws,rs) of
+        (".":p:[],[]) -> Source (Path.create p)
+        ("exit":[],[]) -> BashExit
+        ("echo":args,_) -> Run Echo args rs
+        ("cat":args,_) -> Run Cat args rs
+        ("ls":[],_) -> Run Ls [] rs
+        ("rev":[],_) -> Run Rev [] rs
+        ([],[]) -> Null
+        ([w],_) -> Exec (Path.create w) rs
+        _ ->
+          Echo2 ("bash, unable to parse: " ++ show line)
+
+-- TODO: support '>' as 'rm/>>'
+-- TODO: support fd 3,4.. (need 3 for swap stderr/stdout)
+-- TODO: allow no space before path redirect: >xx
+parseAsRedirect :: [String] -> Maybe (Redirect,[String])
+parseAsRedirect = \case
+  "<":p:xs -> Just (Redirect read (FD 0) (path p), xs)
+  "0<":p:xs -> Just (Redirect read (FD 0) (path p), xs)
+  ">>":p:xs -> Just (Redirect app (FD 1) (path p), xs)
+  "1>>":p:xs -> Just (Redirect app (FD 1) (path p), xs)
+  "2>>":p:xs -> Just (Redirect app (FD 2) (path p), xs)
+  ">>&2":xs -> Just (Redirect app (FD 1) (dup 2), xs)
+  "1>>&2":xs -> Just (Redirect app (FD 1) (dup 2), xs)
+  "2>>&1":xs -> Just (Redirect app (FD 2) (dup 1), xs)
+  _ ->
+    Nothing
+  where
+    dup n = FromFD (FD n)
+    path p = FromPath (Path.create p)
+    read = OpenForReading
+    app = OpenForAppending
+
 
 data Script
   = Null
