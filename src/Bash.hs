@@ -36,14 +36,22 @@ parseLine line = loop [] [] (words line)
       case (ws,rs) of
         (".":p:[],[]) -> Source (Path.create p)
         ("exit":[],[]) -> BashExit
-        ("echo":args,_) -> Run Echo args rs
-        ("cat":args,_) -> Run Cat args rs
-        ("ls":[],_) -> Run Ls [] rs
-        ("rev":[],_) -> Run Rev [] rs
+        ("echo":args,_) -> makeBuiltin Echo args rs
+        ("cat":args,_) -> makeBuiltin Cat args rs
+        ("ls":args,_) -> makeBuiltin Ls args rs
+        ("rev":args,_) -> makeBuiltin Rev args rs
         ([],[]) -> Null
         ([w],_) -> Exec (Path.create w) rs
         _ ->
           Echo2 ("bash, unable to parse: " ++ show line)
+
+
+makeBuiltin :: Builtin -> [String] -> [Redirect] -> Script
+makeBuiltin b args rs =
+  case reverse args of
+    "&":args' -> Run b (reverse args') rs (Just NoWait)
+    _-> Run b args rs Nothing
+
 
 -- TODO: support fd 3,4.. (need 3 for swap stderr/stdout)
 -- TODO: allow no space before path redirect: >xx
@@ -79,10 +87,12 @@ parseAsRedirect = \case
 data Script
   = Null
   | Echo2 String
-  | Run Builtin [String] [Redirect]
+  | Run Builtin [String] [Redirect] (Maybe NoWait)
   | Exec Path [Redirect]
   | Source Path
   | BashExit
+
+data NoWait = NoWait
 
 data Builtin = Echo | Cat | Rev | Ls
 
@@ -97,7 +107,7 @@ interpret :: Script -> Prog ()
 interpret = \case
   Null  -> pure ()
   Echo2 line -> write (FD 2) line -- TODO: use redirect
-  Run b args rs -> executeBuiltin rs b args
+  Run b args rs waitMode -> executeBuiltin rs b args waitMode
   Exec path rs -> executePath rs path
   Source path -> runBashScript path
   BashExit -> Exit
@@ -105,8 +115,13 @@ interpret = \case
 executePath :: [Redirect] -> Path -> Prog ()
 executePath rs path = spawnWait (execRedirects rs (runBashScript path))
 
-executeBuiltin :: [Redirect] -> Builtin -> [String] -> Prog ()
-executeBuiltin rs b args = spawnWait (execRedirects rs (builtinProg args b))
+executeBuiltin :: [Redirect] -> Builtin -> [String] -> Maybe NoWait -> Prog ()
+executeBuiltin rs b args = \case
+  Nothing -> spawnWait (execRedirects rs (builtinProg args b))
+  Just NoWait -> spawn (execRedirects rs (builtinProg args b))
+
+spawn :: Prog () -> Prog ()
+spawn prog = do Spawn prog (\_ -> pure ())
 
 spawnWait :: Prog () -> Prog ()
 spawnWait prog = do Spawn prog (\childPid -> Wait childPid)
@@ -153,21 +168,24 @@ echoProg :: String -> Prog ()
 echoProg line = write (FD 1) line
 
 catProg :: [String] -> Prog ()
-catProg args =
-  sequence_ [ catProg1 (Path.create arg) | arg <- args ]
+catProg = \case
+  [] ->
+    catFd (FD 0)
+  args ->
+    sequence_ [ catProg1 (Path.create arg) | arg <- args ]
 
 catProg1 :: Path -> Prog ()
-catProg1 path = do
-  withOpen path OpenForReading $ \fd -> do
-    let
-      loop :: Prog ()
-      loop = do
-        read fd >>= \case
-          Left EOF -> pure ()
-          Right line -> do
-            write (FD 1) line
-            loop
-    loop
+catProg1 path = withOpen path OpenForReading $ catFd
+
+catFd :: FD -> Prog ()
+catFd fd = loop where
+  loop :: Prog ()
+  loop = do
+    read fd >>= \case
+      Left EOF -> pure ()
+      Right line -> do
+        write (FD 1) line
+        loop
 
 lsProg :: Prog ()
 lsProg = do

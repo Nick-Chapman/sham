@@ -43,5 +43,7 @@ fs0 = FileSystem.create
   , (Path.create "oe", File.create ["this is wrong", "echo to-out", "echo to-err 1>>&2"])
   , (Path.create "t1", File.create ["oe >> xx"])
   , (Path.create "t2", File.create ["oe 2>> yy"])
-  , (Path.create "t", File.create ["oe > xx"])
+  , (Path.create "t3", File.create ["oe > xx"])
+  , (Path.create "t4", File.create ["cat words &", "cat words"])
+  , (Path.create "t", File.create ["cat &", "rev"])
   ]
