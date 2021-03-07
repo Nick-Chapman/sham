@@ -43,16 +43,23 @@ parseLine line = loop [] [] (words line)
         ("ps":args,_) -> makeBuiltin Ps args rs
         ("rev":args,_) -> makeBuiltin Rev args rs
         ([],[]) -> Null
-        ([w],_) -> Exec (Path.create w) rs
+        (w:args,_) -> do
+          -- TODO: still no args for bash scripts yet; but check for &
+          lookAmpersand args $ \_args mode -> do
+            Exec (Path.create w) rs mode
         _ ->
           Echo2 ("bash, unable to parse: " ++ show line)
 
 
 makeBuiltin :: Builtin -> [String] -> [Redirect] -> Script
 makeBuiltin b args rs =
-  case reverse args of
-    "&":args' -> Run b (reverse args') rs (Just NoWait)
-    _-> Run b args rs Nothing
+  lookAmpersand args $ \args mode -> Run b args rs mode
+
+lookAmpersand :: [String] -> ([String] -> Maybe NoWait -> a) -> a
+lookAmpersand xs k =
+  case reverse xs of
+    "&":xs' -> k xs' (Just NoWait)
+    _-> k xs Nothing
 
 
 -- TODO: support fd 3,4.. (need 3 for swap stderr/stdout)
@@ -112,7 +119,7 @@ data Script
   = Null
   | Echo2 String
   | Run Builtin [String] [Redirect] (Maybe NoWait)
-  | Exec Path [Redirect] -- TODO: NoWait on Exec
+  | Exec Path [Redirect] (Maybe NoWait)
   | Source Path
   | BashExit
   -- TODO: sequencing operator ";"
@@ -134,13 +141,16 @@ interpret = \case
   Null  -> pure ()
   Echo2 line -> write (FD 2) line -- TODO: use redirect
   Run b args rs waitMode -> executeBuiltin rs b args waitMode
-  Exec path rs -> executePath rs path
+  Exec path rs waitMode -> executePath rs path waitMode
   Source path -> runBashScript path
   BashExit -> Exit
 
-executePath :: [Redirect] -> Path -> Prog ()
-executePath rs path =
-  spawnWait (do mapM_ execRedirect rs; runBashScript path)
+executePath :: [Redirect] -> Path -> Maybe NoWait -> Prog ()
+executePath rs path = \case
+  Nothing ->
+    spawnWait (do mapM_ execRedirect rs; runBashScript path)
+  Just NoWait ->
+    spawn (do mapM_ execRedirect rs; runBashScript path)
 
 executeBuiltin :: [Redirect] -> Builtin -> [String] -> Maybe NoWait -> Prog ()
 executeBuiltin rs b args = \case

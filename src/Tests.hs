@@ -12,6 +12,7 @@ run = Testing.run $ do
 
   test ["ls"] ["README","days","help"]
   test ["help"] FileSystem.readme
+  test ["help &"] FileSystem.readme
   test ["doh"] ["(stderr) no such path: doh"]
 
   test [] []
