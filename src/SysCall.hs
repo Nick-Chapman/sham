@@ -10,7 +10,7 @@ import FileSystem (NoSuchPath(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import OsState (OsState,OpenMode(..))
 import Path (Path)
-import Interaction (Interaction(..))
+import Interaction (Interaction(..),Prompt)
 import qualified Data.Map.Strict as Map
 import qualified OsState (ls,open,Key,close,dup,read,write)
 
@@ -18,7 +18,7 @@ data SysCall a b where
   Open :: SysCall (Path,OpenMode) (Either NoSuchPath FD)
   Close :: SysCall FD ()
   Dup2 :: SysCall (FD,FD) (Either BadFileDescriptor ())
-  Read :: SysCall FD (Either NotReadable (Either EOF String))
+  Read :: Prompt -> SysCall FD (Either NotReadable (Either EOF String))
   Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
   Paths :: SysCall () [Path]
 
@@ -29,7 +29,7 @@ instance Show (SysCall a b) where -- TODO: automate?
     Open -> "Open"
     Close -> "Close"
     Dup2 -> "Dup2"
-    Read -> "Read"
+    Read _ -> "Read"
     Write -> "Write"
     Paths -> "Paths"
 
@@ -82,7 +82,7 @@ runSys sys s env arg = case sys of
           let env' = Map.insert fdDest target env
           k s'' env' (Right ())
 
-  Read -> do
+  Read prompt -> do
     let fd = arg
     case look "sim,Read" fd env of
       File key -> do
@@ -97,7 +97,7 @@ runSys sys s env arg = case sys of
               k s env (Right dat)
       Console{} -> do
         Right $ \k -> do
-          I_Read $ \case -- TODO: share alts
+          I_Read prompt $ \case -- TODO: share alts
             Left EOF ->
               k s env (Right (Left EOF))
             Right line ->

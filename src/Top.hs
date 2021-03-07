@@ -2,7 +2,7 @@ module Top (main) where
 
 import Control.Monad.Trans.Class (lift)
 import FileSystem (fs0)
-import Interaction (Interaction(..))
+import Interaction (Interaction(..),Prompt(..))
 import Misc (EOF(..))
 import Os (Prog)
 import qualified Bash (console)
@@ -28,12 +28,21 @@ runInteraction i0 = do
     loop (1::Int) i0
   where
     loop n = \case
-      I_Read f -> do
-        HL.getInputLine (col AN.Green $ show n <> "> ") >>= \case
-          Nothing -> loop (n+1) (f (Left EOF))
-          Just line -> do
-            updateHistory line
-            loop (n+1) (f (Right line))
+      I_Read pM f -> do
+        case pM of
+
+          NoPrompt -> do
+            HL.getInputLine "(more...) " >>= \case
+              Nothing -> loop n (f (Left EOF))
+              Just line -> do
+                loop n (f (Right line))
+
+          Prompt prompt -> do
+            HL.getInputLine (col AN.Green (show n ++ prompt)) >>= \case
+              Nothing -> loop n (f (Left EOF))
+              Just line -> do
+                updateHistory line
+                loop (n+1) (f (Right line))
 
       I_Write line i -> do
         lift $ putStrLn line

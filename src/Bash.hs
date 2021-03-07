@@ -4,6 +4,7 @@ module Bash (console) where
 import Data.List (sort)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Os (Prog(..),SysCall(..),OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..))
+import Interaction (Prompt(..))
 import SysCall (BadFileDescriptor(..))
 import Path (Path)
 import Prelude hiding (read)
@@ -13,8 +14,7 @@ console :: Prog ()
 console = loop where
   loop :: Prog ()
   loop = do
-    --write (FD 1) "prompt $"
-    read (FD 0) >>= \case
+    read (Prompt "> ") (FD 0) >>= \case
       Left EOF -> pure ()
       Right line -> do
         interpret (parseLine line)
@@ -188,7 +188,7 @@ readAll :: FD -> Prog [String]
 readAll fd = loop []
   where
     loop acc =
-      read fd >>= \case
+      read NoPrompt fd >>= \case
       Left EOF -> pure (reverse acc)
       Right line -> loop (line:acc)
 
@@ -217,7 +217,7 @@ catFd :: FD -> Prog ()
 catFd fd = loop where
   loop :: Prog ()
   loop = do
-    read fd >>= \case
+    read NoPrompt fd >>= \case
       Left EOF -> pure ()
       Right line -> do
         write (FD 1) line
@@ -237,7 +237,7 @@ revProg :: Prog ()
 revProg = loop where
   loop :: Prog ()
   loop = do
-    read (FD 0) >>= \case
+    read NoPrompt (FD 0) >>= \case
       Left EOF -> pure ()
       Right line -> do
         write (FD 1) (reverse line)
@@ -254,9 +254,9 @@ withOpen path mode action =
       Call Close fd
       pure res
 
-read :: FD -> Prog (Either EOF String)
-read fd =
-  Call Read fd >>= \case
+read :: Prompt -> FD -> Prog (Either EOF String)
+read prompt fd =
+  Call (Read prompt) fd >>= \case
     Left NotReadable -> do
       err2 (show fd ++ " not readable")
       pure (Left EOF) -- TODO: better to exit?

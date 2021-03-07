@@ -66,7 +66,7 @@ runInteraction :: Interaction -> Lines -> Either Unconsumed Lines
 runInteraction i (Lines xs0) = loop xs0 [] i where
   loop :: [String] -> [String] -> Interaction -> Either Unconsumed Lines
   loop xs ys = \case
-    I_Read f -> do
+    I_Read _ f -> do
       case xs of
         [] -> loop xs ys (f (Left EOF))
         "":xs -> loop xs ys (f (Left EOF))
