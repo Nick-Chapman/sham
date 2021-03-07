@@ -6,13 +6,13 @@ module FileSystem (
   exists,
   read, unlink, NoSuchPath(..),
   safeUnlink,
-  fs0
+  fs0, readme, days
   ) where
 
 import Data.Map (Map)
 import File (File)
 import Path (Path)
-import Prelude hiding (read)
+import Prelude hiding (read,words)
 import qualified Data.Map.Strict as Map
 import qualified Path (create)
 import qualified File (create)
@@ -38,13 +38,16 @@ safeUnlink fs path = Map.delete path fs
 
 fs0 :: FileSystem
 fs0 = FileSystem.create
-  [ (Path.create "words", File.create ["one","two","three"])
-  , (Path.create "README", File.create readmeLines)
+  [ (Path.create "README", File.create readme)
+  , (Path.create "words", File.create days)
   , (Path.create "help", File.create ["cat README"])
   ]
 
-readmeLines :: [String]
-readmeLines =
+readme :: [String]
+readme =
   [ "Welcome to Nick's simulated bash."
   , "Some available commands: echo, cat, rev, ls, exit."
   ]
+
+days :: [String]
+days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]

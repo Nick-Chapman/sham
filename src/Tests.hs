@@ -2,15 +2,19 @@ module Tests (run) where
 
 import Testing (test)
 import qualified Testing (run)
+import qualified FileSystem
 
 run :: IO ()
 run = Testing.run $ do
-  let words = ["one","two","three"]
+  let words = FileSystem.days
   let rw = map reverse words
+  let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
 
-  test [] []
+  test ["ls"] ["README","help","words"]
+  test ["help"] FileSystem.readme
   test ["doh"] ["(stderr) no such path: doh"]
 
+  test [] []
   test ["echo"] [""]
   test ["echo foo"] ["foo"]
   test ["echo foo", "echo bar"] ["foo","bar"]
@@ -47,8 +51,8 @@ run = Testing.run $ do
   test ["doh 4< words"] ["(stderr) no such path: doh"]
   test ["doh 4< words 2>&4"] [] -- redirecting stderr to unwritable FD looses error
 
-  test ["cat words &", "cat words"] ["one","two","one","three","two","three"]
-  test ["cat words &", "echo FOO"] ["one","FOO","two","three"]
+  test ["cat words &", "cat words"] (head words : merge (tail words) words)
+  test ["cat words &", "echo FOO"] (head words : "FOO" : tail words)
 
   test ["cat > x","echo OUT","echo ERR >&2","","x"] ["OUT","(stderr) ERR"]
   test ["cat > x","echo OUT","echo ERR >&2","",". x"] ["OUT","(stderr) ERR"]
@@ -57,8 +61,6 @@ run = Testing.run $ do
   test ["cat > x","echo 1","exit","echo 2","","x"] ["1"]
   test ["echo exit > y","cat > x","echo 1","y","echo 2","","x"] ["1","2"]
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
-
-  test ["ls"] ["README","help","words"]
 
   test ["ps"] ["[1]"]
   test ["echo ps > x","x"] ["[1]","[3]"]
