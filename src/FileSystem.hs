@@ -39,7 +39,7 @@ safeUnlink fs path = Map.delete path fs
 fs0 :: FileSystem
 fs0 = FileSystem.create
   [ (Path.create "README", File.create readme)
-  , (Path.create "words", File.create days)
+  , (Path.create "days", File.create days)
   , (Path.create "help", File.create ["cat README"])
   ]
 
