@@ -1,18 +1,17 @@
-
 module SysCall (
   SysCall(..),runSys,
   Env,env0,
-  FD(..), BadFileDescriptor(..),
+  FD(..), BadFileDescriptor(..), PipeEnds(..),
   ) where
 
 import Data.Map (Map)
 import FileSystem (NoSuchPath(..))
-import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
+import Interaction (Interaction(..),Prompt)
+import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import OsState (OsState,OpenMode(..))
 import Path (Path)
-import Interaction (Interaction(..),Prompt)
 import qualified Data.Map.Strict as Map
-import qualified OsState (ls,open,Key,close,dup,read,write)
+import qualified OsState (ls,open,pipe,Key,close,dup,read,write)
 
 data SysCall a b where
   Open :: SysCall (Path,OpenMode) (Either NoSuchPath FD)
@@ -21,6 +20,7 @@ data SysCall a b where
   Read :: Prompt -> SysCall FD (Either NotReadable (Either EOF String))
   Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
   Paths :: SysCall () [Path]
+  SysPipe :: SysCall () (PipeEnds FD)
 
 data BadFileDescriptor = BadFileDescriptor deriving Show
 
@@ -32,12 +32,23 @@ instance Show (SysCall a b) where -- TODO: automate?
     Read _ -> "Read"
     Write -> "Write"
     Paths -> "Paths"
+    SysPipe -> "Pipe"
 
 runSys :: SysCall a b ->
   OsState -> Env -> a ->
   Either Block ((OsState -> Env -> b -> Interaction) -> Interaction)
 
 runSys sys s env arg = case sys of
+
+  SysPipe -> do
+    case OsState.pipe s of
+      (PipeEnds{r=keyR,w=keyW},s) -> do
+        let fdR = smallestUnused env
+        env <- pure $ Map.insert fdR (File keyR) env
+        let fdW = smallestUnused env
+        env <- pure $ Map.insert fdW (File keyW) env
+        let pe = PipeEnds { r = fdR, w = fdW }
+        Right $ \k -> k s env pe
 
   Open -> do
     let (path,mode) = arg
@@ -54,11 +65,11 @@ runSys sys s env arg = case sys of
   Close -> do
     let fd = arg
     Right $ \k -> do
-      let env' = Map.delete fd env
-      let s' = case look "sim,Close" fd env of
-            File key -> OsState.close s key
-            Console{} -> s
-      k s' env' ()
+      case (case look "Sys.Close" fd env of
+              File key -> OsState.close s key
+              Console{} -> s)
+        of s ->
+             k s (Map.delete fd env) ()
 
   Dup2 -> do
     let (fdDest,fdSrc) = arg
@@ -84,14 +95,14 @@ runSys sys s env arg = case sys of
 
   Read prompt -> do
     let fd = arg
-    case look "sim,Read" fd env of
+    case look "Sys.Read" fd env of
       File key -> do
         case OsState.read s key of
           Left NotReadable -> do
             Right $ \k ->
               k s env (Left NotReadable)
           Right (Left Block) ->
-            undefined -- TODO: blocking; when we have pipes
+            Left Block
           Right (Right (dat,s)) -> do
             Right $ \k ->
               k s env (Right dat)
@@ -105,15 +116,14 @@ runSys sys s env arg = case sys of
 
   Write -> do
     let (fd,line) = arg
-    case look "sim,Write" fd env of
+    case look "Sys.Write" fd env of
       File key -> do
         case OsState.write s key line of
           Left NotWritable -> do
             Right $ \k ->
               k s env (Left NotWritable)
           Right (Left Block) -> do
-            undefined -- TODO: blocking; when we have pipes
-            --Left Block -- but easy to implement!!
+            Left Block
           Right (Right (Left EPIPE)) -> do
             Right $ \k ->
               k s env (Right (Left EPIPE))

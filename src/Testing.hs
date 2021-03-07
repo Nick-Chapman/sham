@@ -2,11 +2,11 @@ module Testing (test,run) where
 
 import Control.Monad (ap,liftM)
 import Data.List (intercalate)
+import FileSystem (fs0)
+import Interaction (Interaction(..))
 import Misc (EOF(..))
 import qualified Bash (console)
 import qualified Os (sim)
-import FileSystem (fs0)
-import Interaction (Interaction(..))
 
 test :: [String] -> [String] -> Testing ()
 test is xs = T1 (Test (Lines is) (Lines xs))

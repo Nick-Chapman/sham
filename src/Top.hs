@@ -49,7 +49,7 @@ runInteraction i0 = do
         loop n i
 
       I_Trace mes i -> do
-        lift $ putStrLn $ "(trace) " ++ mes
+        lift $ putStrLn (col AN.Yellow mes)
         loop n i
 
       I_Halt -> do

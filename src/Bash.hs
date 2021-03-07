@@ -2,14 +2,15 @@
 module Bash (console) where
 
 import Data.List (sort)
+import Data.List.Split (splitWhen)
+import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Os (Prog,SysCall(..),OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..))
-import Interaction (Prompt(..))
-import SysCall (BadFileDescriptor(..))
 import Path (Path)
 import Prelude hiding (read)
-import qualified Path (create,toString)
+import SysCall (BadFileDescriptor(..),PipeEnds(..))
 import qualified Os (Prog(..))
+import qualified Path (create,toString)
 
 console :: Prog ()
 console = loop where
@@ -24,7 +25,16 @@ console = loop where
 -- TODO: at some point we'll want a proper parser!
 -- TODO: allow no space before path redirect: >xx
 parseLine :: String -> Script
-parseLine line = loop [] [] (words line)
+parseLine line = do
+  case splitWhen (=='|') line of
+    [] -> error "parseLine/split/[]/impossible"
+    [seg] -> parseCommand seg
+    [seg1,seg2] -> Pipe (parseCommand seg1) (parseCommand seg2)
+    _ ->
+      error "multi-pipeline-not-supported-yet" -- TODO: multi pipes
+
+parseCommand :: String -> Script
+parseCommand seg = loop [] [] (words seg)
   where
     loop ws rs xs =
       case parseAsRedirect xs of
@@ -48,7 +58,6 @@ parseLine line = loop [] [] (words line)
         ([],[]) -> Null
         (args,_) -> makeBuiltin Exec args rs
 
-
 makeBuiltin :: Builtin -> [String] -> [Redirect] -> Script
 makeBuiltin b args rs =
   lookAmpersand args $ \args mode -> Command b args rs mode
@@ -58,7 +67,6 @@ lookAmpersand xs k =
   case reverse xs of
     "&":xs' -> k xs' NoWait
     _-> k xs Wait
-
 
 -- TODO: generalize/share redirect parsing; even before a proper parser
 parseAsRedirect :: [String] -> Maybe (Redirect,[String])
@@ -111,14 +119,13 @@ parseAsRedirect = \case
     wr = OpenForWriting Truncate
     ap = OpenForWriting Append
 
-
 data Script
   = Null
+  -- TODO: sequencing operator ";"
   | Command Builtin [String] [Redirect] WaitMode
   | Source Path -- TODO: builtin
   | Exit -- TODO: builtin
-  -- TODO: sequencing operator ";"
-  -- TODO: pipe operator "|"
+  | Pipe Script Script
 
 data WaitMode = NoWait | Wait
 
@@ -137,15 +144,29 @@ interpret = \case
   Exit -> Os.Exit
   Source path -> runBashScript path
   Command b args rs waitMode -> executeBuiltin rs b args waitMode
+  Pipe script1 script2 -> do
+    PipeEnds{r,w} <- Os.Call SysPipe ()
+    --spawn Wait $ do -- TODO: extra spawn?
+    do
+      spawn NoWait $ do
+        dup2 (FD 1) w
+        Os.Call Close w
+        interpret script1
+        Os.Call Close (FD 1)
+      spawn Wait $ do -- TODO: NoWait, if add extra spawn above
+        dup2 (FD 0) r
+        Os.Call Close r
+        interpret script2
+        Os.Call Close (FD 0)
 
 executeBuiltin :: [Redirect] -> Builtin -> [String] -> WaitMode -> Prog ()
 executeBuiltin rs b args mode = do
-  evalWaitMode mode $ do
+  spawn mode $ do
     mapM_ execRedirect rs
     builtinProg args b
 
-evalWaitMode :: WaitMode -> Prog () -> Prog ()
-evalWaitMode mode prog = case mode of
+spawn :: WaitMode -> Prog () -> Prog ()
+spawn mode prog = case mode of
     Wait -> do Os.Spawn prog (\childPid -> Os.Wait childPid)
     NoWait -> do Os.Spawn prog (\_ -> pure ())
 

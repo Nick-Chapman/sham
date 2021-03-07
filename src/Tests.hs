@@ -66,3 +66,7 @@ run = Testing.run $ do
   test ["ps"] ["[1]"]
   test ["echo ps > x","x"] ["[1]","[3]"]
   test ["echo ps > x","echo x > y","y"] ["[1]","[4]","[5]"]
+
+  -- pipes...
+  test ["echo foo | rev"] ["oof"]
+  test ["cat days | rev"] rw

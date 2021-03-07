@@ -20,6 +20,7 @@ dependencies:
 - extra
 - haskeline
 - mtl
+- split
 - text
 - time
 - transformers

@@ -1,5 +1,5 @@
 
-module Os2 ( -- with support for co-operatove threading!
+module Os2 ( -- with support for multi-threading!
   Prog(..),
   SysCall(..),
   OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..),
@@ -88,22 +88,24 @@ resume me proc0@(Proc env action0) state@State{os} = case action0 of
     yield me (Proc env action) state
 
   A_Call sys arg f -> do
+    -- TODO: allow trace tobe turned on/off interactively at the console
     --I_Trace (show ("Call",sys,arg)) $ do -- trace all system calls
     case runSys sys os env arg of
       Left Block ->
-        --I_Trace (show ("Call/blocked",sys,arg)) $ do
+        --I_Trace (show ("Blocked",sys)) $ do
         block me proc0 state
       Right proceed -> do
         proceed $ \os env res -> do
-          --I_Trace (show ("Call/proceed",sys,arg,res)) $ do
+          --I_Trace (show ("Proceed",res)) $ do
           let action = f res
           yield me (Proc env action) state { os }
 
 block :: Pid -> Proc -> State -> Interaction
-block = yield
+block = yield -- TODO: track blocked Procs
 
 yield :: Pid -> Proc -> State -> Interaction
 yield me proc1 state = do
+ --I_Trace (show state) $
   case choose state of
     Nothing ->
       resume me proc1 state -- nothing else to do, so continue
@@ -124,6 +126,9 @@ data State = State
   , waiting :: Map Pid Proc
   , suspended :: Map Pid Proc
   }
+
+instance Show State where
+  show State{os} = show os
 
 allPids :: State -> [Pid]
 allPids State{waiting,suspended} = Map.keys waiting ++ Map.keys suspended

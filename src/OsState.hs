@@ -3,7 +3,7 @@ module OsState (
   OsState,
   Key,
   open, OpenMode(..), WriteOpenMode(..),
-  pipe, PipeEnds(..),
+  pipe,
   dup,
   close,
   Block(..),
@@ -12,9 +12,10 @@ module OsState (
   ls,
   ) where
 
+import Data.List (intercalate)
 import Data.Map (Map)
 import FileSystem (FileSystem,NoSuchPath(..))
-import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
+import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import Path (Path)
 import PipeSystem (PipeSystem,PipeKey)
 import Prelude hiding (init,read)
@@ -33,25 +34,37 @@ data OsState = OsState
 newtype Key = Key Int
   -- These numbers are just keys into the open-file-table. Entirely *unrelated* to the
   -- per-process file-descriptor(index), stdin=0, stdout=1 etc
-  deriving (Eq,Ord,Num,Show)
+  deriving (Eq,Ord,Num)
 
-type FileTable = Map Key Entry
-data Entry = Entry { rc :: Int, what :: What }
+instance Show Key where show (Key n) = "k"++show n
+
+newtype FileTable = Tab { unTab :: Map Key Entry }
+
+instance Show FileTable where
+  show Tab{unTab=m} =
+    intercalate "," [ show k ++ ":" ++ show e | (k,e) <- Map.toList m ]
+
+data Entry = Entry { rc :: Int, what :: What } deriving Show
 
 data What
   = PipeRead PipeKey
   | PipeWrite PipeKey
   | FileAppend Path -- nothing done when opened
   | FileContents [String] -- full contents read when opened
-
+  deriving Show
 
 init :: FileSystem -> OsState
 init fs = OsState
   { fs
   , pipeSystem = PipeSystem.empty
-  , table = Map.empty
-  , nextKey = 100
+  , table = Tab Map.empty
+  , nextKey = 21
   }
+
+instance Show OsState where
+  show OsState{fs=_,pipeSystem=ps,table,nextKey=_} =
+    "pipe:[" ++ show ps ++ "], " ++
+    "open:[" ++ show table ++ "]"
 
 data OpenMode
   = OpenForReading -- creating if doesn't exist
@@ -68,7 +81,7 @@ open state@OsState{nextKey=key,fs,table} path = \case
       Left NoSuchPath -> Left NoSuchPath
       Right file -> do
         let entry = Entry { rc = 1, what = FileContents (File.lines file) }
-        let table' = Map.insert key entry table
+        let table' = Tab (Map.insert key entry (unTab table))
         let state' = state { nextKey, table = table' }
         Right (key,state')
   OpenForWriting wom -> do
@@ -78,20 +91,18 @@ open state@OsState{nextKey=key,fs,table} path = \case
         Append -> fs
     let nextKey = key+1
     let entry = Entry { rc = 1, what = FileAppend path }
-    let table' = Map.insert key entry table
+    let table' = Tab (Map.insert key entry (unTab table))
     let state' = state { nextKey, fs = fs', table = table' }
     Right (key,state')
 
 
-data PipeEnds = PipeEnds { r :: Key, w :: Key }
-
-pipe :: OsState -> (PipeEnds,OsState)
+pipe :: OsState -> (PipeEnds Key,OsState)
 pipe state@OsState{nextKey=key,pipeSystem,table} = do
   let (r,w,nextKey) = (key,key+1,key+2)
   let (pk,pipeSystem') = PipeSystem.createPipe pipeSystem
   let re = Entry { rc = 1, what = PipeRead pk}
   let we = Entry { rc = 1, what = PipeWrite pk }
-  let table' = Map.insert r re (Map.insert w we table)
+  let table' = Tab (Map.insert r re (Map.insert w we (unTab table)))
   let state' = state { nextKey, table = table', pipeSystem = pipeSystem' }
   let ends = PipeEnds { r, w }
   (ends, state')
@@ -99,22 +110,22 @@ pipe state@OsState{nextKey=key,pipeSystem,table} = do
 
 dup :: OsState -> Key -> OsState
 dup state@OsState{table} key = do
-  let e@Entry{rc} = look "dup" key table
+  let e@Entry{rc} = look "dup" key (unTab table)
   let e' = e { rc = rc + 1 }
-  let table' = Map.insert key e' table
+  let table' = Tab (Map.insert key e' (unTab table))
   state { table = table' }
 
 
 close :: OsState -> Key -> OsState
 close state0@OsState{pipeSystem,table} key = do
-  let e@Entry{rc,what} = look "close" key table
+  let e@Entry{rc,what} = look "close" key (unTab table)
   case rc > 1 of
     True -> do
-      let e' = e { rc = rc + 1 }
-      let table' = Map.insert key e' table
+      let e' = e { rc = rc - 1 } -- TODO: haha, this was +, needs to be -
+      let table' = Tab (Map.insert key e' (unTab table))
       state0 { table = table' }
     False -> do
-      let table' = Map.delete key table
+      let table' = Tab (Map.delete key (unTab table))
       let state = state0 { table = table' }
       case what of
         PipeRead pk -> state { pipeSystem = PipeSystem.closeForReading pipeSystem pk }
@@ -125,24 +136,22 @@ close state0@OsState{pipeSystem,table} key = do
 
 read :: OsState -> Key -> Either NotReadable (Either Block (Either EOF String, OsState))
 read state@OsState{table,pipeSystem} key = do
-  let e@Entry{what} = look "write" key table
+  let e@Entry{what} = look "write" key (unTab table)
   case what of
     PipeWrite{} -> Left NotReadable
     FileAppend{} -> Left NotReadable
     PipeRead pk  -> do
       case PipeSystem.readPipe pipeSystem pk of
         Left Block -> Right (Left Block)
-        Right (Left EOF) -> Right (Right (Left EOF, state))
-        Right (Right (line,pipeSystem)) -> do
-          let state' = state { pipeSystem  }
-          Right (Right (Right line, state'))
+        Right (x,pipeSystem) -> Right (Right (x,state {pipeSystem}))
+
     FileContents xs -> do
       case xs of
         [] -> Right (Right (Left EOF, state))
         line:xs' -> do
           let what' = FileContents xs'
           let e' = e { what = what' }
-          let table' = Map.insert key e' table
+          let table' = Tab (Map.insert key e' (unTab table))
           let state' = state { table = table' }
           Right (Right (Right line, state'))
 
@@ -150,7 +159,7 @@ read state@OsState{table,pipeSystem} key = do
 
 write :: OsState -> Key -> String -> Either NotWritable (Either Block (Either EPIPE OsState))
 write state@OsState{table,pipeSystem,fs} key line = do
-  let Entry{what} = look "write" key table
+  let Entry{what} = look "write" key (unTab table)
   case what of
     PipeRead{} -> Left NotWritable
     FileContents{} -> Left NotWritable
