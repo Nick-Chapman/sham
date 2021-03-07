@@ -42,7 +42,7 @@ run = Testing.run $ do
   test ["echo hey < words >&0"] ["(stderr) &1 not writable"]
 
   test ["echo foo >&3"] ["(stderr) bad file descriptor: &3"]
-  test ["echo AA 3< words >&3"] ["(stderr) &1 not writable"]
+  test ["echo AA 3< words >&3"] ["(stderr) bad file descriptor: &3"] -- ?? file-opens on fd-3
   test ["echo AA 4< words >&4"] ["(stderr) &1 not writable"]
   test ["doh 4< words"] ["(stderr) no such path: doh"]
   test ["doh 4< words 2>&4"] [] -- redirecting stderr to unwritable FD looses error

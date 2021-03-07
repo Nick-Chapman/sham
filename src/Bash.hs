@@ -139,12 +139,15 @@ interpret = \case
   BashExit -> Exit
 
 executePath :: [Redirect] -> Path -> Prog ()
-executePath rs path = spawnWait (execRedirects rs (runBashScript path))
+executePath rs path =
+  spawnWait (do mapM_ execRedirect rs; runBashScript path)
 
 executeBuiltin :: [Redirect] -> Builtin -> [String] -> Maybe NoWait -> Prog ()
 executeBuiltin rs b args = \case
-  Nothing -> spawnWait (execRedirects rs (builtinProg args b))
-  Just NoWait -> spawn (execRedirects rs (builtinProg args b))
+  Nothing ->
+    spawnWait (do mapM_ execRedirect rs; builtinProg args b)
+  Just NoWait ->
+    spawn (do mapM_ execRedirect rs; builtinProg args b)
 
 spawn :: Prog () -> Prog ()
 spawn prog = do Spawn prog (\_ -> pure ())
@@ -152,22 +155,14 @@ spawn prog = do Spawn prog (\_ -> pure ())
 spawnWait :: Prog () -> Prog ()
 spawnWait prog = do Spawn prog (\childPid -> Wait childPid)
 
-execRedirects :: [Redirect] -> Prog () -> Prog ()
-execRedirects = \case
-  [] -> \prog -> prog
-  r:rs -> execRedirect r . execRedirects rs
-
-execRedirect :: Redirect -> Prog () -> Prog ()
-execRedirect r prog = -- TODO: doesn't need to take prog..
+execRedirect :: Redirect -> Prog ()
+execRedirect r =
   case r of
     Redirect mode dest (FromPath path) -> do
       withOpen path mode $ \src -> do
         dup2 dest src
-        prog
     Redirect _mode dest (FromFD src) -> do -- do we care what the mode is?
       dup2 dest src
-      prog -- ..very easy to forget & cause a bug hunt!
-
 
 dup2 :: FD -> FD -> Prog ()
 dup2 d s = do
