@@ -3,12 +3,13 @@ module Bash (console) where
 
 import Data.List (sort)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import Os (Prog(..),SysCall(..),OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..))
+import Os (Prog,SysCall(..),OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..))
 import Interaction (Prompt(..))
 import SysCall (BadFileDescriptor(..))
 import Path (Path)
 import Prelude hiding (read)
 import qualified Path (create,toString)
+import qualified Os (Prog(..))
 
 console :: Prog ()
 console = loop where
@@ -21,6 +22,7 @@ console = loop where
         loop
 
 -- TODO: at some point we'll want a proper parser!
+-- TODO: allow no space before path redirect: >xx
 parseLine :: String -> Script
 parseLine line = loop [] [] (words line)
   where
@@ -36,34 +38,29 @@ parseLine line = loop [] [] (words line)
     makeScript ws rs =
       case (ws,rs) of
         (".":p:[],[]) -> Source (Path.create p)
-        ("exit":[],[]) -> BashExit
+        ("exit":[],[]) -> Exit
         ("echo":args,_) -> makeBuiltin Echo args rs
         ("cat":args,_) -> makeBuiltin Cat args rs
         ("ls":args,_) -> makeBuiltin Ls args rs
         ("ps":args,_) -> makeBuiltin Ps args rs
         ("rev":args,_) -> makeBuiltin Rev args rs
+        ("exec":args,_) -> makeBuiltin Exec args rs
         ([],[]) -> Null
-        (w:args,_) -> do
-          -- TODO: still no args for bash scripts yet; but check for &
-          lookAmpersand args $ \_args mode -> do
-            Exec (Path.create w) rs mode
-        _ ->
-          Echo2 ("bash, unable to parse: " ++ show line)
+        (args,_) -> makeBuiltin Exec args rs
 
 
 makeBuiltin :: Builtin -> [String] -> [Redirect] -> Script
 makeBuiltin b args rs =
-  lookAmpersand args $ \args mode -> Run b args rs mode
+  lookAmpersand args $ \args mode -> Command b args rs mode
 
-lookAmpersand :: [String] -> ([String] -> Maybe NoWait -> a) -> a
+lookAmpersand :: [String] -> ([String] -> WaitMode -> a) -> a
 lookAmpersand xs k =
   case reverse xs of
-    "&":xs' -> k xs' (Just NoWait)
-    _-> k xs Nothing
+    "&":xs' -> k xs' NoWait
+    _-> k xs Wait
 
 
--- TODO: support fd 3,4.. (need 3 for swap stderr/stdout)
--- TODO: allow no space before path redirect: >xx
+-- TODO: generalize/share redirect parsing; even before a proper parser
 parseAsRedirect :: [String] -> Maybe (Redirect,[String])
 parseAsRedirect = \case
   "<":p:xs -> Just (Redirect rd (FD 0) (path p), xs)
@@ -117,17 +114,15 @@ parseAsRedirect = \case
 
 data Script
   = Null
-  | Echo2 String
-  | Run Builtin [String] [Redirect] (Maybe NoWait)
-  | Exec Path [Redirect] (Maybe NoWait)
-  | Source Path
-  | BashExit
+  | Command Builtin [String] [Redirect] WaitMode
+  | Source Path -- TODO: builtin
+  | Exit -- TODO: builtin
   -- TODO: sequencing operator ";"
   -- TODO: pipe operator "|"
 
-data NoWait = NoWait
+data WaitMode = NoWait | Wait
 
-data Builtin = Echo | Cat | Rev | Ls | Ps
+data Builtin = Exec | Echo | Cat | Rev | Ls | Ps
 
 data Redirect
   = Redirect OpenMode FD RedirectSource
@@ -139,31 +134,20 @@ data RedirectSource
 interpret :: Script -> Prog ()
 interpret = \case
   Null  -> pure ()
-  Echo2 line -> write (FD 2) line -- TODO: use redirect
-  Run b args rs waitMode -> executeBuiltin rs b args waitMode
-  Exec path rs waitMode -> executePath rs path waitMode
+  Exit -> Os.Exit
   Source path -> runBashScript path
-  BashExit -> Exit
+  Command b args rs waitMode -> executeBuiltin rs b args waitMode
 
-executePath :: [Redirect] -> Path -> Maybe NoWait -> Prog ()
-executePath rs path = \case
-  Nothing ->
-    spawnWait (do mapM_ execRedirect rs; runBashScript path)
-  Just NoWait ->
-    spawn (do mapM_ execRedirect rs; runBashScript path)
+executeBuiltin :: [Redirect] -> Builtin -> [String] -> WaitMode -> Prog ()
+executeBuiltin rs b args mode = do
+  evalWaitMode mode $ do
+    mapM_ execRedirect rs
+    builtinProg args b
 
-executeBuiltin :: [Redirect] -> Builtin -> [String] -> Maybe NoWait -> Prog ()
-executeBuiltin rs b args = \case
-  Nothing ->
-    spawnWait (do mapM_ execRedirect rs; builtinProg args b)
-  Just NoWait ->
-    spawn (do mapM_ execRedirect rs; builtinProg args b)
-
-spawn :: Prog () -> Prog ()
-spawn prog = do Spawn prog (\_ -> pure ())
-
-spawnWait :: Prog () -> Prog ()
-spawnWait prog = do Spawn prog (\childPid -> Wait childPid)
+evalWaitMode :: WaitMode -> Prog () -> Prog ()
+evalWaitMode mode prog = case mode of
+    Wait -> do Os.Spawn prog (\childPid -> Os.Wait childPid)
+    NoWait -> do Os.Spawn prog (\_ -> pure ())
 
 execRedirect :: Redirect -> Prog ()
 execRedirect r =
@@ -176,11 +160,28 @@ execRedirect r =
 
 dup2 :: FD -> FD -> Prog ()
 dup2 d s = do
-  Call Dup2 (d,s) >>= \case
+  Os.Call Dup2 (d,s) >>= \case
     Left BadFileDescriptor -> do
       err2 $ "bad file descriptor: " ++ show s
-      Exit
+      Os.Exit
     Right () -> pure ()
+
+builtinProg :: [String] -> Builtin -> Prog ()
+builtinProg args = \case
+  Exec -> execProg args
+  Echo -> echoProg (unwords args)
+  Cat -> catProg args
+  Rev -> revProg -- ignores command line args
+  Ls -> lsProg -- ignores command line args
+  Ps -> psProg
+
+execProg :: [String] -> Prog ()
+execProg = \case
+  [] -> err2 "execProg/0"
+  [p] -> do
+    runBashScript (Path.create p)
+  _ ->
+    err2 "execProg/multi"
 
 runBashScript :: Path -> Prog ()
 runBashScript path = do
@@ -188,22 +189,6 @@ runBashScript path = do
     withOpen path OpenForReading $ \fd -> do
       readAll fd
   sequence_ [ interpret (parseLine line) | line <- lines ]
-
-readAll :: FD -> Prog [String]
-readAll fd = loop []
-  where
-    loop acc =
-      read NoPrompt fd >>= \case
-      Left EOF -> pure (reverse acc)
-      Right line -> loop (line:acc)
-
-builtinProg :: [String] -> Builtin -> Prog ()
-builtinProg args = \case
-  Echo -> echoProg (unwords args)
-  Cat -> catProg args
-  Rev -> revProg -- ignores command line args
-  Ls -> lsProg -- ignores command line args
-  Ps -> psProg
 
 echoProg :: String -> Prog ()
 echoProg line = write (FD 1) line
@@ -228,16 +213,6 @@ catFd fd = loop where
         write (FD 1) line
         loop
 
-lsProg :: Prog ()
-lsProg = do
-  paths <- Call Paths ()
-  mapM_ (write (FD 1) . Path.toString) (sort paths)
-
-psProg :: Prog ()
-psProg = do
-  pids <- Pids
-  mapM_ (write (FD 1) . show) (sort pids)
-
 revProg :: Prog ()
 revProg = loop where
   loop :: Prog ()
@@ -248,20 +223,38 @@ revProg = loop where
         write (FD 1) (reverse line)
         loop
 
+lsProg :: Prog ()
+lsProg = do
+  paths <- Os.Call Paths ()
+  mapM_ (write (FD 1) . Path.toString) (sort paths)
+
+psProg :: Prog ()
+psProg = do
+  pids <- Os.Pids
+  mapM_ (write (FD 1) . show) (sort pids)
+
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
-  Call Open (path,mode) >>= \case
+  Os.Call Open (path,mode) >>= \case
     Left NoSuchPath -> do
       err2 $ "no such path: " ++ Path.toString path
-      Exit
+      Os.Exit
     Right fd -> do
       res <- action fd
-      Call Close fd
+      Os.Call Close fd
       pure res
+
+readAll :: FD -> Prog [String]
+readAll fd = loop []
+  where
+    loop acc =
+      read NoPrompt fd >>= \case
+      Left EOF -> pure (reverse acc)
+      Right line -> loop (line:acc)
 
 read :: Prompt -> FD -> Prog (Either EOF String)
 read prompt fd =
-  Call (Read prompt) fd >>= \case
+  Os.Call (Read prompt) fd >>= \case
     Left NotReadable -> do
       err2 (show fd ++ " not readable")
       pure (Left EOF) -- TODO: better to exit?
@@ -270,14 +263,14 @@ read prompt fd =
 
 write :: FD -> String -> Prog ()
 write fd line = do
-  Call Write (fd,line) >>= \case
+  Os.Call Write (fd,line) >>= \case
     Left NotWritable -> err2 (show fd ++ " not writable")
     Right (Left EPIPE) -> err2 "EPIPE when writing to fd1"
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()
 err2 line = do
-  Call Write (FD 2, line) >>= \case
-    Left NotWritable -> Trace (show (FD 2) ++ " not writable")
-    Right (Left EPIPE) -> Trace "EPIPE when writing to fd2"
+  Os.Call Write (FD 2, line) >>= \case
+    Left NotWritable -> Os.Trace (show (FD 2) ++ " not writable")
+    Right (Left EPIPE) -> Os.Trace "EPIPE when writing to fd2"
     Right (Right ()) -> pure ()
