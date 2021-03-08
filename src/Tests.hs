@@ -71,3 +71,4 @@ run = Testing.run $ do
   test ["echo foo | rev"] ["oof"]
   test ["cat days | rev"] rw
   test ["cat days | rev | rev"] days
+  test ["cat days | rev | rev | rev"] rw

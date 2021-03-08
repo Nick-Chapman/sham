@@ -28,11 +28,9 @@ parseLine :: String -> Script
 parseLine line = do
   case splitWhen (=='|') line of
     [] -> error "parseLine/split/[]/impossible"
-    [seg] -> parseCommand seg
-    [seg1,seg2] -> Pipe (parseCommand seg1) (parseCommand seg2)
-    [seg1,seg2,seg3] -> Pipe (Pipe (parseCommand seg1) (parseCommand seg2)) (parseCommand seg3)
-    _ ->
-      error "multi-pipeline-not-supported-yet" -- TODO: multi pipes
+    x1:xs ->
+      foldl Pipe (parseCommand x1) (reverse [ parseCommand com | com <- xs ])
+
 
 parseCommand :: String -> Script
 parseCommand seg = loop [] [] (words seg)
