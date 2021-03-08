@@ -27,16 +27,16 @@ data PipeSystem = State
   }
 
 data Mode = Active | Drain
-instance Show Mode where show = \case Active -> "(a)"; Drain -> "(d)"
+instance Show Mode where show = \case Active -> "(active)"; Drain -> "(draining)"
 
 instance Show PipeSystem where
   show State{m} =
     intercalate "," [ show k ++ show m ++ show p | (k,(p,m)) <- Map.toList m ]
 
 newtype PipeKey = PK Int deriving (Eq,Ord,Num)
-instance Show PipeKey where show (PK n) = "p"++show n
+instance Show PipeKey where show (PK n) = "pipe"++show n
 
-empty = State { m = Map.empty, next = 71 }
+empty = State { m = Map.empty, next = 1 }
 
 createPipe s@State{m,next=key} = do
   let pipe = Pipe.empty

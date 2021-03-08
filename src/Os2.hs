@@ -12,7 +12,7 @@ import FileSystem (FileSystem,NoSuchPath(..))
 import Interaction (Interaction(..))
 import Misc (Block(..))
 import OsState (OsState,OpenMode(..),WriteOpenMode(..))
-import SysCall (SysCall(..),Env,env0,runSys,FD(..))
+import SysCall (SysCall(..),Env,env0,dupEnv,closeEnv,runSys,FD(..))
 import qualified Data.Map.Strict as Map
 import qualified OsState (init)
 
@@ -25,7 +25,7 @@ data Prog a where
   Bind :: Prog a -> (a -> Prog b) -> Prog b
   Exit :: Prog a
   Trace :: String -> Prog ()
-  Spawn :: Prog () -> (Pid -> Prog a) -> Prog a
+  Spawn :: Prog () -> (Pid -> Prog a) -> Prog a -- TODO: Better named Fork
   Wait :: Pid -> Prog ()
   Pids :: Prog [Pid]
   Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
@@ -57,60 +57,86 @@ data Action where
   A_Pids :: ([Pid] -> Action) -> Action
   A_Call :: (Show a, Show b) => SysCall a b -> a -> (b -> Action) -> Action
 
+instance Show Action where
+  show = \case
+    A_Halt{} -> "A_Halt"
+    A_Trace{} -> "A_Trace"
+    A_Spawn{} -> "A_Spawn"
+    A_Wait{} -> "A_Wait"
+    A_Pids{} -> "A_Pids"
+    A_Call{} -> "A_Call"
+
 ----------------------------------------------------------------------
 
 resume :: Pid -> Proc -> State -> Interaction
-resume me proc0@(Proc env action0) state@State{os} = case action0 of
+resume me proc0@(Proc env action0) state@State{os} =
+ --I_Trace (show ("resume",me,action0)) $
+  case action0 of
 
   A_Halt -> do
-    case choose state of
+    --trace me "Halt" $ do
+    let state' = state { os = closeEnv env os }
+    --I_Trace (show state') $ do
+    case choose state' of
       Nothing -> I_Halt
-      Just (state,other,proc2) ->
-        resume other proc2 state
+      Just (state',other,proc2) ->
+        resume other proc2 state'
 
   A_Trace message action ->
     I_Trace message (resume me (Proc env action) state)
 
   A_Spawn action f -> do
-    -- TODO: dup all file-descriptors in env
+    let state' = state { os = dupEnv env os }
+    let (state'',pid) = newPid state'
+    --trace me ("Spawn:"++show pid) $ do
     let child = Proc env action
-    let (state',pid) = newPid state
     let parent = Proc env (f pid)
-    yield me parent (suspend pid child state')
+    --I_Trace (show state'') $ do
+    yield me parent (suspend pid child state'')
 
   A_Wait pid action ->
+    --trace me ("Wait:"++show pid) $ do -- This happens a lot!
     if running pid state
     then block me proc0 state
-    else yield me (Proc env action) state
+    else yield me (Proc env action) state -- TODO: resume instead of yield (less rr)
 
   A_Pids f -> do
-    let action = f (allPids state)
+    let res = allPids state
+    trace me ("Pids()="++show res) $ do
+    let action = f res
     yield me (Proc env action) state
 
   A_Call sys arg f -> do
     -- TODO: allow trace tobe turned on/off interactively at the console
-    --I_Trace (show ("Call",sys,arg)) $ do -- trace all system calls
+    --trace me (show sys ++ show arg ++"...") $ do
     case runSys sys os env arg of
       Left Block ->
-        --I_Trace (show ("Blocked",sys)) $ do
+        --trace me (show sys ++ show arg ++" BLOCKED") $ do
         block me proc0 state
       Right proceed -> do
         proceed $ \os env res -> do
-          --I_Trace (show ("Proceed",res)) $ do
+          --trace me (show sys ++ show arg ++" --> " ++ show res) $ do
+          --trace me ("env: " ++ show env) $ do
+          let state' = state { os }
+          --I_Trace (show state') $ do
           let action = f res
-          yield me (Proc env action) state { os }
+          yield me (Proc env action) state'
+
+
+trace :: Pid -> String -> Interaction -> Interaction
+trace me mes = I_Trace (show me ++ " " ++ mes)
 
 block :: Pid -> Proc -> State -> Interaction
 block = yield -- TODO: track blocked Procs
 
 yield :: Pid -> Proc -> State -> Interaction
 yield me proc1 state = do
- --I_Trace (show state) $
   case choose state of
     Nothing ->
+      --I_Trace (show ("yield, only me!", me)) $
       resume me proc1 state -- nothing else to do, so continue
     Just (state,other,proc2) ->
-      --I_Trace (show ("yield",me,other)) $ do
+      --I_Trace (show ("yield", me, "-->", other)) $
       resume other proc2 (suspend me proc1 state)
 
 ----------------------------------------------------------------------

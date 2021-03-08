@@ -42,16 +42,26 @@ newtype FileTable = Tab { unTab :: Map Key Entry }
 
 instance Show FileTable where
   show Tab{unTab=m} =
-    intercalate "," [ show k ++ ":" ++ show e | (k,e) <- Map.toList m ]
+    intercalate ", " [ show k ++ "=" ++ show e | (k,e) <- Map.toList m ]
 
-data Entry = Entry { rc :: Int, what :: What } deriving Show
+data Entry = Entry { rc :: Int, what :: What }
+
+instance Show Entry where
+  show Entry{rc,what} =
+    show what ++ "(" ++ show rc ++ ")"
 
 data What
   = PipeRead PipeKey
   | PipeWrite PipeKey
   | FileAppend Path -- nothing done when opened
   | FileContents [String] -- full contents read when opened
-  deriving Show
+
+instance Show What where
+  show = \case
+    PipeRead pk -> "Read:"++show pk
+    PipeWrite pk -> "Write:"++show pk
+    FileAppend path -> "Append:"++show path
+    FileContents xs -> "Contents[size=#"++show (length xs)++"]"
 
 init :: FileSystem -> OsState
 init fs = OsState
@@ -63,8 +73,8 @@ init fs = OsState
 
 instance Show OsState where
   show OsState{fs=_,pipeSystem=ps,table,nextKey=_} =
-    "pipe:[" ++ show ps ++ "], " ++
-    "open:[" ++ show table ++ "]"
+    "open: " ++ show table ++ "\n" ++
+    "pipe: " ++ show ps
 
 data OpenMode
   = OpenForReading -- creating if doesn't exist
@@ -116,27 +126,28 @@ dup state@OsState{table} key = do
   state { table = table' }
 
 
-close :: OsState -> Key -> OsState
+close :: OsState -> Key -> (Bool,OsState)
 close state0@OsState{pipeSystem,table} key = do
   let e@Entry{rc,what} = look "close" key (unTab table)
-  case rc > 1 of
-    True -> do
-      let e' = e { rc = rc - 1 } -- TODO: haha, this was +, needs to be -
+  let closing = (rc == 1)
+  (closing, case closing of
+    False -> do
+      let e' = e { rc = rc - 1 }
       let table' = Tab (Map.insert key e' (unTab table))
       state0 { table = table' }
-    False -> do
+    True -> do
       let table' = Tab (Map.delete key (unTab table))
       let state = state0 { table = table' }
       case what of
         PipeRead pk -> state { pipeSystem = PipeSystem.closeForReading pipeSystem pk }
         PipeWrite pk -> state { pipeSystem = PipeSystem.closeForWriting pipeSystem pk }
         FileAppend{} -> state
-        FileContents{} -> state
+        FileContents{} -> state)
 
 
 read :: OsState -> Key -> Either NotReadable (Either Block (Either EOF String, OsState))
 read state@OsState{table,pipeSystem} key = do
-  let e@Entry{what} = look "write" key (unTab table)
+  let e@Entry{what} = look "read" key (unTab table)
   case what of
     PipeWrite{} -> Left NotReadable
     FileAppend{} -> Left NotReadable

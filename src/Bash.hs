@@ -30,6 +30,7 @@ parseLine line = do
     [] -> error "parseLine/split/[]/impossible"
     [seg] -> parseCommand seg
     [seg1,seg2] -> Pipe (parseCommand seg1) (parseCommand seg2)
+    [seg1,seg2,seg3] -> Pipe (Pipe (parseCommand seg1) (parseCommand seg2)) (parseCommand seg3)
     _ ->
       error "multi-pipeline-not-supported-yet" -- TODO: multi pipes
 
@@ -144,20 +145,26 @@ interpret = \case
   Exit -> Os.Exit
   Source path -> runBashScript path
   Command b args rs waitMode -> executeBuiltin rs b args waitMode
+
   Pipe script1 script2 -> do
     PipeEnds{r,w} <- Os.Call SysPipe ()
-    --spawn Wait $ do -- TODO: extra spawn?
-    do
-      spawn NoWait $ do
-        dup2 (FD 1) w
+    Os.Spawn (do
+                 dup2 (FD 1) w
+                 Os.Call Close w
+                 Os.Call Close r
+                 interpret script1
+             ) $ \child1 -> do
+      Os.Spawn (do
+                   dup2 (FD 0) r
+                   Os.Call Close w
+                   Os.Call Close r
+                   interpret script2
+               ) $ \child2 -> do
         Os.Call Close w
-        interpret script1
-        Os.Call Close (FD 1)
-      spawn Wait $ do -- TODO: NoWait, if add extra spawn above
-        dup2 (FD 0) r
         Os.Call Close r
-        interpret script2
-        Os.Call Close (FD 0)
+        Os.Wait child1
+        Os.Wait child2
+
 
 executeBuiltin :: [Redirect] -> Builtin -> [String] -> WaitMode -> Prog ()
 executeBuiltin rs b args mode = do
