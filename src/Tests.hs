@@ -33,6 +33,12 @@ run = Testing.run $ do
   test ["rev < days"] rw
   test ["rev < days > rw", "cat rw"] rw
 
+  test ["exit nope"] ["(stderr) exit: takes no arguments"]
+  test ["rev nope"] ["(stderr) rev: takes no arguments"]
+  test ["rev nope < days"] ["(stderr) rev: takes no arguments"]
+  test ["ls nope"] ["(stderr) ls: takes no arguments"]
+  test ["ps nope"] ["(stderr) ps: takes no arguments"]
+
   test ["echo doh > x","echo echo foo >> x","x"] ["(stderr) no such path: doh","foo"]
   test ["echo doh > x","echo echo foo >> x","x > hide"] ["(stderr) no such path: doh"]
   test ["echo doh > x","echo echo foo >> x","x 2> hide"] ["foo"]
@@ -58,7 +64,6 @@ run = Testing.run $ do
   test ["cat > x","echo OUT","echo ERR >&2","","x"] ["OUT","(stderr) ERR"]
   test ["cat > x","echo OUT","echo ERR >&2","",". x"] ["OUT","(stderr) ERR"]
 
-  test ["exit nope"] ["(stderr) exit takes no arguments"]
   test ["exit"] []
   test ["cat > x","echo 1","exit","echo 2","","x"] ["1"]
   test ["echo exit > y","cat > x","echo 1","y","echo 2","","x"] ["1","2"]

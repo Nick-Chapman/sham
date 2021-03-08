@@ -166,7 +166,7 @@ executeBuiltin :: [Redirect] -> Builtin -> [String] -> WaitMode -> Prog ()
 executeBuiltin rs b args mode = do
   spawn mode $ do
     mapM_ execRedirect rs
-    builtinProg args b
+    builtinProg b args
 
 spawn :: WaitMode -> Prog () -> Prog ()
 spawn mode prog = case mode of
@@ -191,20 +191,18 @@ dup2 d s = do
       Os.Exit
     Right () -> pure ()
 
-builtinProg :: [String] -> Builtin -> Prog ()
-builtinProg args = \case
-  Exit -> exitProg args
-  Exec -> execProg args
-  Echo -> echoProg (unwords args)
-  Cat -> catProg args
-  Rev -> revProg -- ignores command line args
-  Ls -> lsProg -- ignores command line args
+builtinProg :: Builtin -> [String] -> Prog ()
+builtinProg = \case
+  Exit -> exitProg
+  Exec -> execProg
+  Echo -> echoProg
+  Cat -> catProg
+  Rev -> revProg
+  Ls -> lsProg
   Ps -> psProg
 
 exitProg :: [String] -> Prog ()
-exitProg = \case
-  [] -> Os.Exit
-  _ -> err2 "exit takes no arguments"
+exitProg args = checkNoArgs "exit" args Os.Exit
 
 execProg :: [String] -> Prog ()
 execProg = \case
@@ -221,8 +219,8 @@ runBashScript path = do
       readAll fd
   sequence_ [ interpret (parseLine line) | line <- lines ]
 
-echoProg :: String -> Prog ()
-echoProg line = write (FD 1) line
+echoProg :: [String] -> Prog ()
+echoProg args = write (FD 1) (unwords args)
 
 catProg :: [String] -> Prog ()
 catProg = \case
@@ -244,8 +242,8 @@ catFd fd = loop where
         write (FD 1) line
         loop
 
-revProg :: Prog ()
-revProg = loop where
+revProg :: [String] -> Prog ()
+revProg args = checkNoArgs "rev" args loop where
   loop :: Prog ()
   loop = do
     read NoPrompt (FD 0) >>= \case
@@ -254,15 +252,21 @@ revProg = loop where
         write (FD 1) (reverse line)
         loop
 
-lsProg :: Prog ()
-lsProg = do
+lsProg :: [String] -> Prog ()
+lsProg args = checkNoArgs "ls" args $ do
   paths <- Os.Call Paths ()
   mapM_ (write (FD 1) . Path.toString) (sort paths)
 
-psProg :: Prog ()
-psProg = do
+psProg :: [String] -> Prog ()
+psProg args = checkNoArgs "ps" args $ do
   pids <- Os.Pids
   mapM_ (write (FD 1) . show) (sort pids)
+
+checkNoArgs :: String -> [String] -> Prog () -> Prog ()
+checkNoArgs who args prog = case args of
+  [] -> prog
+  _ -> err2 (who ++ ": takes no arguments")
+
 
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
