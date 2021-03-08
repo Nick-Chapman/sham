@@ -47,7 +47,7 @@ parseCommand seg = loop [] [] (words seg)
     makeScript ws rs =
       case (ws,rs) of
         (".":p:[],[]) -> Source (Path.create p)
-        ("exit":[],[]) -> Exit
+        ("exit":args,_) -> Command Exit args [] Inline
         ("echo":args,_) -> makeBuiltin Echo args rs
         ("cat":args,_) -> makeBuiltin Cat args rs
         ("ls":args,_) -> makeBuiltin Ls args rs
@@ -123,12 +123,11 @@ data Script
   -- TODO: sequencing operator ";"
   | Command Builtin [String] [Redirect] WaitMode
   | Source Path -- TODO: builtin
-  | Exit -- TODO: builtin
   | Pipe Script Script
 
-data WaitMode = NoWait | Wait
+data WaitMode = NoWait | Wait | Inline
 
-data Builtin = Exec | Echo | Cat | Rev | Ls | Ps
+data Builtin = Exec | Echo | Cat | Rev | Ls | Ps | Exit
 
 data Redirect
   = Redirect OpenMode FD RedirectSource
@@ -140,7 +139,6 @@ data RedirectSource
 interpret :: Script -> Prog ()
 interpret = \case
   Null  -> pure ()
-  Exit -> Os.Exit
   Source path -> runBashScript path
   Command b args rs waitMode -> executeBuiltin rs b args waitMode
 
@@ -174,6 +172,7 @@ spawn :: WaitMode -> Prog () -> Prog ()
 spawn mode prog = case mode of
     Wait -> do Os.Spawn prog (\childPid -> Os.Wait childPid)
     NoWait -> do Os.Spawn prog (\_ -> pure ())
+    Inline -> prog
 
 execRedirect :: Redirect -> Prog ()
 execRedirect r =
@@ -194,12 +193,18 @@ dup2 d s = do
 
 builtinProg :: [String] -> Builtin -> Prog ()
 builtinProg args = \case
+  Exit -> exitProg args
   Exec -> execProg args
   Echo -> echoProg (unwords args)
   Cat -> catProg args
   Rev -> revProg -- ignores command line args
   Ls -> lsProg -- ignores command line args
   Ps -> psProg
+
+exitProg :: [String] -> Prog ()
+exitProg = \case
+  [] -> Os.Exit
+  _ -> err2 "exit takes no arguments"
 
 execProg :: [String] -> Prog ()
 execProg = \case

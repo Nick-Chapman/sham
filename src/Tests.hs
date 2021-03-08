@@ -58,6 +58,7 @@ run = Testing.run $ do
   test ["cat > x","echo OUT","echo ERR >&2","","x"] ["OUT","(stderr) ERR"]
   test ["cat > x","echo OUT","echo ERR >&2","",". x"] ["OUT","(stderr) ERR"]
 
+  test ["exit nope"] ["(stderr) exit takes no arguments"]
   test ["exit"] []
   test ["cat > x","echo 1","exit","echo 2","","x"] ["1"]
   test ["echo exit > y","cat > x","echo 1","y","echo 2","","x"] ["1","2"]
