@@ -101,8 +101,8 @@ resume me proc0@(Proc env action0) state@State{os} =
     else yield me (Proc env action) state -- TODO: resume instead of yield (less rr)
 
   A_Pids f -> do
-    let res = allPids state
-    trace me ("Pids()="++show res) $ do
+    let res = me : allPids state
+    --trace me ("Pids()="++show res) $ do
     let action = f res
     yield me (Proc env action) state
 
@@ -123,8 +123,8 @@ resume me proc0@(Proc env action0) state@State{os} =
           yield me (Proc env action) state'
 
 
-trace :: Pid -> String -> Interaction -> Interaction
-trace me mes = I_Trace (show me ++ " " ++ mes)
+_trace :: Pid -> String -> Interaction -> Interaction
+_trace me mes = I_Trace (show me ++ " " ++ mes)
 
 block :: Pid -> Proc -> State -> Interaction
 block = yield -- TODO: track blocked Procs

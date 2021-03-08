@@ -69,9 +69,9 @@ run = Testing.run $ do
   test ["echo exit > y","cat > x","echo 1","y","echo 2","","x"] ["1","2"]
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
 
-  test ["ps"] ["[1]"]
-  test ["echo ps > x","x"] ["[1]","[3]"]
-  test ["echo ps > x","echo x > y","y"] ["[1]","[4]","[5]"]
+  test ["ps"] ["[1]","[2]"]
+  test ["echo ps > x","x"] ["[1]","[3]","[4]"]
+  test ["echo ps > x","echo x > y","y"] ["[1]","[4]","[5]","[6]"]
 
   -- pipes...
   test ["echo foo | rev"] ["oof"]
