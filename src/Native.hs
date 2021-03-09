@@ -1,6 +1,6 @@
 
 module Native (
-  echo,cat,rev,grep,ls,ps,bins,xargs,
+  echo,cat,rev,grep,head,ls,ps,bins,xargs,
   withOpen,readAll,read,write,err2,
   ) where
 
@@ -10,7 +10,7 @@ import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Prog (Prog,OpenMode(..),NoSuchPath(..))
 import Path (Path)
-import Prelude hiding (all,read)
+import Prelude hiding (all,head,read)
 import SysCall (SysCall(..),FD)
 import qualified Prog
 import qualified Path (create,toString)
@@ -48,7 +48,7 @@ rev args = checkNoArgs "rev" args loop where
 
 grep :: [String] -> Prog ()
 grep args = do
-  getSingleArg "rev" args $ \pat -> do
+  getSingleArg "grep" args $ \pat -> do
   let
     loop :: Prog ()
     loop = do
@@ -59,6 +59,12 @@ grep args = do
             write stdout line
           loop
   loop
+
+head :: [String] -> Prog ()
+head args = checkNoArgs "head" args $ do
+  Native.read NoPrompt stdin >>= \case
+    Left EOF -> pure ()
+    Right line -> write stdout line
 
 ls :: [String] -> Prog ()
 ls args = checkNoArgs "ls" args $ do
