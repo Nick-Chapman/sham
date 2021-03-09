@@ -11,7 +11,7 @@ import Path (Path)
 import Prelude hiding (read)
 import SysCall (BadFileDescriptor(..))
 import qualified Data.Map.Strict as Map
-import qualified Native (all,name,run,read)
+import qualified Native (list,name,run,read)
 import qualified Os (Prog(..))
 import qualified Path (create)
 
@@ -120,7 +120,7 @@ makeCommand str =
     Nothing -> Right (Path.create str)
 
 nativeTable :: Map String Native
-nativeTable = Map.fromList [ (Native.name x, x) | x <- Native.all ]
+nativeTable = Map.fromList [ (Native.name x, x) | x <- Native.list ]
 
 
 data Script

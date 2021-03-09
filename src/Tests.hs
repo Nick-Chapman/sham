@@ -74,6 +74,8 @@ run = Testing.run $ do
   test ["echo ps > x","x"] ["[1]","[3]","[4]"]
   test ["echo ps > x","echo x > y","y"] ["[1]","[4]","[5]","[6]"]
 
+  test ["builtins"] ["builtins","cat","echo","ls","ps","rev"]
+
   -- pipes...
   test ["echo foo | rev"] ["oof"]
   test ["cat days | rev"] rw

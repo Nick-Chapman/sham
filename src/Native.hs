@@ -1,6 +1,6 @@
 
 module Native (
-  Native(..),all,name,run,
+  Native,list,name,run,
   withOpen,read,write,err2
   ) where
 
@@ -14,7 +14,11 @@ import SysCall (SysCall(..),FD)
 import qualified Os
 import qualified Path (create,toString)
 
-data Native = Echo | Cat | Rev | Ls | Ps
+list :: [Native]
+name :: Native -> String
+run :: Native -> [String] -> Prog ()
+
+data Native = Echo | Cat | Rev | Ls | Ps | Builtins
   deriving (Bounded,Enum)
 
 binding :: Native -> (String, [String] -> Prog ())
@@ -24,13 +28,9 @@ binding = \case
   Rev -> ("rev",revProg)
   Ls -> ("ls",lsProg)
   Ps -> ("ps",psProg)
+  Builtins -> ("builtins",builtinsProg)
 
-all :: [Native]
-all = [minBound..maxBound]
-
-name :: Native -> String
-run :: Native -> [String] -> Prog ()
-
+list = [minBound..maxBound]
 name = fst . binding
 run n args = snd (binding n) args
 
@@ -76,6 +76,11 @@ psProg :: [String] -> Prog ()
 psProg args = checkNoArgs "ps" args $ do
   pids <- Os.Pids
   mapM_ (write stdout . show) (sort pids)
+
+builtinsProg :: [String] -> Prog ()
+builtinsProg args = checkNoArgs "builtins" args $ do
+  mapM_ (write stdout) $ sort [ (name x) | x <- list ]
+
 
 checkNoArgs :: String -> [String] -> Prog () -> Prog ()
 checkNoArgs who args prog = case args of
