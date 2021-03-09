@@ -11,7 +11,7 @@ run console = Testing.run console $ do
   let days = FileSystem.days
   let rw = map reverse days
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
-  let paths0 = ["README","days","help"]
+  let paths0 = ["README","days","help","y"]
 
   test ["ls"] paths0
   test ["help"] FileSystem.readme
