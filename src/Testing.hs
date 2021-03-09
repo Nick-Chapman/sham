@@ -5,15 +5,15 @@ import Data.List (intercalate)
 import FileSystem (fs0)
 import Interaction (Interaction(..))
 import Misc (EOF(..))
-import qualified Bash (console)
+import Os (Prog)
 import qualified Os (sim)
 
 test :: [String] -> [String] -> Testing ()
 test is xs = T1 (Test (Lines is) (Lines xs))
 
-run :: Testing () -> IO ()
-run testing = do
-  bools <- sequence [ runTest i x | (i,x) <- zip [1..] (collect testing) ]
+run :: Prog () -> Testing () -> IO ()
+run console testing = do
+  bools <- sequence [ runTest console i x | (i,x) <- zip [1..] (collect testing) ]
   let numTests = length bools
   let numPass = length [ () | res <- bools, res ]
   let numFail = numTests - numPass
@@ -46,9 +46,9 @@ instance Show Lines where show (Lines xs) = intercalate "/" xs
 instance Show Test where
   show (Test is xs) = "input: " ++ show is ++ "\n- expected: " ++ show xs
 
-runTest :: Int -> Test -> IO Bool
-runTest n t@(Test input expected) = do
-  case bash input of
+runTest :: Prog () -> Int -> Test -> IO Bool
+runTest console n t@(Test input expected) = do
+  case runConsole console input of
     Left (Unconsumed lines) -> do
       putStrLn $ "test #" ++ show n ++ " : " ++ show t
       putStrLn $ "- unconsumed: " ++ show lines
@@ -59,8 +59,8 @@ runTest n t@(Test input expected) = do
         putStrLn $ "- actual: " ++ show actual
         pure False
 
-bash :: Lines -> Either Unconsumed Lines
-bash input = runInteraction (Os.sim fs0 Bash.console) input
+runConsole :: Prog () -> Lines -> Either Unconsumed Lines
+runConsole console input = runInteraction (Os.sim fs0 console) input
 
 runInteraction :: Interaction -> Lines -> Either Unconsumed Lines
 runInteraction i (Lines xs0) = loop xs0 [] i where

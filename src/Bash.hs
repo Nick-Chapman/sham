@@ -1,28 +1,33 @@
 
-module Bash (console) where
+module Bash (Bins(..),console,bash) where
 
 import Data.List.Split (splitWhen)
 import Data.Map (Map)
 import Interaction (Prompt(..))
 import Misc (EOF(..),PipeEnds(..))
-import Native (Native,withOpen,err2)
+import Native (withOpen,err2)
 import Os (Prog,SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import Path (Path)
 import Prelude hiding (read)
 import SysCall (BadFileDescriptor(..))
 import qualified Data.Map.Strict as Map
-import qualified Native (list,name,run,read)
+import qualified Native (read,readAll)
 import qualified Os (Prog(..))
-import qualified Path (create,toString)
+import qualified Path (create)
 
-console :: Prog ()
-console = loop where
+newtype Bins = Bins (Map String ([String] -> Prog ()))
+
+lookupBins :: Bins -> String -> Maybe ([String] -> Prog ())
+lookupBins (Bins m) k = Map.lookup k m
+
+console :: Bins -> Prog ()
+console bins = loop where
   loop :: Prog ()
   loop = do
     Native.read (Prompt "> ") (FD 0) >>= \case
       Left EOF -> pure ()
       Right line -> do
-        interpret (parseLine line)
+        interpret bins (parseLine line)
         loop
 
 -- TODO: at some point we'll want a proper parser!
@@ -105,22 +110,13 @@ makeScript rs = \case
   [".",p] -> Source (Path.create p)
   ".":_ -> BashError "source (.): takes exactly one argument"
   com:args -> lookAmpersand args $ \args mode ->
-    Run (makeCommand com) args rs mode
+    Run com args rs mode
 
 lookAmpersand :: [String] -> ([String] -> WaitMode -> a) -> a
 lookAmpersand xs k =
   case reverse xs of
     "&":xs' -> k xs' NoWait
     _-> k xs Wait
-
-makeCommand :: String -> Command
-makeCommand str =
-  case Map.lookup str nativeTable of
-    Just native -> ComNative native
-    Nothing -> ComScript (Path.create str)
-
-nativeTable :: Map String Native
-nativeTable = Map.fromList [ (Native.name x, x) | x <- Native.list ]
 
 
 data Script
@@ -131,11 +127,7 @@ data Script
   | Exit
   | Source Path
 --  | Exec Command -- TODO: need Exec from Os
-  | Run Command [String] [Redirect] WaitMode
-
-data Command
-  = ComNative Native
-  | ComScript Path
+  | Run String [String] [Redirect] WaitMode
 
 data WaitMode = NoWait | Wait
 
@@ -146,20 +138,14 @@ data RedirectSource
   = FromPath Path
   | FromFD FD
 
-
-instance Show Command where
-  show = \case
-    ComNative n -> Native.name n
-    ComScript p -> Path.toString p
-
-interpret :: Script -> Prog ()
-interpret = \case
+interpret :: Bins -> Script -> Prog ()
+interpret bins = \case
   Null -> pure ()
   BashError message -> err2 message
   Exit -> Os.Exit
-  Source path -> runBashScript path
-  Run com args rs mode -> executeCommand com args rs mode
-  Pipe script1 script2 -> pipe (interpret script1) (interpret script2)
+  Source path -> runBashScript bins path
+  Run com args rs mode -> executeCommand bins com args rs mode
+  Pipe script1 script2 -> pipe (interpret bins script1) (interpret bins script2)
 
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
@@ -181,20 +167,24 @@ pipe prog1 prog2 = do
       Os.Wait child1
       Os.Wait child2
 
-executeCommand :: Command -> [String] -> [Redirect] -> WaitMode -> Prog ()
-executeCommand com args rs mode = do
-  spawn (unwords (show com:args)) mode $ do
+executeCommand :: Bins -> String -> [String] -> [Redirect] -> WaitMode -> Prog ()
+executeCommand bins com args rs mode = do
+  spawn (unwords (com:args)) mode $ do
     mapM_ execRedirect rs
-    case com of
-      ComNative native -> Native.run native args
-      ComScript path -> runBashScript path
+    bash bins com args
 
-runBashScript :: Path -> Prog ()
-runBashScript path = do
+bash :: Bins -> String -> [String] -> Prog ()
+bash bins com args =
+  case lookupBins bins com of
+    Just prog -> prog args
+    Nothing -> runBashScript bins (Path.create com)
+
+runBashScript :: Bins -> Path -> Prog ()
+runBashScript bins path = do
   lines <- do
     withOpen path OpenForReading $ \fd -> do
-      readAll fd
-  sequence_ [ interpret (parseLine line) | line <- lines ]
+      Native.readAll fd
+  sequence_ [ interpret bins (parseLine line) | line <- lines ]
 
 spawn :: String -> WaitMode -> Prog () -> Prog ()
 spawn commandString mode prog = case mode of
@@ -217,11 +207,3 @@ dup2 d s = do
       err2 $ "bad file descriptor: " ++ show s
       Os.Exit
     Right () -> pure ()
-
-readAll :: FD -> Prog [String]
-readAll fd = loop []
-  where
-    loop acc =
-      Native.read NoPrompt fd >>= \case
-      Left EOF -> pure (reverse acc)
-      Right line -> loop (line:acc)

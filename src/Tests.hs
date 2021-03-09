@@ -1,16 +1,18 @@
 module Tests (run) where
 
 import Testing (test)
+import Os (Prog)
 import qualified Testing (run)
 import qualified FileSystem
 
-run :: IO ()
-run = Testing.run $ do
+run :: Prog () -> IO ()
+run console = Testing.run console $ do
   let days = FileSystem.days
   let rw = map reverse days
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
+  let paths0 = ["README","days","help"]
 
-  test ["ls"] ["README","days","help"]
+  test ["ls"] paths0
   test ["help"] FileSystem.readme
   test ["help &"] FileSystem.readme
   test ["doh"] ["(stderr) no such path: doh"]
@@ -65,17 +67,16 @@ run = Testing.run $ do
   test ["cat > x","echo OUT","echo ERR >&2","","x"] ["OUT","(stderr) ERR"]
   test ["cat > x","echo OUT","echo ERR >&2","",". x"] ["OUT","(stderr) ERR"]
 
+  test ["echo foo | rev"] ["oof"]
+  test ["cat days | rev"] rw
+  test ["cat days | rev | rev"] days
+  test ["cat days | rev | rev | rev"] rw
+
   test ["exit"] []
   test ["cat > x","echo 1","exit","echo 2","","x"] ["1"]
   test ["echo exit > y","cat > x","echo 1","y","echo 2","","x"] ["1","2"]
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
 
   test ["ps"] ["[1] init","[2] ps"]
-
-  test ["builtins"] ["builtins","cat","echo","ls","ps","rev"]
-
-  -- pipes...
-  test ["echo foo | rev"] ["oof"]
-  test ["cat days | rev"] rw
-  test ["cat days | rev | rev"] days
-  test ["cat days | rev | rev | rev"] rw
+  test ["builtins"] ["builtins","cat","echo","ls","ps","rev","xargs"]
+  test ["ls | xargs echo"] [unwords paths0]

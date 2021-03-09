@@ -46,7 +46,7 @@ fs0 = FileSystem.create
 readme :: [String]
 readme =
   [ "Welcome to Nick's simulated bash."
-  , "Some available commands: echo, cat, rev, ls, exit."
+  , "Some available commands: builtins, echo, cat, rev, ls, ps, xargs, exit."
   ]
 
 days :: [String]

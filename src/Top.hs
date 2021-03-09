@@ -1,11 +1,14 @@
 module Top (main) where
 
 import Control.Monad.Trans.Class (lift)
+import Data.Map (Map)
 import FileSystem (fs0)
 import Interaction (Interaction(..),Prompt(..))
 import Misc (EOF(..))
 import Os (Prog)
-import qualified Bash (console)
+import qualified Bash (Bins(..),console,bash)
+import qualified Data.Map.Strict as Map
+import qualified Native (echo,cat,ls,ps,rev,xargs,builtins)
 import qualified Os (sim)
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
@@ -14,12 +17,25 @@ import qualified Tests (run)
 
 main :: IO ()
 main = do
-  Tests.run
+  Tests.run console
   putStrLn "*bash-sim* (try typing help)"
-  runInteraction (Os.sim fs0 prog)
+  runInteraction (Os.sim fs0 console)
 
-prog :: Prog ()
-prog = Bash.console
+console :: Prog ()
+console = Bash.console bins
+  where
+    binMap :: Map String ([String] -> Prog ())
+    binMap = Map.fromList
+      [ ("echo",Native.echo)
+      , ("cat",Native.cat)
+      , ("rev",Native.rev)
+      , ("ls",Native.ls)
+      , ("ps",Native.ps)
+      , ("xargs",Native.xargs (Bash.bash bins))
+      , ("builtins",Native.builtins (Map.keys binMap)) -- TODO: rename bins
+      -- TODO: add bash
+      ]
+    bins = Bash.Bins binMap
 
 runInteraction :: Interaction -> IO ()
 runInteraction i0 = do

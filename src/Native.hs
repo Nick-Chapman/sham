@@ -1,7 +1,7 @@
 
 module Native (
-  Native,list,name,run,
-  withOpen,read,write,err2
+  ls,ps,rev,cat,echo,xargs,builtins,
+  withOpen, readAll, read, write, err2,
   ) where
 
 import Data.List (sort,sortOn)
@@ -14,51 +14,29 @@ import SysCall (SysCall(..),FD)
 import qualified Os
 import qualified Path (create,toString)
 
-list :: [Native]
-name :: Native -> String
-run :: Native -> [String] -> Prog ()
+echo :: [String] -> Prog ()
+echo args = write stdout (unwords args)
 
-data Native = Echo | Cat | Rev | Ls | Ps | Builtins
-  deriving (Bounded,Enum)
+cat :: [String] -> Prog ()
+cat = \case
+  [] -> catFd stdin
+  args -> sequence_ [ catProg1 (Path.create arg) | arg <- args ]
+  where
+    catProg1 :: Path -> Prog ()
+    catProg1 path = withOpen path OpenForReading $ catFd
 
-binding :: Native -> (String, [String] -> Prog ())
-binding = \case
-  Echo -> ("echo",echoProg)
-  Cat -> ("cat",catProg)
-  Rev -> ("rev",revProg)
-  Ls -> ("ls",lsProg)
-  Ps -> ("ps",psProg)
-  Builtins -> ("builtins",builtinsProg)
+    catFd :: FD -> Prog ()
+    catFd fd = loop where
+      loop :: Prog ()
+      loop = do
+        read NoPrompt fd >>= \case
+          Left EOF -> pure ()
+          Right line -> do
+            write stdout line
+            loop
 
-list = [minBound..maxBound]
-name = fst . binding
-run n args = snd (binding n) args
-
-echoProg :: [String] -> Prog ()
-echoProg args = write stdout (unwords args)
-
-catProg :: [String] -> Prog ()
-catProg = \case
-  [] ->
-    catFd stdin
-  args ->
-    sequence_ [ catProg1 (Path.create arg) | arg <- args ]
-
-catProg1 :: Path -> Prog ()
-catProg1 path = withOpen path OpenForReading $ catFd
-
-catFd :: FD -> Prog ()
-catFd fd = loop where
-  loop :: Prog ()
-  loop = do
-    read NoPrompt fd >>= \case
-      Left EOF -> pure ()
-      Right line -> do
-        write stdout line
-        loop
-
-revProg :: [String] -> Prog ()
-revProg args = checkNoArgs "rev" args loop where
+rev :: [String] -> Prog ()
+rev args = checkNoArgs "rev" args loop where
   loop :: Prog ()
   loop = do
     read NoPrompt stdin >>= \case
@@ -67,22 +45,29 @@ revProg args = checkNoArgs "rev" args loop where
         write stdout (reverse line)
         loop
 
-lsProg :: [String] -> Prog ()
-lsProg args = checkNoArgs "ls" args $ do
+ls :: [String] -> Prog ()
+ls args = checkNoArgs "ls" args $ do
   paths <- Os.Call Paths ()
   mapM_ (write stdout . Path.toString) (sort paths)
 
-psProg :: [String] -> Prog ()
-psProg args = checkNoArgs "ps" args $ do
+ps :: [String] -> Prog ()
+ps args = checkNoArgs "ps" args $ do
   xs <- Os.Procs
   sequence_
     [ write stdout (show pid ++ " " ++ show p)  | (pid,p) <- sortOn fst xs ]
 
-builtinsProg :: [String] -> Prog ()
-builtinsProg args = checkNoArgs "builtins" args $ do
-  mapM_ (write stdout) $ sort [ (name x) | x <- list ]
+builtins :: [String] -> [String] -> Prog ()
+builtins names args = checkNoArgs "builtins" args $ do
+  mapM_ (write stdout) $ names
 
+xargs :: (String -> [String] -> Prog ()) -> [String] -> Prog ()
+xargs runCom = \case
+  [] -> err2 "xargs: needs at least 1 argument"
+  x:args -> do
+    lines <- readAll stdin
+    runCom x (args ++ lines)
 
+-- TODO: checkNoArgs should get who and args from Prog env
 checkNoArgs :: String -> [String] -> Prog () -> Prog ()
 checkNoArgs who args prog = case args of
   [] -> prog
@@ -98,6 +83,14 @@ withOpen path mode action =
       res <- action fd
       Os.Call Close fd
       pure res
+
+readAll :: FD -> Prog [String]
+readAll fd = loop []
+  where
+    loop acc =
+      Native.read NoPrompt fd >>= \case
+      Left EOF -> pure (reverse acc)
+      Right line -> loop (line:acc)
 
 read :: Prompt -> FD -> Prog (Either EOF String)
 read prompt fd =

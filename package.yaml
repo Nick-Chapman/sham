@@ -29,6 +29,7 @@ dependencies:
 default-extensions:
 - BangPatterns
 - DuplicateRecordFields
+- EmptyCase
 - FlexibleContexts
 - GADTs
 - GeneralizedNewtypeDeriving
