@@ -27,7 +27,9 @@ console bins = loop where
     Native.read (Prompt "> ") (FD 0) >>= \case
       Left EOF -> pure ()
       Right line -> do
-        interpret bins (parseLine line)
+        let script = parseLine line
+        --Prog.Trace (show script)
+        interpret bins script
         loop
 
 -- TODO: at some point we'll want a proper parser!
@@ -37,7 +39,7 @@ parseLine line = do
   case splitWhen (=='|') line of
     [] -> error "parseLine/split/[]/impossible"
     x1:xs ->
-      foldl Pipe (parseCommand x1) (reverse [ parseCommand com | com <- xs ])
+      foldl Pipe (parseCommand x1) [ parseCommand com | com <- xs ]
 
 parseCommand :: String -> Script
 parseCommand seg = loop [] [] (words seg)
@@ -128,15 +130,19 @@ data Script
   | Source Path
 --  | Exec Command -- TODO: need Exec from Prog
   | Run String [String] [Redirect] WaitMode
+  deriving Show
 
 data WaitMode = NoWait | Wait
+  deriving Show
 
 data Redirect
   = Redirect OpenMode FD RedirectSource
+  deriving Show
 
 data RedirectSource
   = FromPath Path
   | FromFD FD
+  deriving Show
 
 interpret :: Bins -> Script -> Prog ()
 interpret bins = \case

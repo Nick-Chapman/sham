@@ -84,4 +84,4 @@ run console = Testing.run console $ do
   test ["cat days | grep u"] [ d | d <- days, "u" `isInfixOf` d ]
   test ["grep"] ["(stderr) grep: takes a single argument"]
   test ["cat days | head"] ["Monday"]
-  --test ["cat days | grep u | head"] ["Tuesday"] -- TODO: test not working yet
+  test ["cat days | grep u | head"] ["Tuesday"]
