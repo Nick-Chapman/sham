@@ -8,7 +8,7 @@ import Misc (EOF(..))
 import Prog (Prog)
 import qualified Bash (Bins(..),console,bash)
 import qualified Data.Map.Strict as Map
-import qualified Native (echo,cat,ls,ps,rev,xargs,bins)
+import qualified Native (echo,cat,rev,grep,ls,ps,bins,xargs)
 import qualified Prog (run)
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
@@ -29,6 +29,7 @@ console = Bash.console bins
       [ ("echo",Native.echo)
       , ("cat",Native.cat)
       , ("rev",Native.rev)
+      , ("grep",Native.grep)
       , ("ls",Native.ls)
       , ("ps",Native.ps)
       , ("xargs",Native.xargs (Bash.bash bins))

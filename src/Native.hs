@@ -1,10 +1,11 @@
 
 module Native (
-  ls,ps,rev,cat,echo,xargs,bins,
-  withOpen, readAll, read, write, err2,
+  echo,cat,rev,grep,ls,ps,bins,xargs,
+  withOpen,readAll,read,write,err2,
   ) where
 
-import Data.List (sort,sortOn)
+import Control.Monad (when)
+import Data.List (sort,sortOn,isInfixOf)
 import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Prog (Prog,OpenMode(..),NoSuchPath(..))
@@ -45,6 +46,20 @@ rev args = checkNoArgs "rev" args loop where
         write stdout (reverse line)
         loop
 
+grep :: [String] -> Prog ()
+grep args = do
+  getSingleArg "rev" args $ \pat -> do
+  let
+    loop :: Prog ()
+    loop = do
+      read NoPrompt stdin >>= \case
+        Left EOF -> pure ()
+        Right line -> do
+          when (pat `isInfixOf` line) $
+            write stdout line
+          loop
+  loop
+
 ls :: [String] -> Prog ()
 ls args = checkNoArgs "ls" args $ do
   paths <- Prog.Call Paths ()
@@ -72,6 +87,11 @@ checkNoArgs :: String -> [String] -> Prog () -> Prog ()
 checkNoArgs who args prog = case args of
   [] -> prog
   _ -> err2 (who ++ ": takes no arguments")
+
+getSingleArg :: String -> [String] -> (String -> Prog ()) -> Prog ()
+getSingleArg who args f = case args of
+  [arg] -> f arg
+  _ -> err2 (who ++ ": takes a single argument")
 
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
