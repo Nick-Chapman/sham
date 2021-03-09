@@ -1,7 +1,7 @@
 
 module Native (
   echo,cat,rev,grep,head,ls,ps,bins,xargs,
-  withOpen,readAll,read,write,err2,
+  withOpen,readAll,read,write,err2,checkNoArgs
   ) where
 
 import Control.Monad (when)

@@ -8,7 +8,7 @@ import Misc (EOF(..))
 import Prog (Prog)
 import qualified Bash (Bins(..),console,bash)
 import qualified Data.Map.Strict as Map
-import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs)
+import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,checkNoArgs)
 import qualified Prog (run)
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
@@ -27,6 +27,7 @@ console = Bash.console bins
     binMap :: Map String ([String] -> Prog ())
     binMap = Map.fromList
       [ ("echo",Native.echo)
+      , ("bash",bash)
       , ("cat",Native.cat)
       , ("rev",Native.rev)
       , ("grep",Native.grep)
@@ -35,9 +36,9 @@ console = Bash.console bins
       , ("ps",Native.ps)
       , ("xargs",Native.xargs (Bash.bash bins))
       , ("bins",Native.bins (Map.keys binMap))
-      -- TODO: add bash
       ]
     bins = Bash.Bins binMap
+    bash args = Native.checkNoArgs "bash" args (Bash.console bins)
 
 runInteraction :: Interaction -> IO ()
 runInteraction i0 = do
