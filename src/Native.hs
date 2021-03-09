@@ -1,17 +1,19 @@
 
 module Native (
-  echo,cat,rev,grep,head,ls,ps,bins,xargs,
+  echo,cat,rev,grep,head,ls,ps,bins,xargs,man,
   withOpen,readAll,read,write,err2,checkNoArgs
   ) where
 
 import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
+import Data.Map (Map)
 import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Prog (Prog,OpenMode(..),NoSuchPath(..))
 import Path (Path)
 import Prelude hiding (all,head,read)
 import SysCall (SysCall(..),FD)
+import qualified Data.Map.Strict as Map
 import qualified Prog
 import qualified Path (create,toString)
 
@@ -87,6 +89,16 @@ xargs runCom = \case
   x:args -> do
     lines <- readAll stdin
     runCom x (args ++ lines)
+
+man :: Map String String -> [String] -> Prog ()
+man docsMap args =
+  mapM_ manline args
+  where
+    manline :: String -> Prog ()
+    manline name =
+      case Map.lookup name docsMap of
+        Just text -> write stdout (name ++ " : " ++ text)
+        Nothing -> write stderr (name ++ " : no manual entry")
 
 -- TODO: checkNoArgs should get who and args from Prog env
 checkNoArgs :: String -> [String] -> Prog () -> Prog ()

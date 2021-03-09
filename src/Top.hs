@@ -8,7 +8,7 @@ import Misc (EOF(..))
 import Prog (Prog)
 import qualified Bash (Bins(..),console,bash)
 import qualified Data.Map.Strict as Map
-import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,checkNoArgs)
+import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,man,checkNoArgs)
 import qualified Prog (run)
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
@@ -25,17 +25,34 @@ console :: Prog ()
 console = Bash.console bins
   where
     binMap :: Map String ([String] -> Prog ())
-    binMap = Map.fromList
-      [ ("echo",Native.echo)
-      , ("bash",bash)
-      , ("cat",Native.cat)
-      , ("rev",Native.rev)
-      , ("grep",Native.grep)
-      , ("head",Native.head)
-      , ("ls",Native.ls)
-      , ("ps",Native.ps)
-      , ("xargs",Native.xargs (Bash.bash bins))
-      , ("bins",Native.bins (Map.keys binMap))
+    binMap = Map.fromList [ (name,prog) | (name,prog,_) <- table ]
+
+    docMap :: Map String String
+    docMap = Map.fromList [ (name,text) | (name,_,text) <- table ]
+
+    table =
+      [ ("echo",Native.echo,
+        "write given arguments to stdout")
+      , ("bash",bash,
+        "start a nested bash console")
+      , ("cat",Native.cat,
+        "write named files (or stdin in no files given) to stdout")
+      , ("rev",Native.rev,
+        "copy stdin to stdout, reversing each line")
+      , ("grep",Native.grep,
+        "copy lines which match the given pattern to stdout ")
+      , ("head",Native.head,
+        "copy just the first line on stdin to stdout, then exit")
+      , ("ls",Native.ls,
+        "list all files on the filesystem")
+      , ("ps",Native.ps,
+        "list all running process")
+      , ("xargs",Native.xargs (Bash.bash bins),
+        "concatenate lines from stdin, and pass as arguments to the given command")
+      , ("bins",Native.bins (Map.keys binMap),
+        "list builtin executables")
+      , ("man",Native.man docMap,
+         "list the manual entries for the given commands")
       ]
     bins = Bash.Bins binMap
     bash args = Native.checkNoArgs "bash" args (Bash.console bins)

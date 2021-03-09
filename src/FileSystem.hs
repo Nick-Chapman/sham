@@ -47,6 +47,7 @@ readme :: [String]
 readme =
   [ "Welcome to Nick's simulated bash."
   , "Some available commands: bins, echo, cat, rev, grep, ls, ps, xargs, exit."
+  , "For more help, perhaps run: bins | xargs man"
   ]
 
 days :: [String]
