@@ -3,7 +3,7 @@ module Testing (test,run) where
 import Control.Monad (ap,liftM)
 import Data.List (intercalate)
 import FileSystem (fs0)
-import Interaction (Interaction(..))
+import Interaction (Interaction(..),OutMode(..))
 import Misc (EOF(..))
 import Os (Prog)
 import qualified Os (sim)
@@ -71,8 +71,9 @@ runInteraction i (Lines xs0) = loop xs0 [] i where
         [] -> loop xs ys (f (Left EOF))
         "":xs -> loop xs ys (f (Left EOF))
         line:xs -> loop xs ys (f (Right line))
-    I_Write line i -> do
-      loop xs (line:ys) i
+    I_Write mode line i -> do
+      loop xs ((tag++line):ys) i
+        where tag = case mode of Normal -> ""; StdErr -> "(stderr) "
     I_Trace _ i -> do
       loop xs ys i
     I_Halt -> do

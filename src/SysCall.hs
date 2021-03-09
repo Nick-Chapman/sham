@@ -7,7 +7,7 @@ module SysCall (
 import Data.List (intercalate)
 import Data.Map (Map)
 import FileSystem (NoSuchPath(..))
-import Interaction (Interaction(..),Prompt)
+import Interaction (Interaction(..),Prompt,OutMode(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import OsState (OsState,OpenMode(..))
 import Path (Path)
@@ -132,10 +132,9 @@ runSys sys s env arg = case sys of
           Right (Right (Right s)) -> do
             Right $ \k ->
               k s env (Right (Right ()))
-      Console consoleMode -> do
+      Console outMode -> do
         Right $ \k ->
-          I_Write (tag++line) (k s env (Right (Right ())))
-            where tag = case consoleMode of Normal -> ""; StdErr -> "(stderr) "
+          I_Write outMode line (k s env (Right (Right ())))
 
   Paths{} -> do
     Right $ \k -> do
@@ -146,10 +145,8 @@ runSys sys s env arg = case sys of
 newtype Env = Env { unEnv :: Map FD Target } -- per process state, currently just FD map
 
 data Target
-  = Console ConsoleMode
+  = Console OutMode
   | File OsState.Key
-
-data ConsoleMode = Normal | StdErr
 
 instance Show Env where
   show Env{unEnv=m} =

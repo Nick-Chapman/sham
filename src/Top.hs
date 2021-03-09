@@ -3,7 +3,7 @@ module Top (main) where
 import Control.Monad.Trans.Class (lift)
 import Data.Map (Map)
 import FileSystem (fs0)
-import Interaction (Interaction(..),Prompt(..))
+import Interaction (Interaction(..),Prompt(..),OutMode(..))
 import Misc (EOF(..))
 import Os (Prog)
 import qualified Bash (Bins(..),console,bash)
@@ -60,9 +60,10 @@ runInteraction i0 = do
                 updateHistory line
                 loop (n+1) (f (Right line))
 
-      I_Write line i -> do
-        lift $ putStrLn line
+      I_Write mode line i -> do
+        lift $ putStrLn (colouring line)
         loop n i
+          where colouring = case mode of Normal -> id; StdErr -> col AN.Red
 
       I_Trace mes i -> do
         lift $ putStrLn (col AN.Yellow mes)
