@@ -25,16 +25,16 @@ data Prog a where
   Bind :: Prog a -> (a -> Prog b) -> Prog b
   Exit :: Prog a
   Trace :: String -> Prog ()
-  Spawn :: Prog () -> (Pid -> Prog a) -> Prog a -- TODO: Better named Fork
+  Spawn :: String -> Prog () -> (Pid -> Prog a) -> Prog a -- TODO: Better named Fork
   Wait :: Pid -> Prog ()
-  Pids :: Prog [Pid]
+  Procs :: Prog [(Pid,Proc)]
   Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
 
 sim :: FileSystem -> Prog () -> Interaction
 sim fs prog = do
   let action = linearize prog (\() -> A_Halt)
   let (state,pid) = newPid (initState fs)
-  resume pid (Proc env0 action) state
+  resume pid (Proc "init" env0 action) state
 
 linearize :: Prog a -> (a -> Action) -> Action
 linearize p0 = case p0 of
@@ -42,19 +42,19 @@ linearize p0 = case p0 of
   Bind p f -> \k ->linearize p $ \a -> linearize (f a) k
   Exit -> \_ignoredK -> A_Halt
   Trace message -> \k -> A_Trace message (k ())
-  Spawn child f -> \k -> do
+  Spawn commandString child f -> \k -> do
     let action = linearize child $ \() -> A_Halt
-    A_Spawn action $ \pid -> linearize (f pid) k
+    A_Spawn commandString action $ \pid -> linearize (f pid) k
   Wait pid -> \k -> A_Wait pid (k ())
-  Pids -> \k -> A_Pids k
+  Procs -> \k -> A_Procs k
   Call sys arg -> \k -> A_Call sys arg k
 
 data Action where
   A_Halt :: Action
   A_Trace :: String -> Action -> Action
-  A_Spawn :: Action -> (Pid -> Action) -> Action
+  A_Spawn :: String -> Action -> (Pid -> Action) -> Action
   A_Wait :: Pid -> Action -> Action
-  A_Pids :: ([Pid] -> Action) -> Action
+  A_Procs :: ([(Pid,Proc)] -> Action) -> Action
   A_Call :: (Show a, Show b) => SysCall a b -> a -> (b -> Action) -> Action
 
 instance Show Action where
@@ -63,13 +63,13 @@ instance Show Action where
     A_Trace{} -> "A_Trace"
     A_Spawn{} -> "A_Spawn"
     A_Wait{} -> "A_Wait"
-    A_Pids{} -> "A_Pids"
+    A_Procs{} -> "A_Procs"
     A_Call{} -> "A_Call"
 
 ----------------------------------------------------------------------
 
 resume :: Pid -> Proc -> State -> Interaction
-resume me proc0@(Proc env action0) state@State{os} =
+resume me proc0@(Proc{env,action=action0}) state@State{os} =
  --I_Trace (show ("resume",me,action0)) $
   case action0 of
 
@@ -83,14 +83,14 @@ resume me proc0@(Proc env action0) state@State{os} =
         resume other proc2 state'
 
   A_Trace message action ->
-    I_Trace message (resume me (Proc env action) state)
+    I_Trace message (resume me proc0 { env, action } state)
 
-  A_Spawn action f -> do
+  A_Spawn commandString action f -> do
     let state' = state { os = dupEnv env os }
     let (state'',pid) = newPid state'
     --trace me ("Spawn:"++show pid) $ do
-    let child = Proc env action
-    let parent = Proc env (f pid)
+    let child = Proc { commandString, env, action }
+    let parent = proc0 { env, action = f pid }
     --I_Trace (show state'') $ do
     yield me parent (suspend pid child state'')
 
@@ -98,13 +98,14 @@ resume me proc0@(Proc env action0) state@State{os} =
     --trace me ("Wait:"++show pid) $ do -- This happens a lot!
     if running pid state
     then block me proc0 state
-    else yield me (Proc env action) state -- TODO: resume instead of yield (less rr)
+     -- TODO: resume instead of yield (less rr)
+    else yield me proc0 { action } state
 
-  A_Pids f -> do
-    let res = me : allPids state
-    --trace me ("Pids()="++show res) $ do
+  A_Procs f -> do
+    let res = (me,proc0) : allProcs state
+    --trace me ("Procs()="++show res) $ do
     let action = f res
-    yield me (Proc env action) state
+    yield me proc0 { action } state
 
   A_Call sys arg f -> do
     -- TODO: allow trace tobe turned on/off interactively at the console
@@ -120,7 +121,7 @@ resume me proc0@(Proc env action0) state@State{os} =
           let state' = state { os }
           --I_Trace (show state') $ do
           let action = f res
-          yield me (Proc env action) state'
+          yield me proc0 { env, action } state'
 
 
 _trace :: Pid -> String -> Interaction -> Interaction
@@ -141,7 +142,10 @@ yield me proc1 state = do
 
 ----------------------------------------------------------------------
 
-data Proc = Proc Env Action
+data Proc = Proc { commandString :: String, env :: Env, action :: Action }
+
+instance Show Proc where
+  show Proc{commandString} = commandString
 
 newtype Pid = Pid Int deriving (Eq,Ord,Num)
 instance Show Pid where show (Pid n) = "[" ++ show n ++ "]"
@@ -156,8 +160,8 @@ data State = State
 instance Show State where
   show State{os} = show os
 
-allPids :: State -> [Pid]
-allPids State{waiting,suspended} = Map.keys waiting ++ Map.keys suspended
+allProcs :: State -> [(Pid,Proc)]
+allProcs State{waiting,suspended} = Map.toList waiting ++ Map.toList suspended
 
 initState :: FileSystem -> State
 initState fs = State

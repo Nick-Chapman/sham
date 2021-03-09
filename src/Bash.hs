@@ -13,7 +13,7 @@ import SysCall (BadFileDescriptor(..))
 import qualified Data.Map.Strict as Map
 import qualified Native (list,name,run,read)
 import qualified Os (Prog(..))
-import qualified Path (create)
+import qualified Path (create,toString)
 
 console :: Prog ()
 console = loop where
@@ -116,8 +116,8 @@ lookAmpersand xs k =
 makeCommand :: String -> Command
 makeCommand str =
   case Map.lookup str nativeTable of
-    Just native -> Left native
-    Nothing -> Right (Path.create str)
+    Just native -> ComNative native
+    Nothing -> ComScript (Path.create str)
 
 nativeTable :: Map String Native
 nativeTable = Map.fromList [ (Native.name x, x) | x <- Native.list ]
@@ -133,7 +133,9 @@ data Script
 --  | Exec Command -- TODO: need Exec from Os
   | Run Command [String] [Redirect] WaitMode
 
-type Command = Either Native Path
+data Command
+  = ComNative Native
+  | ComScript Path
 
 data WaitMode = NoWait | Wait
 
@@ -144,6 +146,11 @@ data RedirectSource
   = FromPath Path
   | FromFD FD
 
+
+instance Show Command where
+  show = \case
+    ComNative n -> Native.name n
+    ComScript p -> Path.toString p
 
 interpret :: Script -> Prog ()
 interpret = \case
@@ -157,13 +164,13 @@ interpret = \case
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
   PipeEnds{r,w} <- Os.Call SysPipe ()
-  Os.Spawn (do
+  Os.Spawn "bash" (do
                dup2 (FD 1) w
                Os.Call Close w
                Os.Call Close r
                prog1
            ) $ \child1 -> do
-    Os.Spawn (do
+    Os.Spawn "bash" (do
                  dup2 (FD 0) r
                  Os.Call Close w
                  Os.Call Close r
@@ -176,11 +183,11 @@ pipe prog1 prog2 = do
 
 executeCommand :: Command -> [String] -> [Redirect] -> WaitMode -> Prog ()
 executeCommand com args rs mode = do
-  spawn mode $ do
+  spawn (unwords (show com:args)) mode $ do
     mapM_ execRedirect rs
     case com of
-      Left native -> Native.run native args
-      Right path -> runBashScript path
+      ComNative native -> Native.run native args
+      ComScript path -> runBashScript path
 
 runBashScript :: Path -> Prog ()
 runBashScript path = do
@@ -189,10 +196,10 @@ runBashScript path = do
       readAll fd
   sequence_ [ interpret (parseLine line) | line <- lines ]
 
-spawn :: WaitMode -> Prog () -> Prog ()
-spawn mode prog = case mode of
-  Wait -> do Os.Spawn prog (\childPid -> Os.Wait childPid)
-  NoWait -> do Os.Spawn prog (\_ -> pure ())
+spawn :: String -> WaitMode -> Prog () -> Prog ()
+spawn commandString mode prog = case mode of
+  Wait -> do Os.Spawn commandString prog (\childPid -> Os.Wait childPid)
+  NoWait -> do Os.Spawn commandString prog (\_ -> pure ())
 
 execRedirect :: Redirect -> Prog ()
 execRedirect r =

@@ -4,7 +4,7 @@ module Native (
   withOpen,read,write,err2
   ) where
 
-import Data.List (sort)
+import Data.List (sort,sortOn)
 import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Os (Prog,OpenMode(..),NoSuchPath(..))
@@ -74,8 +74,9 @@ lsProg args = checkNoArgs "ls" args $ do
 
 psProg :: [String] -> Prog ()
 psProg args = checkNoArgs "ps" args $ do
-  pids <- Os.Pids
-  mapM_ (write stdout . show) (sort pids)
+  xs <- Os.Procs
+  sequence_
+    [ write stdout (show pid ++ " " ++ show p)  | (pid,p) <- sortOn fst xs ]
 
 builtinsProg :: [String] -> Prog ()
 builtinsProg args = checkNoArgs "builtins" args $ do
