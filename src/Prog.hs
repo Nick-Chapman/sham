@@ -1,6 +1,6 @@
 
 module Prog ( -- with support for multi-threading!
-  Prog(..),
+  Prog(..), Pid,
   SysCall(..),
   OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..),
   run,
@@ -25,7 +25,8 @@ data Prog a where
   Bind :: Prog a -> (a -> Prog b) -> Prog b
   Exit :: Prog a
   Trace :: String -> Prog ()
-  Spawn :: String -> Prog () -> (Pid -> Prog a) -> Prog a -- TODO: Better named Fork
+  Fork :: Prog (Maybe Pid)
+  Exec :: String -> Prog a -> Prog b
   Wait :: Pid -> Prog ()
   Procs :: Prog [(Pid,Proc)]
   Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
@@ -42,31 +43,30 @@ linearize p0 = case p0 of
   Bind p f -> \k ->linearize p $ \a -> linearize (f a) k
   Exit -> \_ignoredK -> A_Halt
   Trace message -> \k -> A_Trace message (k ())
-  Spawn commandString child f -> \k -> do
-    let action = linearize child $ \() -> A_Halt
-    A_Spawn commandString action $ \pid -> linearize (f pid) k
+  Fork -> A_Fork
+  Exec commandString prog -> \_ignoredK -> A_Exec commandString (linearize prog $ \_ -> A_Halt)
   Wait pid -> \k -> A_Wait pid (k ())
-  Procs -> \k -> A_Procs k
-  Call sys arg -> \k -> A_Call sys arg k
+  Procs -> A_Procs
+  Call sys arg -> A_Call sys arg
 
 data Action where
   A_Halt :: Action
   A_Trace :: String -> Action -> Action
-  A_Spawn :: String -> Action -> (Pid -> Action) -> Action
+  A_Fork :: (Maybe Pid -> Action) -> Action
+  A_Exec :: String -> Action -> Action
   A_Wait :: Pid -> Action -> Action
   A_Procs :: ([(Pid,Proc)] -> Action) -> Action
   A_Call :: (Show a, Show b) => SysCall a b -> a -> (b -> Action) -> Action
 
 instance Show Action where
   show = \case
-    A_Halt{} -> "A_Halt"
-    A_Trace{} -> "A_Trace"
-    A_Spawn{} -> "A_Spawn"
-    A_Wait{} -> "A_Wait"
-    A_Procs{} -> "A_Procs"
-    A_Call{} -> "A_Call"
-
-----------------------------------------------------------------------
+    A_Halt{} -> "Halt"
+    A_Trace{} -> "Trace"
+    A_Fork{} -> "Fork"
+    A_Exec{} -> "Exec"
+    A_Wait{} -> "Wait"
+    A_Procs{} -> "Procs"
+    A_Call{} -> "Call"
 
 resume :: Pid -> Proc -> State -> Interaction
 resume me proc0@(Proc{env,action=action0}) state@State{os} =
@@ -85,14 +85,16 @@ resume me proc0@(Proc{env,action=action0}) state@State{os} =
   A_Trace message action ->
     I_Trace message (resume me proc0 { env, action } state)
 
-  A_Spawn commandString action f -> do
+  A_Fork f -> do
     let state' = state { os = dupEnv env os }
     let (state'',pid) = newPid state'
-    --trace me ("Spawn:"++show pid) $ do
-    let child = Proc { commandString, env, action }
-    let parent = proc0 { env, action = f pid }
-    --I_Trace (show state'') $ do
+    --_trace me ("Fork:"++show pid) $ do
+    let child = proc0 { action = f Nothing }
+    let parent = proc0 { action = f (Just pid) }
     yield me parent (suspend pid child state'')
+
+  A_Exec commandString action -> do
+    yield me proc0 { commandString, action } state
 
   A_Wait pid action ->
     --trace me ("Wait:"++show pid) $ do -- This happens a lot!
@@ -123,7 +125,6 @@ resume me proc0@(Proc{env,action=action0}) state@State{os} =
           let action = f res
           yield me proc0 { env, action } state'
 
-
 _trace :: Pid -> String -> Interaction -> Interaction
 _trace me mes = I_Trace (show me ++ " " ++ mes)
 
@@ -139,8 +140,6 @@ yield me proc1 state = do
     Just (state,other,proc2) ->
       --I_Trace (show ("yield", me, "-->", other)) $
       resume other proc2 (suspend me proc1 state)
-
-----------------------------------------------------------------------
 
 data Proc = Proc { commandString :: String, env :: Env, action :: Action }
 

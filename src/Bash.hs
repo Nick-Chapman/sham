@@ -6,7 +6,7 @@ import Data.Map (Map)
 import Interaction (Prompt(..))
 import Misc (EOF(..),PipeEnds(..))
 import Native (withOpen,err2)
-import Prog (Prog,SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
+import Prog (Prog,Pid,SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import Path (Path)
 import Prelude hiding (read)
 import SysCall (BadFileDescriptor(..))
@@ -150,13 +150,13 @@ interpret bins = \case
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
   PipeEnds{r,w} <- Prog.Call SysPipe ()
-  Prog.Spawn "bash" (do
+  spawn1 "bash" (do
                dup2 (FD 1) w
                Prog.Call Close w
                Prog.Call Close r
                prog1
            ) $ \child1 -> do
-    Prog.Spawn "bash" (do
+    spawn1 "bash" (do
                  dup2 (FD 0) r
                  Prog.Call Close w
                  Prog.Call Close r
@@ -188,8 +188,14 @@ runBashScript bins path = do
 
 spawn :: String -> WaitMode -> Prog () -> Prog ()
 spawn commandString mode prog = case mode of
-  Wait -> do Prog.Spawn commandString prog (\childPid -> Prog.Wait childPid)
-  NoWait -> do Prog.Spawn commandString prog (\_ -> pure ())
+  Wait -> do spawn1 commandString prog (\childPid -> Prog.Wait childPid)
+  NoWait -> do spawn1 commandString prog (\_ -> pure ())
+
+spawn1 :: String -> Prog () -> (Pid -> Prog a) -> Prog a
+spawn1 commandString child parent = do
+  Prog.Fork >>= \case
+    Nothing -> Prog.Exec commandString child
+    Just pid -> parent pid
 
 execRedirect :: Redirect -> Prog ()
 execRedirect r =
