@@ -187,7 +187,7 @@ closeTarget tar s =
     Console{}-> s
 
 newtype FD = FD Int
-  deriving (Eq,Ord,Enum)
+  deriving (Eq,Ord,Enum,Num)
 
 instance Show FD where show (FD n) = "&" ++ show n
 

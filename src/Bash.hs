@@ -1,22 +1,25 @@
 
 module Bash (console) where
 
-import Data.List (sort)
 import Data.List.Split (splitWhen)
+import Data.Map (Map)
 import Interaction (Prompt(..))
-import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import Os (Prog,SysCall(..),OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..))
+import Misc (EOF(..),PipeEnds(..))
+import Native (Native,withOpen,err2)
+import Os (Prog,SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import Path (Path)
 import Prelude hiding (read)
-import SysCall (BadFileDescriptor(..),PipeEnds(..))
+import SysCall (BadFileDescriptor(..))
+import qualified Data.Map.Strict as Map
+import qualified Native (all,name,run,read)
 import qualified Os (Prog(..))
-import qualified Path (create,toString)
+import qualified Path (create)
 
 console :: Prog ()
 console = loop where
   loop :: Prog ()
   loop = do
-    read (Prompt "> ") (FD 0) >>= \case
+    Native.read (Prompt "> ") (FD 0) >>= \case
       Left EOF -> pure ()
       Right line -> do
         interpret (parseLine line)
@@ -31,7 +34,6 @@ parseLine line = do
     x1:xs ->
       foldl Pipe (parseCommand x1) (reverse [ parseCommand com | com <- xs ])
 
-
 parseCommand :: String -> Script
 parseCommand seg = loop [] [] (words seg)
   where
@@ -41,31 +43,8 @@ parseCommand seg = loop [] [] (words seg)
         Nothing ->
           case xs of
             x:xs -> loop (x:ws) rs xs
-            [] -> makeScript (reverse ws) (reverse rs)
+            [] -> makeScript (reverse rs) (reverse ws)
 
-    makeScript :: [String] -> [Redirect] -> Script
-    makeScript ws rs =
-      case (ws,rs) of
-        (".":p:[],[]) -> Source (Path.create p)
-        ("exit":args,_) -> Command Exit args [] Inline
-        ("echo":args,_) -> makeBuiltin Echo args rs
-        ("cat":args,_) -> makeBuiltin Cat args rs
-        ("ls":args,_) -> makeBuiltin Ls args rs
-        ("ps":args,_) -> makeBuiltin Ps args rs
-        ("rev":args,_) -> makeBuiltin Rev args rs
-        ("exec":args,_) -> makeBuiltin Exec args rs
-        ([],[]) -> Null
-        (args,_) -> makeBuiltin Exec args rs
-
-makeBuiltin :: Builtin -> [String] -> [Redirect] -> Script
-makeBuiltin b args rs =
-  lookAmpersand args $ \args mode -> Command b args rs mode
-
-lookAmpersand :: [String] -> ([String] -> WaitMode -> a) -> a
-lookAmpersand xs k =
-  case reverse xs of
-    "&":xs' -> k xs' NoWait
-    _-> k xs Wait
 
 -- TODO: generalize/share redirect parsing; even before a proper parser
 parseAsRedirect :: [String] -> Maybe (Redirect,[String])
@@ -118,16 +97,45 @@ parseAsRedirect = \case
     wr = OpenForWriting Truncate
     ap = OpenForWriting Append
 
+makeScript :: [Redirect] -> [String] -> Script
+makeScript rs = \case
+  [] -> Null
+  ["exit"] -> Exit
+  "exit":_ -> BashError "exit: takes no arguments"
+  [".",p] -> Source (Path.create p)
+  ".":_ -> BashError "source (.): takes exactly one argument"
+  com:args -> lookAmpersand args $ \args mode ->
+    Run (makeCommand com) args rs mode
+
+lookAmpersand :: [String] -> ([String] -> WaitMode -> a) -> a
+lookAmpersand xs k =
+  case reverse xs of
+    "&":xs' -> k xs' NoWait
+    _-> k xs Wait
+
+makeCommand :: String -> Command
+makeCommand str =
+  case Map.lookup str nativeTable of
+    Just native -> Left native
+    Nothing -> Right (Path.create str)
+
+nativeTable :: Map String Native
+nativeTable = Map.fromList [ (Native.name x, x) | x <- Native.all ]
+
+
 data Script
   = Null
+  | BashError String
   -- TODO: sequencing operator ";"
-  | Command Builtin [String] [Redirect] WaitMode
-  | Source Path -- TODO: builtin
   | Pipe Script Script
+  | Exit
+  | Source Path
+--  | Exec Command -- TODO: need Exec from Os
+  | Run Command [String] [Redirect] WaitMode
 
-data WaitMode = NoWait | Wait | Inline
+type Command = Either Native Path
 
-data Builtin = Exec | Echo | Cat | Rev | Ls | Ps | Exit
+data WaitMode = NoWait | Wait
 
 data Redirect
   = Redirect OpenMode FD RedirectSource
@@ -136,43 +144,55 @@ data RedirectSource
   = FromPath Path
   | FromFD FD
 
+
 interpret :: Script -> Prog ()
 interpret = \case
-  Null  -> pure ()
+  Null -> pure ()
+  BashError message -> err2 message
+  Exit -> Os.Exit
   Source path -> runBashScript path
-  Command b args rs waitMode -> executeBuiltin rs b args waitMode
+  Run com args rs mode -> executeCommand com args rs mode
+  Pipe script1 script2 -> pipe (interpret script1) (interpret script2)
 
-  Pipe script1 script2 -> do
-    PipeEnds{r,w} <- Os.Call SysPipe ()
+pipe :: Prog () -> Prog () -> Prog ()
+pipe prog1 prog2 = do
+  PipeEnds{r,w} <- Os.Call SysPipe ()
+  Os.Spawn (do
+               dup2 (FD 1) w
+               Os.Call Close w
+               Os.Call Close r
+               prog1
+           ) $ \child1 -> do
     Os.Spawn (do
-                 dup2 (FD 1) w
+                 dup2 (FD 0) r
                  Os.Call Close w
                  Os.Call Close r
-                 interpret script1
-             ) $ \child1 -> do
-      Os.Spawn (do
-                   dup2 (FD 0) r
-                   Os.Call Close w
-                   Os.Call Close r
-                   interpret script2
-               ) $ \child2 -> do
-        Os.Call Close w
-        Os.Call Close r
-        Os.Wait child1
-        Os.Wait child2
+                 prog2
+             ) $ \child2 -> do
+      Os.Call Close w
+      Os.Call Close r
+      Os.Wait child1
+      Os.Wait child2
 
-
-executeBuiltin :: [Redirect] -> Builtin -> [String] -> WaitMode -> Prog ()
-executeBuiltin rs b args mode = do
+executeCommand :: Command -> [String] -> [Redirect] -> WaitMode -> Prog ()
+executeCommand com args rs mode = do
   spawn mode $ do
     mapM_ execRedirect rs
-    builtinProg b args
+    case com of
+      Left native -> Native.run native args
+      Right path -> runBashScript path
+
+runBashScript :: Path -> Prog ()
+runBashScript path = do
+  lines <- do
+    withOpen path OpenForReading $ \fd -> do
+      readAll fd
+  sequence_ [ interpret (parseLine line) | line <- lines ]
 
 spawn :: WaitMode -> Prog () -> Prog ()
 spawn mode prog = case mode of
-    Wait -> do Os.Spawn prog (\childPid -> Os.Wait childPid)
-    NoWait -> do Os.Spawn prog (\_ -> pure ())
-    Inline -> prog
+  Wait -> do Os.Spawn prog (\childPid -> Os.Wait childPid)
+  NoWait -> do Os.Spawn prog (\_ -> pure ())
 
 execRedirect :: Redirect -> Prog ()
 execRedirect r =
@@ -191,121 +211,10 @@ dup2 d s = do
       Os.Exit
     Right () -> pure ()
 
-builtinProg :: Builtin -> [String] -> Prog ()
-builtinProg = \case
-  Exit -> exitProg
-  Exec -> execProg
-  Echo -> echoProg
-  Cat -> catProg
-  Rev -> revProg
-  Ls -> lsProg
-  Ps -> psProg
-
-exitProg :: [String] -> Prog ()
-exitProg args = checkNoArgs "exit" args Os.Exit
-
-execProg :: [String] -> Prog ()
-execProg = \case
-  [] -> err2 "execProg/0"
-  [p] -> do
-    runBashScript (Path.create p)
-  _ ->
-    err2 "execProg/multi"
-
-runBashScript :: Path -> Prog ()
-runBashScript path = do
-  lines <- do
-    withOpen path OpenForReading $ \fd -> do
-      readAll fd
-  sequence_ [ interpret (parseLine line) | line <- lines ]
-
-echoProg :: [String] -> Prog ()
-echoProg args = write (FD 1) (unwords args)
-
-catProg :: [String] -> Prog ()
-catProg = \case
-  [] ->
-    catFd (FD 0)
-  args ->
-    sequence_ [ catProg1 (Path.create arg) | arg <- args ]
-
-catProg1 :: Path -> Prog ()
-catProg1 path = withOpen path OpenForReading $ catFd
-
-catFd :: FD -> Prog ()
-catFd fd = loop where
-  loop :: Prog ()
-  loop = do
-    read NoPrompt fd >>= \case
-      Left EOF -> pure ()
-      Right line -> do
-        write (FD 1) line
-        loop
-
-revProg :: [String] -> Prog ()
-revProg args = checkNoArgs "rev" args loop where
-  loop :: Prog ()
-  loop = do
-    read NoPrompt (FD 0) >>= \case
-      Left EOF -> pure ()
-      Right line -> do
-        write (FD 1) (reverse line)
-        loop
-
-lsProg :: [String] -> Prog ()
-lsProg args = checkNoArgs "ls" args $ do
-  paths <- Os.Call Paths ()
-  mapM_ (write (FD 1) . Path.toString) (sort paths)
-
-psProg :: [String] -> Prog ()
-psProg args = checkNoArgs "ps" args $ do
-  pids <- Os.Pids
-  mapM_ (write (FD 1) . show) (sort pids)
-
-checkNoArgs :: String -> [String] -> Prog () -> Prog ()
-checkNoArgs who args prog = case args of
-  [] -> prog
-  _ -> err2 (who ++ ": takes no arguments")
-
-
-withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
-withOpen path mode action =
-  Os.Call Open (path,mode) >>= \case
-    Left NoSuchPath -> do
-      err2 $ "no such path: " ++ Path.toString path
-      Os.Exit
-    Right fd -> do
-      res <- action fd
-      Os.Call Close fd
-      pure res
-
 readAll :: FD -> Prog [String]
 readAll fd = loop []
   where
     loop acc =
-      read NoPrompt fd >>= \case
+      Native.read NoPrompt fd >>= \case
       Left EOF -> pure (reverse acc)
       Right line -> loop (line:acc)
-
-read :: Prompt -> FD -> Prog (Either EOF String)
-read prompt fd =
-  Os.Call (Read prompt) fd >>= \case
-    Left NotReadable -> do
-      err2 (show fd ++ " not readable")
-      pure (Left EOF) -- TODO: better to exit?
-    Right eofOrLine -> do
-      pure eofOrLine
-
-write :: FD -> String -> Prog ()
-write fd line = do
-  Os.Call Write (fd,line) >>= \case
-    Left NotWritable -> err2 (show fd ++ " not writable")
-    Right (Left EPIPE) -> err2 "EPIPE when writing to fd1"
-    Right (Right ()) -> pure ()
-
-err2 :: String -> Prog ()
-err2 line = do
-  Os.Call Write (FD 2, line) >>= \case
-    Left NotWritable -> Os.Trace (show (FD 2) ++ " not writable")
-    Right (Left EPIPE) -> Os.Trace "EPIPE when writing to fd2"
-    Right (Right ()) -> pure ()
