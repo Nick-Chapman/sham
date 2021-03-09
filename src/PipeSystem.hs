@@ -45,13 +45,13 @@ createPipe s@State{m,next=key} = do
 writePipe s@State{m} k str = do
   let (pipe,mode) = look "writePipe" k m
   case Pipe.write pipe str of
-    Left Pipe.Full -> Left Block
+    Left Block -> Left Block
     Right pipe -> Right (Right s { m = Map.insert k (pipe,mode) m })
 
 readPipe s@State{m} k = do
   let (pipe,mode) = look "readPipe" k m
   case Pipe.read pipe of
-    Left Pipe.Empty ->
+    Left Block ->
       case mode of
         Active -> Left Block
         Drain -> Right (Left EOF, s { m = Map.delete k m })
