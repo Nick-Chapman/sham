@@ -8,7 +8,7 @@ import Misc (EOF(..))
 import Prog (Prog)
 import qualified Bash (Bins(..),console,bash)
 import qualified Data.Map.Strict as Map
-import qualified Native (echo,cat,ls,ps,rev,xargs,builtins)
+import qualified Native (echo,cat,ls,ps,rev,xargs,bins)
 import qualified Prog (run)
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
@@ -32,7 +32,7 @@ console = Bash.console bins
       , ("ls",Native.ls)
       , ("ps",Native.ps)
       , ("xargs",Native.xargs (Bash.bash bins))
-      , ("builtins",Native.builtins (Map.keys binMap)) -- TODO: rename bins
+      , ("bins",Native.bins (Map.keys binMap))
       -- TODO: add bash
       ]
     bins = Bash.Bins binMap

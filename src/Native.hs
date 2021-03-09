@@ -1,6 +1,6 @@
 
 module Native (
-  ls,ps,rev,cat,echo,xargs,builtins,
+  ls,ps,rev,cat,echo,xargs,bins,
   withOpen, readAll, read, write, err2,
   ) where
 
@@ -56,8 +56,8 @@ ps args = checkNoArgs "ps" args $ do
   sequence_
     [ write stdout (show pid ++ " " ++ show p)  | (pid,p) <- sortOn fst xs ]
 
-builtins :: [String] -> [String] -> Prog ()
-builtins names args = checkNoArgs "builtins" args $ do
+bins :: [String] -> [String] -> Prog ()
+bins names args = checkNoArgs "bins" args $ do
   mapM_ (write stdout) $ names
 
 xargs :: (String -> [String] -> Prog ()) -> [String] -> Prog ()

@@ -78,5 +78,5 @@ run console = Testing.run console $ do
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
 
   test ["ps"] ["[1] init","[2] ps"]
-  test ["builtins"] ["builtins","cat","echo","ls","ps","rev","xargs"]
+  test ["bins"] ["bins","cat","echo","ls","ps","rev","xargs"]
   test ["ls | xargs echo"] [unwords paths0]
