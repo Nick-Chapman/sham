@@ -83,3 +83,5 @@ run console = Testing.run console $ do
   test ["ls | xargs echo"] [unwords paths0]
   test ["cat days | grep u"] [ d | d <- days, "u" `isInfixOf` d ]
   test ["grep"] ["(stderr) grep: takes a single argument"]
+  test ["cat days | head"] ["Monday"]
+  --test ["cat days | grep u | head"] ["Tuesday"] -- TODO: test not working yet

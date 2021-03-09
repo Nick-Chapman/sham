@@ -131,7 +131,7 @@ write :: FD -> String -> Prog ()
 write fd line = do
   Prog.Call Write (fd,line) >>= \case
     Left NotWritable -> err2 (show fd ++ " not writable")
-    Right (Left EPIPE) -> err2 "EPIPE when writing to fd1"
+    Right (Left EPIPE) -> Prog.Exit --err2 "EPIPE when writing to fd1"
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()

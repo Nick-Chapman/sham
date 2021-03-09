@@ -24,4 +24,3 @@ write (Pipe Nothing) x = Right (Pipe (Just x))
 write (Pipe (Just _)) _ = Left Block
 read (Pipe Nothing) = Left Block
 read (Pipe (Just x)) = Right (x, Pipe Nothing)
-

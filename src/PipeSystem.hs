@@ -26,8 +26,12 @@ data PipeSystem = State
   , next :: PipeKey
   }
 
-data Mode = Active | Drain
-instance Show Mode where show = \case Active -> "(active)"; Drain -> "(draining)"
+data Mode = Active | Drain | Unwatched
+instance Show Mode where
+  show = \case
+    Active -> "(active)"
+    Drain -> "(draining)"
+    Unwatched -> "(unwatched)"
 
 instance Show PipeSystem where
   show State{m} =
@@ -44,9 +48,13 @@ createPipe s@State{m,next=key} = do
 
 writePipe s@State{m} k str = do
   let (pipe,mode) = look "writePipe" k m
-  case Pipe.write pipe str of
-    Left Block -> Left Block
-    Right pipe -> Right (Right s { m = Map.insert k (pipe,mode) m })
+  case mode of
+    Drain -> error "writing to a draining pipe (closed for writing); should be impossible"
+    Unwatched -> Right (Left EPIPE)
+    Active -> do
+      case Pipe.write pipe str of
+        Left Block -> Left Block
+        Right pipe -> Right (Right s { m = Map.insert k (pipe,mode) m })
 
 readPipe s@State{m} k = do
   let (pipe,mode) = look "readPipe" k m
@@ -54,25 +62,26 @@ readPipe s@State{m} k = do
     Left Block ->
       case mode of
         Active -> Left Block
-        Drain -> Right (Left EOF, s { m = Map.delete k m })
+        Drain -> Right (Left EOF, s { m = Map.delete k m }) --TODO: here or when closeForReading
+        Unwatched -> error "reading from an unwatched pipe (closed for reading); should be impossible"
     Right (str,pipe) ->
       Right (Right str, s { m = Map.insert k (pipe,mode) m })
 
 closeForReading s@State{m} k = do
   case Map.lookup k m of
-    Nothing -> s
-    Just (_,mode) ->
+    Nothing -> s --TODO: impossible if we only delete when both ends are closed
+    Just (pipe,mode) ->
       case mode of
-        Active -> s -- TODO: change mode here, to allow EPIPE generation
+        Active -> s { m = Map.insert k (pipe,Unwatched) m }
         Drain -> s
+        Unwatched -> error "already closed for reading; should be impossible"
 
 closeForWriting s@State{m} k = do
   let (pipe,mode) = look "closeForWriting" k m
   case mode of
     Active -> s { m = Map.insert k (pipe,Drain) m }
-    Drain ->
-      -- TODO: This shouldn't be an error if it can be user provoked.
-      error "already closed for writing"
+    Drain -> error "already closed for writing; should be impossible"
+    Unwatched -> s -- TODO: delete here?
 
 -- helper for map lookup
 look :: (Show k, Ord k) => String -> k -> Map k b -> b
