@@ -1,7 +1,7 @@
 module Tests (run) where
 
 import Testing (test)
-import Os (Prog)
+import Prog (Prog)
 import qualified Testing (run)
 import qualified FileSystem
 

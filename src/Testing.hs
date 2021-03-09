@@ -5,8 +5,8 @@ import Data.List (intercalate)
 import FileSystem (fs0)
 import Interaction (Interaction(..),OutMode(..))
 import Misc (EOF(..))
-import Os (Prog)
-import qualified Os (sim)
+import Prog (Prog)
+import qualified Prog (run)
 
 test :: [String] -> [String] -> Testing ()
 test is xs = T1 (Test (Lines is) (Lines xs))
@@ -60,7 +60,7 @@ runTest console n t@(Test input expected) = do
         pure False
 
 runConsole :: Prog () -> Lines -> Either Unconsumed Lines
-runConsole console input = runInteraction (Os.sim fs0 console) input
+runConsole console input = runInteraction (Prog.run fs0 console) input
 
 runInteraction :: Interaction -> Lines -> Either Unconsumed Lines
 runInteraction i (Lines xs0) = loop xs0 [] i where

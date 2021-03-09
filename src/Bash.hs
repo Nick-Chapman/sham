@@ -6,13 +6,13 @@ import Data.Map (Map)
 import Interaction (Prompt(..))
 import Misc (EOF(..),PipeEnds(..))
 import Native (withOpen,err2)
-import Os (Prog,SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
+import Prog (Prog,SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import Path (Path)
 import Prelude hiding (read)
 import SysCall (BadFileDescriptor(..))
 import qualified Data.Map.Strict as Map
 import qualified Native (read,readAll)
-import qualified Os (Prog(..))
+import qualified Prog (Prog(..))
 import qualified Path (create)
 
 newtype Bins = Bins (Map String ([String] -> Prog ()))
@@ -126,7 +126,7 @@ data Script
   | Pipe Script Script
   | Exit
   | Source Path
---  | Exec Command -- TODO: need Exec from Os
+--  | Exec Command -- TODO: need Exec from Prog
   | Run String [String] [Redirect] WaitMode
 
 data WaitMode = NoWait | Wait
@@ -142,30 +142,30 @@ interpret :: Bins -> Script -> Prog ()
 interpret bins = \case
   Null -> pure ()
   BashError message -> err2 message
-  Exit -> Os.Exit
+  Exit -> Prog.Exit
   Source path -> runBashScript bins path
   Run com args rs mode -> executeCommand bins com args rs mode
   Pipe script1 script2 -> pipe (interpret bins script1) (interpret bins script2)
 
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
-  PipeEnds{r,w} <- Os.Call SysPipe ()
-  Os.Spawn "bash" (do
+  PipeEnds{r,w} <- Prog.Call SysPipe ()
+  Prog.Spawn "bash" (do
                dup2 (FD 1) w
-               Os.Call Close w
-               Os.Call Close r
+               Prog.Call Close w
+               Prog.Call Close r
                prog1
            ) $ \child1 -> do
-    Os.Spawn "bash" (do
+    Prog.Spawn "bash" (do
                  dup2 (FD 0) r
-                 Os.Call Close w
-                 Os.Call Close r
+                 Prog.Call Close w
+                 Prog.Call Close r
                  prog2
              ) $ \child2 -> do
-      Os.Call Close w
-      Os.Call Close r
-      Os.Wait child1
-      Os.Wait child2
+      Prog.Call Close w
+      Prog.Call Close r
+      Prog.Wait child1
+      Prog.Wait child2
 
 executeCommand :: Bins -> String -> [String] -> [Redirect] -> WaitMode -> Prog ()
 executeCommand bins com args rs mode = do
@@ -188,8 +188,8 @@ runBashScript bins path = do
 
 spawn :: String -> WaitMode -> Prog () -> Prog ()
 spawn commandString mode prog = case mode of
-  Wait -> do Os.Spawn commandString prog (\childPid -> Os.Wait childPid)
-  NoWait -> do Os.Spawn commandString prog (\_ -> pure ())
+  Wait -> do Prog.Spawn commandString prog (\childPid -> Prog.Wait childPid)
+  NoWait -> do Prog.Spawn commandString prog (\_ -> pure ())
 
 execRedirect :: Redirect -> Prog ()
 execRedirect r =
@@ -202,8 +202,8 @@ execRedirect r =
 
 dup2 :: FD -> FD -> Prog ()
 dup2 d s = do
-  Os.Call Dup2 (d,s) >>= \case
+  Prog.Call Dup2 (d,s) >>= \case
     Left BadFileDescriptor -> do
       err2 $ "bad file descriptor: " ++ show s
-      Os.Exit
+      Prog.Exit
     Right () -> pure ()

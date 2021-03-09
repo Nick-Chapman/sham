@@ -1,9 +1,9 @@
 
-module Os2 ( -- with support for multi-threading!
+module Prog ( -- with support for multi-threading!
   Prog(..),
   SysCall(..),
   OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..),
-  sim,
+  run,
   ) where
 
 import Control.Monad (ap,liftM)
@@ -30,8 +30,8 @@ data Prog a where
   Procs :: Prog [(Pid,Proc)]
   Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
 
-sim :: FileSystem -> Prog () -> Interaction
-sim fs prog = do
+run :: FileSystem -> Prog () -> Interaction
+run fs prog = do
   let action = linearize prog (\() -> A_Halt)
   let (state,pid) = newPid (initState fs)
   resume pid (Proc "init" env0 action) state

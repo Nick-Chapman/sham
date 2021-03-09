@@ -7,11 +7,11 @@ module Native (
 import Data.List (sort,sortOn)
 import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import Os (Prog,OpenMode(..),NoSuchPath(..))
+import Prog (Prog,OpenMode(..),NoSuchPath(..))
 import Path (Path)
 import Prelude hiding (all,read)
 import SysCall (SysCall(..),FD)
-import qualified Os
+import qualified Prog
 import qualified Path (create,toString)
 
 echo :: [String] -> Prog ()
@@ -47,12 +47,12 @@ rev args = checkNoArgs "rev" args loop where
 
 ls :: [String] -> Prog ()
 ls args = checkNoArgs "ls" args $ do
-  paths <- Os.Call Paths ()
+  paths <- Prog.Call Paths ()
   mapM_ (write stdout . Path.toString) (sort paths)
 
 ps :: [String] -> Prog ()
 ps args = checkNoArgs "ps" args $ do
-  xs <- Os.Procs
+  xs <- Prog.Procs
   sequence_
     [ write stdout (show pid ++ " " ++ show p)  | (pid,p) <- sortOn fst xs ]
 
@@ -75,13 +75,13 @@ checkNoArgs who args prog = case args of
 
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
-  Os.Call Open (path,mode) >>= \case
+  Prog.Call Open (path,mode) >>= \case
     Left NoSuchPath -> do
       err2 $ "no such path: " ++ Path.toString path
-      Os.Exit
+      Prog.Exit
     Right fd -> do
       res <- action fd
-      Os.Call Close fd
+      Prog.Call Close fd
       pure res
 
 readAll :: FD -> Prog [String]
@@ -94,7 +94,7 @@ readAll fd = loop []
 
 read :: Prompt -> FD -> Prog (Either EOF String)
 read prompt fd =
-  Os.Call (Read prompt) fd >>= \case
+  Prog.Call (Read prompt) fd >>= \case
     Left NotReadable -> do
       err2 (show fd ++ " not readable")
       pure (Left EOF) -- TODO: better to exit?
@@ -103,16 +103,16 @@ read prompt fd =
 
 write :: FD -> String -> Prog ()
 write fd line = do
-  Os.Call Write (fd,line) >>= \case
+  Prog.Call Write (fd,line) >>= \case
     Left NotWritable -> err2 (show fd ++ " not writable")
     Right (Left EPIPE) -> err2 "EPIPE when writing to fd1"
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()
 err2 line = do
-  Os.Call Write (stderr, line) >>= \case
-    Left NotWritable -> Os.Trace (show stderr ++ " not writable")
-    Right (Left EPIPE) -> Os.Trace "EPIPE when writing to fd2"
+  Prog.Call Write (stderr, line) >>= \case
+    Left NotWritable -> Prog.Trace (show stderr ++ " not writable")
+    Right (Left EPIPE) -> Prog.Trace "EPIPE when writing to fd2"
     Right (Right ()) -> pure ()
 
 stdin,stdout,stderr :: FD

@@ -5,11 +5,11 @@ import Data.Map (Map)
 import FileSystem (fs0)
 import Interaction (Interaction(..),Prompt(..),OutMode(..))
 import Misc (EOF(..))
-import Os (Prog)
+import Prog (Prog)
 import qualified Bash (Bins(..),console,bash)
 import qualified Data.Map.Strict as Map
 import qualified Native (echo,cat,ls,ps,rev,xargs,builtins)
-import qualified Os (sim)
+import qualified Prog (run)
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
 import qualified System.Console.Haskeline.History as HL
@@ -19,7 +19,7 @@ main :: IO ()
 main = do
   Tests.run console
   putStrLn "*bash-sim* (try typing help)"
-  runInteraction (Os.sim fs0 console)
+  runInteraction (Prog.run fs0 console)
 
 console :: Prog ()
 console = Bash.console bins
