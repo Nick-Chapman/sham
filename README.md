@@ -37,7 +37,6 @@ Simulate a bash-style shell, coded on top of an unix-style OS.
 - lsof
 - rm
 
-- proper parser!
 - command line arguments: $0 $1 etc
 - comments (#), quoting (''), bash-vars (foo=something, $foo)
 - grouping and sequencing: (...), foo;bar

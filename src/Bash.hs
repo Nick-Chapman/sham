@@ -1,19 +1,22 @@
 
 module Bash (Bins(..),console,bash) where
 
-import Data.List.Split (splitWhen)
 import Data.Map (Map)
+import EarleyM (Gram,fail,alts,getToken,many,skipWhile)
 import Interaction (Prompt(..))
 import Misc (EOF(..),PipeEnds(..))
 import Native (withOpen,err2)
-import Prog (Prog,Pid,SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import Path (Path)
-import Prelude hiding (read)
+import Prelude hiding (read,fail)
+import Prog (Prog,Pid,SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import SysCall (BadFileDescriptor(..))
+import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
+import qualified EarleyM as EM (parse,Parsing(..))
 import qualified Native (read,readAll)
-import qualified Prog (Prog(..))
 import qualified Path (create)
+import qualified Prog (Prog(..))
+
 
 newtype Bins = Bins (Map String ([String] -> Prog ()))
 
@@ -28,98 +31,9 @@ console bins = loop where
       Left EOF -> pure ()
       Right line -> do
         let script = parseLine line
-        --Prog.Trace (show script)
+        Prog.Trace (show script)
         interpret bins script
         loop
-
--- TODO: at some point we'll want a proper parser!
--- TODO: allow no space before path redirect: >xx
-parseLine :: String -> Script
-parseLine line = do
-  case splitWhen (=='|') line of
-    [] -> error "parseLine/split/[]/impossible"
-    x1:xs ->
-      foldl Pipe (parseCommand x1) [ parseCommand com | com <- xs ]
-
-parseCommand :: String -> Script
-parseCommand seg = loop [] [] (words seg)
-  where
-    loop ws rs xs =
-      case parseAsRedirect xs of
-        Just (r,xs) -> loop ws (r:rs) xs
-        Nothing ->
-          case xs of
-            x:xs -> loop (x:ws) rs xs
-            [] -> makeScript (reverse rs) (reverse ws)
-
-
--- TODO: generalize/share redirect parsing; even before a proper parser
-parseAsRedirect :: [String] -> Maybe (Redirect,[String])
-parseAsRedirect = \case
-  "<":p:xs -> Just (Redirect rd (FD 0) (path p), xs)
-  "0<":p:xs -> Just (Redirect rd (FD 0) (path p), xs)
-
-  ">":p:xs -> Just (Redirect wr (FD 1) (path p), xs)
-  "1>":p:xs -> Just (Redirect wr (FD 1) (path p), xs)
-  "2>":p:xs -> Just (Redirect wr (FD 2) (path p), xs)
-  ">&2":xs -> Just (Redirect wr (FD 1) (dup 2), xs)
-  "1>&2":xs -> Just (Redirect wr (FD 1) (dup 2), xs)
-  "2>&1":xs -> Just (Redirect wr (FD 2) (dup 1), xs)
-
-  ">>":p:xs -> Just (Redirect ap (FD 1) (path p), xs)
-  "1>>":p:xs -> Just (Redirect ap (FD 1) (path p), xs)
-  "2>>":p:xs -> Just (Redirect ap (FD 2) (path p), xs)
-  ">>&2":xs -> Just (Redirect ap (FD 1) (dup 2), xs)
-  "1>>&2":xs -> Just (Redirect ap (FD 1) (dup 2), xs)
-  "2>>&1":xs -> Just (Redirect ap (FD 2) (dup 1), xs)
-
-  -- provoke unusual conditions
-  "0>":p:xs -> Just (Redirect wr (FD 0) (path p), xs)
-  ">&0":xs -> Just (Redirect wr (FD 1) (dup 0), xs)
-  "1>&0":xs -> Just (Redirect wr (FD 1) (dup 0), xs)
-  "2>&0":xs -> Just (Redirect wr (FD 2) (dup 0), xs)
-
-  -- FD 3...
-  ">&3":xs -> Just (Redirect wr (FD 1) (dup 3), xs)
-  "1>&3":xs -> Just (Redirect wr (FD 1) (dup 3), xs)
-  "2>&3":xs -> Just (Redirect wr (FD 2) (dup 3), xs)
-  "3>&1":xs -> Just (Redirect wr (FD 3) (dup 1), xs)
-  "3>&2":xs -> Just (Redirect wr (FD 3) (dup 2), xs)
-  "3<":p:xs -> Just (Redirect rd (FD 3) (path p), xs)
-
-  -- FD 4...
-  ">&4":xs -> Just (Redirect wr (FD 1) (dup 4), xs)
-  "1>&4":xs -> Just (Redirect wr (FD 1) (dup 4), xs)
-  "2>&4":xs -> Just (Redirect wr (FD 2) (dup 4), xs)
-  "4>&1":xs -> Just (Redirect wr (FD 4) (dup 1), xs)
-  "4>&2":xs -> Just (Redirect wr (FD 4) (dup 2), xs)
-  "4<":p:xs -> Just (Redirect rd (FD 4) (path p), xs)
-
-  _ ->
-    Nothing
-  where
-    dup n = FromFD (FD n)
-    path p = FromPath (Path.create p)
-    rd = OpenForReading
-    wr = OpenForWriting Truncate
-    ap = OpenForWriting Append
-
-makeScript :: [Redirect] -> [String] -> Script
-makeScript rs = \case
-  [] -> Null
-  ["exit"] -> Exit
-  "exit":_ -> BashError "exit: takes no arguments"
-  [".",p] -> Source (Path.create p)
-  ".":_ -> BashError "source (.): takes exactly one argument"
-  com:args -> lookAmpersand args $ \args mode ->
-    Run com args rs mode
-
-lookAmpersand :: [String] -> ([String] -> WaitMode -> a) -> a
-lookAmpersand xs k =
-  case reverse xs of
-    "&":xs' -> k xs' NoWait
-    _-> k xs Wait
-
 
 data Script
   = Null
@@ -219,3 +133,103 @@ dup2 d s = do
       err2 $ "bad file descriptor: " ++ show s
       Prog.Exit
     Right () -> pure ()
+
+
+----------------------------------------------------------------------
+-- syntax...
+
+parseLine :: String -> Script
+parseLine str = do
+  case EM.parse (lang <$> getToken) str of
+    EM.Parsing{EM.outcome} -> case outcome of
+      Left pe -> BashError $ show pe -- TODO: improve parse error message for humans
+      Right script -> script
+
+
+lang :: Gram Char -> Gram Script
+lang token = script where
+
+  keywords = ["exit"]
+
+  script = do ws; res <- alts [ exit, source, pipeline ]; ws; pure res
+
+  exit = do keyword "exit"; pure Exit
+  source = do keyword "."; ws1; p <- path; pure $ Source p
+
+  pipeline = do
+    (com1,coms) <- parseListSep command (do ws; symbol '|'; ws)
+    pure $ foldl Pipe com1 coms
+
+  command = do
+    (com,args) <- parseListSep word ws1
+    if com `elem` keywords then fail else pure ()
+    rs <- redirects
+    mode <- alts [ do eps; pure Wait,
+                   do ws; symbol '&'; pure NoWait ]
+    pure $ Run com args rs mode
+
+  redirects = alts
+    -- TODO: Goal: allow just "ws" to separate args from redirects.
+    -- Problem is that currently this causes ambiguity for examples such as:
+    --  "echo foo1>xx"
+    -- It should parse as:       "echo foo1 >xx"
+    -- But we think it might be  "echo foo 1>xx"  !!
+    [ do ws1; (r1,rs) <- parseListSep redirect ws1; pure (r1:rs)
+    , do eps; pure []
+    ]
+
+  redirect = alts
+    [ do
+        dest <- alts [ do eps; pure 0, do n <- fd; ws; pure n ]
+        let mode = OpenForReading
+        symbol '<'
+        ws
+        src <- redirectSource
+        pure $ Redirect mode dest src
+    , do
+        dest <- alts [ do eps; pure 1, do n <- fd; ws; pure n ]
+        mode <-
+          alts [ do symbol  '>';  pure $ OpenForWriting Truncate
+               , do keyword ">>"; pure $ OpenForWriting Append ]
+        ws
+        src <- redirectSource
+        pure $ Redirect mode dest src
+    ]
+
+  redirectSource = alts [ FromPath <$> path, FromFD <$> fdRef ]
+  fdRef = do symbol '&'; fd
+  fd = FD <$> digit -- TODO: multi-digit file-desciptors
+  path = Path.create <$> word
+
+  word = ident0
+  keyword string = mapM_ symbol string
+
+  ident0 = do
+    x <- alts [alpha,numer]
+    xs <- many (alts [alpha,numer,dash])
+    pure (x : xs)
+
+  digit = do c <- numer; pure (digitOfChar c)
+
+  alpha = sat Char.isAlpha
+  numer = sat Char.isDigit
+  dash = sat (== '-')
+  space = skip (sat Char.isSpace)
+
+  symbol x = do t <-token; if t==x then pure () else fail
+  sat pred = do c <- token; if pred c then pure c else fail
+
+  ws = skipWhile space -- white*
+  ws1 = do space; ws -- white+
+
+  skip p = do _ <- p; eps
+  eps = pure ()
+
+
+digitOfChar :: Char -> Int
+digitOfChar c = Char.ord c - ord0 where ord0 = Char.ord '0'
+
+parseListSep :: Gram a -> Gram () -> Gram (a,[a])
+parseListSep p sep = alts [
+    do x <- p; sep; (x1,xs) <- parseListSep p sep; pure (x,x1:xs),
+    do x <- p; pure (x,[])]
