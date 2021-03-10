@@ -7,8 +7,8 @@ import Interaction (Prompt(..))
 import Misc (EOF(..),PipeEnds(..))
 import Native (withOpen,err2)
 import Path (Path)
-import Prelude hiding (read,fail)
-import Prog (Prog,Pid,SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
+import Prelude hiding (Word,read,fail)
+import Prog (Prog,Pid(..),SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import SysCall (BadFileDescriptor(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
@@ -31,7 +31,7 @@ console bins = loop where
       Left EOF -> pure ()
       Right line -> do
         let script = parseLine line
-        Prog.Trace (show script)
+        --Prog.Trace (show script)
         interpret bins script
         loop
 
@@ -43,8 +43,11 @@ data Script
   | Exit
   | Source Path
 --  | Exec Command -- TODO: need Exec from Prog
-  | Run String [String] [Redirect] WaitMode
+  | Run Word [Word] [Redirect] WaitMode
   deriving Show
+
+data Word = Word String | DolDol
+  deriving (Eq,Show)
 
 data WaitMode = NoWait | Wait
   deriving Show
@@ -87,11 +90,20 @@ pipe prog1 prog2 = do
       Prog.Wait child1
       Prog.Wait child2
 
-executeCommand :: Bins -> String -> [String] -> [Redirect] -> WaitMode -> Prog ()
+
+executeCommand :: Bins -> Word -> [Word] -> [Redirect] -> WaitMode -> Prog ()
 executeCommand bins com args rs mode = do
+  com <- evalWord com
+  args <- mapM evalWord args
   spawn (unwords (com:args)) mode $ do
     mapM_ execRedirect rs
     bash bins com args
+
+evalWord :: Word -> Prog String
+evalWord = \case
+  Word s -> pure s
+  DolDol -> do Pid n <- Prog.MyPid; pure (show n)
+
 
 bash :: Bins -> String -> [String] -> Prog ()
 bash bins com args =
@@ -149,9 +161,10 @@ parseLine str = do
 lang :: Gram Char -> Gram Script
 lang token = script where
 
-  keywords = ["exit"]
+  keywords = map Word ["exit"]
 
-  script = do ws; res <- alts [ exit, source, pipeline ]; ws; pure res
+  script = do ws; alts [ do res <- alts [ exit, source, pipeline ]; ws; pure res
+                       , do eps; pure Null ]
 
   exit = do keyword "exit"; pure Exit
   source = do keyword "."; ws1; p <- path; pure $ Source p
@@ -199,9 +212,11 @@ lang token = script where
   redirectSource = alts [ FromPath <$> path, FromFD <$> fdRef ]
   fdRef = do symbol '&'; fd
   fd = FD <$> digit -- TODO: multi-digit file-desciptors
-  path = Path.create <$> word
+  path = Path.create <$> ident0
 
-  word = ident0
+  word = alts [ Word <$> ident0
+              , do keyword "$$"; pure DolDol ]
+
   keyword string = mapM_ symbol string
 
   ident0 = do

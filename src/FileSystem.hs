@@ -42,6 +42,7 @@ fs0 = FileSystem.create
   , (Path.create "days", File.create days)
   , (Path.create "help", File.create ["cat README"])
   , (Path.create "y", File.create ["echo yes","y &"])
+  , (Path.create "bomb", File.create ["echo $$ >&2", "bomb | bomb"])
   ]
 
 readme :: [String]

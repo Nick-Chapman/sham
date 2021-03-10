@@ -11,7 +11,7 @@ run console = Testing.run console $ do
   let days = FileSystem.days
   let rw = map reverse days
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
-  let paths0 = ["README","days","help","y"]
+  let paths0 = ["README","bomb", "days","help","y"]
 
   test ["ls"] paths0
   test ["help"] FileSystem.readme
@@ -19,6 +19,7 @@ run console = Testing.run console $ do
   test ["doh"] ["(stderr) no such path: doh"]
 
   test [] []
+  test [""] []
   test ["echo"] [""]
   test ["echo foo"] ["foo"]
   test ["echo foo", "echo bar"] ["foo","bar"]
@@ -87,3 +88,5 @@ run console = Testing.run console $ do
   test ["grep"] ["(stderr) grep: takes a single argument"]
   test ["cat days | head"] ["Monday"]
   test ["cat days | grep u | head"] ["Tuesday"]
+
+  test ["echo my pid is $$"] ["my pid is 1"]

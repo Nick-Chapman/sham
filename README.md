@@ -28,6 +28,7 @@ Simulate a bash-style shell, coded on top of an unix-style OS.
 - redirection to/from files/descriptors: < input >> foo 2>&1
 - pipes (|)
 - backgrounding (&)
+- my pid ($$)
 
 
 ### Ideas/Plans

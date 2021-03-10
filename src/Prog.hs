@@ -1,6 +1,6 @@
 
 module Prog ( -- with support for multi-threading!
-  Prog(..), Pid,
+  Prog(..), Pid(..),
   SysCall(..),
   OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..),
   run,
@@ -28,6 +28,7 @@ data Prog a where
   Fork :: Prog (Maybe Pid)
   Exec :: String -> Prog a -> Prog b
   Wait :: Pid -> Prog ()
+  MyPid :: Prog Pid
   Procs :: Prog [(Pid,Proc)]
   Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
 
@@ -46,6 +47,7 @@ linearize p0 = case p0 of
   Fork -> A_Fork
   Exec commandString prog -> \_ignoredK -> A_Exec commandString (linearize prog $ \_ -> A_Halt)
   Wait pid -> \k -> A_Wait pid (k ())
+  MyPid -> A_MyPid
   Procs -> A_Procs
   Call sys arg -> A_Call sys arg
 
@@ -55,18 +57,9 @@ data Action where
   A_Fork :: (Maybe Pid -> Action) -> Action
   A_Exec :: String -> Action -> Action
   A_Wait :: Pid -> Action -> Action
+  A_MyPid :: (Pid -> Action) -> Action
   A_Procs :: ([(Pid,Proc)] -> Action) -> Action
   A_Call :: (Show a, Show b) => SysCall a b -> a -> (b -> Action) -> Action
-
-instance Show Action where
-  show = \case
-    A_Halt{} -> "Halt"
-    A_Trace{} -> "Trace"
-    A_Fork{} -> "Fork"
-    A_Exec{} -> "Exec"
-    A_Wait{} -> "Wait"
-    A_Procs{} -> "Procs"
-    A_Call{} -> "Call"
 
 resume :: Pid -> Proc -> State -> Interaction
 resume me proc0@(Proc{env,action=action0}) state@State{os} =
@@ -102,6 +95,8 @@ resume me proc0@(Proc{env,action=action0}) state@State{os} =
     then block me proc0 state
      -- TODO: resume instead of yield (less rr)
     else yield me proc0 { action } state
+
+  A_MyPid f -> do yield me proc0 { action = f me } state
 
   A_Procs f -> do
     let res = (me,proc0) : allProcs state
