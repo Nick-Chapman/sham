@@ -1,6 +1,7 @@
 
 module Bash (Bins(..),console,bash) where
 
+import Control.Monad (when)
 import Data.Map (Map)
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile)
 import Interaction (Prompt(..))
@@ -13,7 +14,7 @@ import SysCall (BadFileDescriptor(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
-import qualified Native (read,readAll)
+import qualified Native (echo,read,readAll)
 import qualified Path (create)
 import qualified Prog (Prog(..))
 
@@ -42,6 +43,7 @@ data Script
   | Pipe Script Script
   | Exit
   | Source Path
+  | BuiltinEcho [Word] -- run's in same process
   | Exec Word [Word]
   | Run Word [Word] [Redirect] WaitMode
   deriving Show
@@ -50,7 +52,7 @@ data Word = Word String | DolDol
   deriving (Eq,Show)
 
 data WaitMode = NoWait | Wait
-  deriving Show
+  deriving (Eq,Show)
 
 data Redirect
   = Redirect OpenMode FD RedirectSource
@@ -68,6 +70,7 @@ interpret bins = \case
   Exit -> Prog.Exit
   Exec com args -> exec bins com args
   Source path -> runBashScript bins path
+  BuiltinEcho args -> builtinEcho args
   Run com args rs mode -> executeCommand bins com args rs mode
   Pipe script1 script2 -> pipe (interpret bins script1) (interpret bins script2)
 
@@ -96,6 +99,11 @@ exec bins com args = do
   com <- evalWord com
   args <- mapM evalWord args
   Prog.Exec (unwords (com:args)) $ bash bins com args
+
+builtinEcho :: [Word] -> Prog ()
+builtinEcho args = do
+  args <- mapM evalWord args
+  Native.echo args
 
 executeCommand :: Bins -> Word -> [Word] -> [Redirect] -> WaitMode -> Prog ()
 executeCommand bins com args rs mode = do
@@ -167,8 +175,6 @@ parseLine str = do
 lang :: Gram Char -> Gram Script
 lang token = script where
 
-  keywords = map Word ["exit","exec"]
-
   script = do ws; alts [ do res <- alts [ exit, exec, source, pipeline ]; ws; pure res
                        , do eps; pure Null ]
 
@@ -179,15 +185,24 @@ lang token = script where
   source = do keyword "."; ws1; p <- path; pure $ Source p
 
   pipeline = do
-    (com1,coms) <- parseListSep command (do ws; symbol '|'; ws)
+    (com1,coms) <- parseListSep pipeStage (do ws; symbol '|'; ws)
     pure $ foldl Pipe com1 coms
+
+  pipeStage = alts [echo,command]
+
+  -- builtin echo runs in process. critical for "yes | head"
+  echo = do keyword "echo"
+            alts [ do ws1; (com,args) <- parseListSep word ws1; pure $ BuiltinEcho (com:args)
+                 , do eps; pure $ BuiltinEcho []
+                 ]
 
   command = do
     (com,args) <- parseListSep word ws1
-    if com `elem` keywords then fail else pure ()
+    when (com `elem` map Word ["exit","exec"]) fail -- give way to syntax
     rs <- redirects
     mode <- alts [ do eps; pure Wait,
                    do ws; symbol '&'; pure NoWait ]
+    when (com == Word "echo" && null rs && mode == Wait) fail -- give way to builtin echo
     pure $ Run com args rs mode
 
   redirects = alts

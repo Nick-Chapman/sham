@@ -67,7 +67,7 @@ run console = Testing.run console $ do
   test ["doh 4< days 2>&4"] [] -- redirecting stderr to unwritable FD looses error
 
   test ["cat days &", "cat days"] (head days : merge (tail days) days)
-  test ["cat days &", "echo FOO"] (head days : "FOO" : tail days)
+  test ["cat days &", "echo FOO"] ("FOO" : days)
 
   test ["cat > x","echo OUT","echo ERR >&2","","x"] ["OUT","(stderr) ERR"]
   test ["cat > x","echo OUT","echo ERR >&2","",". x"] ["OUT","(stderr) ERR"]
@@ -95,5 +95,7 @@ run console = Testing.run console $ do
   test ["exec ps"] ["[1] ps"]
   test ["me"] ["2"]
   test ["exec me"] ["1"]
-  test ["cat me > a","echo me >> a","a","me"] ["4","6","8"]
-  test ["cat me > a","echo exec me >> a","a","me"] ["4","4","7"]
+  test ["cat me > a","echo me >> a","a","me"] ["4","5","6"]
+  test ["cat me > a","echo exec me >> a","a","me"] ["4","4","5"]
+
+  test ["yes | head", "echo woo hoo"] ["yes","woo hoo"]

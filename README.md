@@ -29,10 +29,10 @@ Simulate a bash-style shell, coded on top of an unix-style OS.
 - pipes (|)
 - backgrounding (&)
 - my pid ($$)
+- builtin "echo" (runs in process). critical to making "yes | head" work!
 
 
 ### Ideas/Plans
-- even using "exec" in "yes" script, running "yes | head" hangs - think because echo is bin
 - fork initial "bash" from "init"
 - lsof
 - rm
