@@ -3,15 +3,16 @@ module Tests (run) where
 import Data.List (isInfixOf)
 import Testing (test)
 import Prog (Prog)
+import qualified Path (toString)
 import qualified Testing (run)
-import qualified FileSystem (days,readme)
+import qualified FileSystem (ls,fs0,days,readme)
 
 run :: Prog () -> IO ()
 run console = Testing.run console $ do
   let days = FileSystem.days
   let rw = map reverse days
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
-  let paths0 = ["README","bomb", "days","help","y"]
+  let paths0 = map Path.toString (FileSystem.ls FileSystem.fs0)
 
   test ["ls"] paths0
   test ["help"] FileSystem.readme
@@ -90,3 +91,9 @@ run console = Testing.run console $ do
   test ["cat days | grep u | head"] ["Tuesday"]
 
   test ["echo my pid is $$"] ["my pid is 1"]
+
+  test ["exec ps"] ["[1] ps"]
+  test ["me"] ["2"]
+  test ["exec me"] ["1"]
+  test ["cat me > a","echo me >> a","a","me"] ["4","6","8"]
+  test ["cat me > a","echo exec me >> a","a","me"] ["4","4","7"]

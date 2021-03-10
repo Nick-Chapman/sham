@@ -42,7 +42,7 @@ data Script
   | Pipe Script Script
   | Exit
   | Source Path
---  | Exec Command -- TODO: need Exec from Prog
+  | Exec Word [Word]
   | Run Word [Word] [Redirect] WaitMode
   deriving Show
 
@@ -66,6 +66,7 @@ interpret bins = \case
   Null -> pure ()
   BashError message -> err2 message
   Exit -> Prog.Exit
+  Exec com args -> exec bins com args
   Source path -> runBashScript bins path
   Run com args rs mode -> executeCommand bins com args rs mode
   Pipe script1 script2 -> pipe (interpret bins script1) (interpret bins script2)
@@ -90,6 +91,11 @@ pipe prog1 prog2 = do
       Prog.Wait child1
       Prog.Wait child2
 
+exec :: Bins -> Word -> [Word] -> Prog ()
+exec bins com args = do
+  com <- evalWord com
+  args <- mapM evalWord args
+  Prog.Exec (unwords (com:args)) $ bash bins com args
 
 executeCommand :: Bins -> Word -> [Word] -> [Redirect] -> WaitMode -> Prog ()
 executeCommand bins com args rs mode = do
@@ -161,12 +167,15 @@ parseLine str = do
 lang :: Gram Char -> Gram Script
 lang token = script where
 
-  keywords = map Word ["exit"]
+  keywords = map Word ["exit","exec"]
 
-  script = do ws; alts [ do res <- alts [ exit, source, pipeline ]; ws; pure res
+  script = do ws; alts [ do res <- alts [ exit, exec, source, pipeline ]; ws; pure res
                        , do eps; pure Null ]
 
   exit = do keyword "exit"; pure Exit
+
+  exec = do keyword "exec"; ws1; (com,args) <- parseListSep word ws1; pure $ Exec com args
+
   source = do keyword "."; ws1; p <- path; pure $ Source p
 
   pipeline = do

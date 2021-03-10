@@ -1,6 +1,7 @@
 module Top (main) where
 
 import Control.Monad.Trans.Class (lift)
+import Control.Monad (when)
 import Data.Map (Map)
 import FileSystem (fs0)
 import Interaction (Interaction(..),Prompt(..),OutMode(..))
@@ -77,7 +78,7 @@ runInteraction i0 = do
             HL.getInputLine (col AN.Green (show n ++ prompt)) >>= \case
               Nothing -> loop n (f (Left EOF))
               Just line -> do
-                updateHistory line
+                when (line /= "") $ updateHistory line
                 loop (n+1) (f (Right line))
 
       I_Write mode line i -> do

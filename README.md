@@ -32,12 +32,12 @@ Simulate a bash-style shell, coded on top of an unix-style OS.
 
 
 ### Ideas/Plans
-- exec
-- use exec in "y" script, so it terminates properly on EPIPE
+- even using "exec" in "yes" script, running "yes | head" hangs - think because echo is bin
 - fork initial "bash" from "init"
 - lsof
 - rm
 - command line arguments: $0 $1 etc
+- cp = "cat $1 > $2"
 - comments (#), quoting (''), bash-vars (foo=something, $foo)
 - grouping and sequencing: (...), foo;bar
 - introduce tty, which is connected by 3 pipes
