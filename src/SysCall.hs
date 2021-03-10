@@ -145,7 +145,7 @@ runSys sys s env arg = case sys of
 newtype Env = Env { unEnv :: Map FD Target } -- per process state, currently just FD map
 
 data Target
-  = Console OutMode
+  = Console OutMode -- TODO: plan to deprecate this, and handle console via tty/pipes
   | File OsState.Key
 
 instance Show Env where

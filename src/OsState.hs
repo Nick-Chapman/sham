@@ -1,4 +1,4 @@
-module OsState (
+module OsState (  -- TODO: rename OpenFiles?
   init,
   OsState,
   Key,

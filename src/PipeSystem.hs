@@ -37,7 +37,7 @@ instance Show PipeSystem where
   show State{m} =
     intercalate "," [ show k ++ show m ++ show p | (k,(p,m)) <- Map.toList m ]
 
-newtype PipeKey = PK Int deriving (Eq,Ord,Num)
+newtype PipeKey = PK Int deriving (Eq,Ord,Num) -- TODO: rename Key
 instance Show PipeKey where show (PK n) = "pipe"++show n
 
 empty = State { m = Map.empty, next = 1 }
