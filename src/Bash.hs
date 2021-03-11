@@ -1,5 +1,5 @@
 
-module Bash (Bins(..),console,bash) where
+module Bash (Bins(..),console,runCommand) where
 
 import Control.Monad (when)
 import Data.Map (Map)
@@ -9,42 +9,25 @@ import Misc (EOF(..),PipeEnds(..))
 import Native (withOpen,err2)
 import Path (Path)
 import Prelude hiding (Word,read,fail)
-import Prog (Prog,Pid(..),SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
+import Prog (Prog,Pid(..),Command(..),SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import SysCall (BadFileDescriptor(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
-import qualified Native (echo,read,readAll)
+import qualified Native (read,write,readAll)
 import qualified Path (create)
 import qualified Prog (Prog(..))
 
-
-newtype Bins = Bins (Map String ([String] -> Prog ()))
-
-lookupBins :: Bins -> String -> Maybe ([String] -> Prog ())
-lookupBins (Bins m) k = Map.lookup k m
-
-console :: Bins -> Prog ()
-console bins = loop where
-  loop :: Prog ()
-  loop = do
-    Native.read (Prompt "> ") (FD 0) >>= \case
-      Left EOF -> pure ()
-      Right line -> do
-        let script = parseLine line
-        --Prog.Trace (show script)
-        interpret bins script
-        loop
 
 data Script
   = Null
   | BashError String
   -- TODO: sequencing operator ";"
   | Pipe Script Script
-  | Exit
-  | Source Path
+  | BuiltinExit
+  | BuiltinExec Word [Word]
   | BuiltinEcho [Word] -- run's in same process
-  | Exec Word [Word]
+  | BuiltinSource Path
   | Run Word [Word] [Redirect] WaitMode
   deriving Show
 
@@ -63,27 +46,46 @@ data RedirectSource
   | FromFD FD
   deriving Show
 
+newtype Bins = Bins (Map String (Prog ()))
+
+lookupBins :: Bins -> String -> Maybe (Prog ())
+lookupBins (Bins m) k = Map.lookup k m
+
+console :: Bins -> Prog ()
+console bins = loop where
+  loop :: Prog ()
+  loop = do
+    Native.read (Prompt "> ") (FD 0) >>= \case
+      Left EOF -> pure ()
+      Right line -> do
+        let script = parseLine line
+        --Prog.Trace (show script)
+        interpret bins script
+        loop
+
 interpret :: Bins -> Script -> Prog ()
 interpret bins = \case
   Null -> pure ()
   BashError message -> err2 message
-  Exit -> Prog.Exit
-  Exec com args -> exec bins com args
-  Source path -> runBashScript bins path
+  BuiltinExit -> Prog.Exit
+  BuiltinExec com args -> doExec bins com args
   BuiltinEcho args -> builtinEcho args
+  BuiltinSource path -> runBashScript bins path
   Run com args rs mode -> executeCommand bins com args rs mode
   Pipe script1 script2 -> pipe (interpret bins script1) (interpret bins script2)
+
 
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
   PipeEnds{r,w} <- Prog.Call SysPipe ()
-  spawn1 "bash" (do
+  let command = Command ("bash",[])
+  spawn1 command (do -- TODO: dont loose the name of the actual pipe element
                dup2 (FD 1) w
                Prog.Call Close w
                Prog.Call Close r
                prog1
            ) $ \child1 -> do
-    spawn1 "bash" (do
+    spawn1 command (do
                  dup2 (FD 0) r
                  Prog.Call Close w
                  Prog.Call Close r
@@ -94,36 +96,47 @@ pipe prog1 prog2 = do
       Prog.Wait child1
       Prog.Wait child2
 
-exec :: Bins -> Word -> [Word] -> Prog ()
-exec bins com args = do
-  com <- evalWord com
-  args <- mapM evalWord args
-  Prog.Exec (unwords (com:args)) $ bash bins com args
+spawn1 :: Command -> Prog () -> (Pid -> Prog a) -> Prog a
+spawn1 command child parent = do
+  Prog.Fork >>= \case
+    Nothing -> Prog.Exec command child
+    Just pid -> parent pid
+
 
 builtinEcho :: [Word] -> Prog ()
 builtinEcho args = do
   args <- mapM evalWord args
-  Native.echo args
+  Native.write (FD 1) (unwords args)
 
 executeCommand :: Bins -> Word -> [Word] -> [Redirect] -> WaitMode -> Prog ()
 executeCommand bins com args rs mode = do
+  Prog.Fork >>= \case
+    Nothing -> do
+      mapM_ execRedirect rs
+      doExec bins com args
+    Just pid -> case mode of
+      Wait -> Prog.Wait pid
+      NoWait -> pure ()
+
+doExec :: Bins -> Word -> [Word] -> Prog ()
+doExec bins com args = do
   com <- evalWord com
   args <- mapM evalWord args
-  spawn (unwords (com:args)) mode $ do
-    mapM_ execRedirect rs
-    bash bins com args
+  runCommand bins $ Command (com,args)
+
+runCommand :: Bins -> Command -> Prog ()
+runCommand bins command = do
+  let Command (com,_) = command
+  let prog =
+        case lookupBins bins com of
+          Just prog -> prog
+          Nothing -> runBashScript bins (Path.create com)
+  Prog.Exec command prog
 
 evalWord :: Word -> Prog String
 evalWord = \case
   Word s -> pure s
   DolDol -> do Pid n <- Prog.MyPid; pure (show n)
-
-
-bash :: Bins -> String -> [String] -> Prog ()
-bash bins com args =
-  case lookupBins bins com of
-    Just prog -> prog args
-    Nothing -> runBashScript bins (Path.create com)
 
 runBashScript :: Bins -> Path -> Prog ()
 runBashScript bins path = do
@@ -131,17 +144,6 @@ runBashScript bins path = do
     withOpen path OpenForReading $ \fd -> do
       Native.readAll fd
   sequence_ [ interpret bins (parseLine line) | line <- lines ]
-
-spawn :: String -> WaitMode -> Prog () -> Prog ()
-spawn commandString mode prog = case mode of
-  Wait -> do spawn1 commandString prog (\childPid -> Prog.Wait childPid)
-  NoWait -> do spawn1 commandString prog (\_ -> pure ())
-
-spawn1 :: String -> Prog () -> (Pid -> Prog a) -> Prog a
-spawn1 commandString child parent = do
-  Prog.Fork >>= \case
-    Nothing -> Prog.Exec commandString child
-    Just pid -> parent pid
 
 execRedirect :: Redirect -> Prog ()
 execRedirect r =
@@ -178,11 +180,10 @@ lang token = script where
   script = do ws; alts [ do res <- alts [ exit, exec, source, pipeline ]; ws; pure res
                        , do eps; pure Null ]
 
-  exit = do keyword "exit"; pure Exit
-
-  exec = do keyword "exec"; ws1; (com,args) <- parseListSep word ws1; pure $ Exec com args
-
-  source = do keyword "."; ws1; p <- path; pure $ Source p
+  -- TODO: builtin exit/exec/source -- should be allowed a pipe-stage ? (like builtin-echo)
+  exit = do keyword "exit"; pure BuiltinExit
+  exec = do keyword "exec"; ws1; (com,args) <- parseListSep word ws1; pure $ BuiltinExec com args
+  source = do keyword "."; ws1; p <- path; pure $ BuiltinSource p
 
   pipeline = do
     (com1,coms) <- parseListSep pipeStage (do ws; symbol '|'; ws)

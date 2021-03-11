@@ -7,7 +7,7 @@ import FileSystem (fs0)
 import Interaction (Interaction(..),Prompt(..),OutMode(..))
 import Misc (EOF(..))
 import Prog (Prog)
-import qualified Bash (Bins(..),console,bash)
+import qualified Bash (Bins(..),console,runCommand)
 import qualified Data.Map.Strict as Map
 import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,man,checkNoArgs)
 import qualified Prog (run)
@@ -25,12 +25,13 @@ main = do
 console :: Prog ()
 console = Bash.console bins
   where
-    binMap :: Map String ([String] -> Prog ())
+    binMap :: Map String (Prog ())
     binMap = Map.fromList [ (name,prog) | (name,prog,_) <- table ]
 
     docMap :: Map String String
     docMap = Map.fromList [ (name,text) | (name,_,text) <- table ]
 
+    table :: [(String,Prog (),String)]
     table =
       [ ("echo",Native.echo,
         "write given arguments to stdout")
@@ -48,7 +49,7 @@ console = Bash.console bins
         "list all files on the filesystem")
       , ("ps",Native.ps,
         "list all running process")
-      , ("xargs",Native.xargs (Bash.bash bins),
+      , ("xargs",Native.xargs (Bash.runCommand bins),
         "concatenate lines from stdin, and pass as arguments to the given command")
       , ("bins",Native.bins (Map.keys binMap),
         "list builtin executables")
@@ -56,7 +57,7 @@ console = Bash.console bins
          "list the manual entries for the given commands")
       ]
     bins = Bash.Bins binMap
-    bash args = Native.checkNoArgs "bash" args (Bash.console bins)
+    bash = Native.checkNoArgs (Bash.console bins)
 
 runInteraction :: Interaction -> IO ()
 runInteraction i0 = do

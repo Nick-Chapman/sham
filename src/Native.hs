@@ -9,7 +9,7 @@ import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import Prog (Prog,OpenMode(..),NoSuchPath(..))
+import Prog (Prog,Command(..),OpenMode(..),NoSuchPath(..))
 import Path (Path)
 import Prelude hiding (all,head,read)
 import SysCall (SysCall(..),FD)
@@ -17,13 +17,17 @@ import qualified Data.Map.Strict as Map
 import qualified Prog
 import qualified Path (create,toString)
 
-echo :: [String] -> Prog ()
-echo args = write stdout (unwords args)
+echo :: Prog ()
+echo = do
+  Command(_,args) <- Prog.Argv
+  write stdout (unwords args)
 
-cat :: [String] -> Prog ()
-cat = \case
-  [] -> catFd stdin
-  args -> sequence_ [ catProg1 (Path.create arg) | arg <- args ]
+cat :: Prog ()
+cat = do
+  Command(_,args) <- Prog.Argv
+  case args of
+    [] -> catFd stdin
+    args -> sequence_ [ catProg1 (Path.create arg) | arg <- args ]
   where
     catProg1 :: Path -> Prog ()
     catProg1 path = withOpen path OpenForReading $ catFd
@@ -38,8 +42,8 @@ cat = \case
             write stdout line
             loop
 
-rev :: [String] -> Prog ()
-rev args = checkNoArgs "rev" args loop where
+rev :: Prog ()
+rev = checkNoArgs loop where
   loop :: Prog ()
   loop = do
     read NoPrompt stdin >>= \case
@@ -48,9 +52,9 @@ rev args = checkNoArgs "rev" args loop where
         write stdout (reverse line)
         loop
 
-grep :: [String] -> Prog ()
-grep args = do
-  getSingleArg "grep" args $ \pat -> do
+grep :: Prog ()
+grep = do
+  getSingleArg $ \pat -> do
   let
     loop :: Prog ()
     loop = do
@@ -62,36 +66,39 @@ grep args = do
           loop
   loop
 
-head :: [String] -> Prog ()
-head args = checkNoArgs "head" args $ do
+head :: Prog ()
+head = checkNoArgs $ do
   Native.read NoPrompt stdin >>= \case
     Left EOF -> pure ()
     Right line -> write stdout line
 
-ls :: [String] -> Prog ()
-ls args = checkNoArgs "ls" args $ do
+ls :: Prog ()
+ls = checkNoArgs $ do
   paths <- Prog.Call Paths ()
   mapM_ (write stdout . Path.toString) (sort paths)
 
-ps :: [String] -> Prog ()
-ps args = checkNoArgs "ps" args $ do
+ps :: Prog ()
+ps = checkNoArgs $ do
   xs <- Prog.Procs
   sequence_
-    [ write stdout (show pid ++ " " ++ show p)  | (pid,p) <- sortOn fst xs ]
+    [ write stdout (show pid ++ " " ++ show com)  | (pid,com) <- sortOn fst xs ]
 
-bins :: [String] -> [String] -> Prog ()
-bins names args = checkNoArgs "bins" args $ do
+bins :: [String] -> Prog ()
+bins names = checkNoArgs $ do
   mapM_ (write stdout) $ names
 
-xargs :: (String -> [String] -> Prog ()) -> [String] -> Prog ()
-xargs runCom = \case
-  [] -> err2 "xargs: needs at least 1 argument"
-  x:args -> do
-    lines <- readAll stdin
-    runCom x (args ++ lines)
+xargs :: (Command -> Prog ()) -> Prog ()
+xargs runCommand = do
+  Command(_,args) <- Prog.Argv
+  case args of
+    [] -> err2 "xargs: needs at least 1 argument"
+    com:args -> do
+      lines <- readAll stdin
+      runCommand (Command (com, args ++ lines))
 
-man :: Map String String -> [String] -> Prog ()
-man docsMap args =
+man :: Map String String -> Prog ()
+man docsMap  = do
+  Command(_,args) <- Prog.Argv
   mapM_ manline args
   where
     manline :: String -> Prog ()
@@ -100,16 +107,19 @@ man docsMap args =
         Just text -> write stdout (name ++ " : " ++ text)
         Nothing -> write stderr (name ++ " : no manual entry")
 
--- TODO: checkNoArgs should get who and args from Prog env
-checkNoArgs :: String -> [String] -> Prog () -> Prog ()
-checkNoArgs who args prog = case args of
-  [] -> prog
-  _ -> err2 (who ++ ": takes no arguments")
+checkNoArgs :: Prog () -> Prog ()
+checkNoArgs prog = do
+  Command(com,args) <- Prog.Argv
+  case args of
+    [] -> prog
+    _ -> err2 (com ++ ": takes no arguments")
 
-getSingleArg :: String -> [String] -> (String -> Prog ()) -> Prog ()
-getSingleArg who args f = case args of
-  [arg] -> f arg
-  _ -> err2 (who ++ ": takes a single argument")
+getSingleArg :: (String -> Prog ()) -> Prog ()
+getSingleArg f = do
+  Command(com,args) <- Prog.Argv
+  case args of
+    [arg] -> f arg
+    _ -> err2 (com ++ ": takes a single argument")
 
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
