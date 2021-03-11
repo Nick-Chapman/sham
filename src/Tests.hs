@@ -8,7 +8,7 @@ import qualified Testing (run)
 import qualified FileSystem (ls,fs0,days,readme)
 
 run :: Prog () -> IO ()
-run console = Testing.run console $ do
+run bash = Testing.run bash $ do
   let days = FileSystem.days
   let rw = map reverse days
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs

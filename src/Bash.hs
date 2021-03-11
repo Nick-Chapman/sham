@@ -1,5 +1,5 @@
 
-module Bash (Bins(..),console,runCommand) where
+module Bash (Bins(..),bash,runCommand) where
 
 import Control.Monad (when)
 import Data.Map (Map)
@@ -14,7 +14,7 @@ import SysCall (BadFileDescriptor(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
-import qualified Native (read,write,readAll)
+import qualified Native (read,write,readAll,checkNoArgs)
 import qualified Path (create)
 import qualified Prog (Prog(..))
 
@@ -51,17 +51,18 @@ newtype Bins = Bins (Map String (Prog ()))
 lookupBins :: Bins -> String -> Maybe (Prog ())
 lookupBins (Bins m) k = Map.lookup k m
 
-console :: Bins -> Prog ()
-console bins = loop where
-  loop :: Prog ()
-  loop = do
-    Native.read (Prompt "> ") (FD 0) >>= \case
+bash :: Int -> Bins -> Prog ()
+bash level bins = Native.checkNoArgs $ loop 1 where
+  loop :: Int -> Prog ()
+  loop n = do
+    let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
+    Native.read (Prompt prompt) (FD 0) >>= \case
       Left EOF -> pure ()
       Right line -> do
         let script = parseLine line
         --Prog.Trace (show script)
         interpret bins script
-        loop
+        loop (n+1)
 
 interpret :: Bins -> Script -> Prog ()
 interpret bins = \case

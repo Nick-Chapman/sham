@@ -7,9 +7,9 @@ import FileSystem (fs0)
 import Interaction (Interaction(..),Prompt(..),OutMode(..))
 import Misc (EOF(..))
 import Prog (Prog)
-import qualified Bash (Bins(..),console,runCommand)
+import qualified Bash (Bins(..),bash,runCommand)
 import qualified Data.Map.Strict as Map
-import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,man,checkNoArgs)
+import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,man)
 import qualified Prog (run)
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
@@ -18,13 +18,15 @@ import qualified Tests (run)
 
 main :: IO ()
 main = do
-  Tests.run console
+  Tests.run (bash 1)
   putStrLn "*bash-sim* (try typing help)"
-  runInteraction (Prog.run fs0 console)
+  runInteraction (Prog.run fs0 (bash 1))
 
-console :: Prog ()
-console = Bash.console bins
+bash :: Int -> Prog ()
+bash level = Bash.bash level bins
   where
+    bins = Bash.Bins binMap
+
     binMap :: Map String (Prog ())
     binMap = Map.fromList [ (name,prog) | (name,prog,_) <- table ]
 
@@ -35,7 +37,7 @@ console = Bash.console bins
     table =
       [ ("echo",Native.echo,
         "write given arguments to stdout")
-      , ("bash",bash,
+      , ("bash",bash (level+1),
         "start a nested bash console")
       , ("cat",Native.cat,
         "write named files (or stdin in no files given) to stdout")
@@ -56,40 +58,38 @@ console = Bash.console bins
       , ("man",Native.man docMap,
          "list the manual entries for the given commands")
       ]
-    bins = Bash.Bins binMap
-    bash = Native.checkNoArgs (Bash.console bins)
 
 runInteraction :: Interaction -> IO ()
 runInteraction i0 = do
   HL.runInputT haskelineSettings $ do
     initialiseHistory
-    loop (1::Int) i0
+    loop i0
   where
-    loop n = \case
+    loop = \case
       I_Read pM f -> do
         case pM of
 
           NoPrompt -> do
             HL.getInputLine "(more...) " >>= \case
-              Nothing -> loop n (f (Left EOF))
+              Nothing -> loop (f (Left EOF))
               Just line -> do
-                loop n (f (Right line))
+                loop (f (Right line))
 
           Prompt prompt -> do
-            HL.getInputLine (col AN.Green (show n ++ prompt)) >>= \case
-              Nothing -> loop n (f (Left EOF))
+            HL.getInputLine (col AN.Green prompt) >>= \case
+              Nothing -> loop (f (Left EOF))
               Just line -> do
                 when (line /= "") $ updateHistory line
-                loop (n+1) (f (Right line))
+                loop (f (Right line))
 
       I_Write mode line i -> do
         lift $ putStrLn (colouring line)
-        loop n i
+        loop i
           where colouring = case mode of Normal -> id; StdErr -> col AN.Red
 
       I_Trace mes i -> do
         lift $ putStrLn (col AN.Yellow mes)
-        loop n i
+        loop i
 
       I_Halt -> do
         lift $ putStrLn "*halt*"
