@@ -18,10 +18,18 @@ run sham = Testing.run sham $ do
   test ["ls"] paths0
   test ["help"] Image.readme
   test ["help &"] Image.readme
+  test ["cat README"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]
 
-  test ["cat README"] Image.readme
-  --test ["cp README xx", "cat xx"] Image.readme
+  test ["echo $0"] ["init"]
+  test ["echo $1"] ["(stderr) $1 undefined",""]
+  test ["echo $1","echo qaz"] ["(stderr) $1 undefined","","qaz"]
+  test ["echo $1 qaz"] ["(stderr) $1 undefined"," qaz"]
+
+  test ["cp README xx", "cat xx"] Image.readme
+  test ["cp"] ["(stderr) $2 undefined", "(stderr) $1 undefined", "(stderr) no such path: "]
+  test ["cp foo"] ["(stderr) $2 undefined", "(stderr) no such path: foo"]
+  test ["cp foo bar"] ["(stderr) no such path: foo"]
 
   test [] []
   test [""] []

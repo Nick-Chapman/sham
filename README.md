@@ -31,15 +31,17 @@ To build, test and run, type `stack run`.
 - pipes (|)
 - backgrounding (&)
 - my pid ($$)
-- builtin "echo" (runs in process). critical to making "yes | head" work!
-
+- builtin "echo" (runs in process). critical to making "yes | head" work! (give absence of exit codes)
+- command line arguments: $0 $1 $2 etc
+- predefined scripts: help, yes, bomb, yes, cp
 
 ### Ideas/Plans
 - fork initial "sham" from "init"
+- predefs commands for arithmetic: sum, ifeq
+- read (syntax or command?)
+- scripts: head N, drop N, countdown N, wc-l
 - lsof
 - rm
-- command line arguments: $0 $1 etc
-- cp = "cat $1 > $2"
 - comments (#), quoting (''), sham-vars (foo=something, $foo)
 - grouping and sequencing: (...), foo;bar
 - introduce tty, which is connected by 3 pipes
@@ -47,8 +49,7 @@ To build, test and run, type `stack run`.
 - avoid special handling of Console in SysCall Target
 - grep -v
 - ls -l
-- read (syntax or command?)
-- arithmetic: sum, ifeq (commands)
 - aysnc operation via "Pause" in Prog and Interaction. Clocked externally
 - predefined: mktmp, kill, sleep
-- scripts: head, drop, wc-l, count, withtmp, ignore, uptime, alarm, cron, killall
+- exit codes
+- scripts: withtmp, ignore, uptime, alarm, cron, killall

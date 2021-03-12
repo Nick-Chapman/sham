@@ -8,7 +8,6 @@ import Interaction (Prompt(..))
 import MeNicks (Prog,Pid(..),Command(..),SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import Misc (EOF(..),PipeEnds(..))
 import Native (withOpen,err2)
-import Path (Path)
 import Prelude hiding (Word,read,fail)
 import SysCall (BadFileDescriptor(..))
 import qualified Data.Char as Char
@@ -82,11 +81,11 @@ data Script
   | BuiltinExit
   | BuiltinExec Word [Word]
   | BuiltinEcho [Word] -- run's in same process
-  | BuiltinSource Path
+  | BuiltinSource Word
   | Run Word [Word] [Redirect] WaitMode
   deriving Show
 
-data Word = Word String | DolDol
+data Word = Word String | DollarDollar | DollarN Int
   deriving (Eq,Show)
 
 data WaitMode = NoWait | Wait
@@ -97,7 +96,7 @@ data Redirect
   deriving Show
 
 data RedirectSource
-  = FromPath Path
+  = FromPath Word
   | FromFD FD
   deriving Show
 
@@ -108,7 +107,7 @@ interpret bins = \case
   BuiltinExit -> MeNicks.Exit
   BuiltinExec com args -> doExec bins com args
   BuiltinEcho args -> builtinEcho args
-  BuiltinSource path -> runShamScript bins path
+  BuiltinSource path -> evalWord path >>= runShamScript bins
   Run com args rs mode -> executeCommand bins com args rs mode
   Pipe script1 script2 -> pipe (interpret bins script1) (interpret bins script2)
 
@@ -168,18 +167,22 @@ runCommand bins command = do
   let prog =
         case lookupBins bins com of
           Just prog -> prog
-          Nothing -> runShamScript bins (Path.create com)
+          Nothing -> runShamScript bins com
   MeNicks.Exec command prog
 
 evalWord :: Word -> Prog String
 evalWord = \case
   Word s -> pure s
-  DolDol -> do Pid n <- MeNicks.MyPid; pure (show n)
+  DollarDollar -> do Pid n <- MeNicks.MyPid; pure (show n)
+  DollarN n -> do
+    Command(com,args) <- MeNicks.Argv
+    if n > length args then do err2 ("$" ++ show n ++ " undefined"); pure "" else
+      pure $ (com:args)!!n
 
-runShamScript :: Bins -> Path -> Prog ()
+runShamScript :: Bins -> String -> Prog ()
 runShamScript bins path = do
   lines <- do
-    withOpen path OpenForReading $ \fd -> do
+    withOpen (Path.create path) OpenForReading $ \fd -> do
       Native.readAll fd
   sequence_ [ interpret bins (parseLine line) | line <- lines ]
 
@@ -187,7 +190,8 @@ execRedirect :: Redirect -> Prog ()
 execRedirect r =
   case r of
     Redirect mode dest (FromPath path) -> do
-      withOpen path mode $ \src -> do
+      path <- evalWord path
+      withOpen (Path.create path) mode $ \src -> do
         dup2 dest src
     Redirect _mode dest (FromFD src) -> do -- do we care what the mode is?
       dup2 dest src
@@ -228,7 +232,7 @@ lang token = script where
   -- TODO: builtin exit/exec/source -- should be allowed a pipe-stage ? (like builtin-echo)
   exit = do keyword "exit"; pure BuiltinExit
   exec = do keyword "exec"; ws1; (com,args) <- parseListSep word ws1; pure $ BuiltinExec com args
-  source = do keyword "."; ws1; p <- path; pure $ BuiltinSource p
+  source = do keyword "."; ws1; path <- word; pure $ BuiltinSource path
 
   pipeline = do
     (com1,coms) <- parseListSep pipeStage (do ws; symbol '|'; ws)
@@ -280,13 +284,14 @@ lang token = script where
         pure $ Redirect mode dest src
     ]
 
-  redirectSource = alts [ FromPath <$> path, FromFD <$> fdRef ]
+  redirectSource = alts [ FromPath <$> word, FromFD <$> fdRef ]
   fdRef = do symbol '&'; fd
   fd = FD <$> digit -- TODO: multi-digit file-desciptors
-  path = Path.create <$> ident0
 
   word = alts [ Word <$> ident0
-              , do keyword "$$"; pure DolDol ]
+              , do keyword "$$"; pure DollarDollar
+              , do keyword "$"; DollarN <$> digit
+              ]
 
   keyword string = mapM_ symbol string
 
