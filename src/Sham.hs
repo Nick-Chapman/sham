@@ -3,7 +3,7 @@ module Sham (sham) where
 
 import Control.Monad (when)
 import Data.Map (Map)
-import EarleyM (Gram,fail,alts,getToken,many,skipWhile)
+import EarleyM (Gram,fail,alts,getToken,many,skipWhile,ParseError(..),Ambiguity(..),SyntaxError(..))
 import Interaction (Prompt(..))
 import MeNicks (Prog,Pid(..),Command(..),SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import Misc (EOF(..),PipeEnds(..))
@@ -208,9 +208,16 @@ parseLine :: String -> Script
 parseLine str = do
   case EM.parse (lang <$> getToken) str of
     EM.Parsing{EM.outcome} -> case outcome of
-      Left pe -> ShamError $ show pe -- TODO: improve parse error message for humans
+      Left pe -> ShamError $ prettyParseError str pe -- TODO: improve parse error message for humans
       Right script -> script
 
+prettyParseError :: String -> ParseError -> String
+prettyParseError str = \case
+  AmbiguityError (Ambiguity _ p1 p2) -> "ambiguous parse between positions " ++ show p1 ++ "--" ++ show p2
+  SyntaxError (UnexpectedTokenAt p) -> "unexpected '" ++ char p ++ "' at position " ++ show p
+  SyntaxError (UnexpectedEOF _) -> "unexpected end of line"
+  SyntaxError (ExpectedEOF p) -> "expected EOF at position " ++ show p
+  where char p = [str!!(p-1)]
 
 lang :: Gram Char -> Gram Script
 lang token = script where
@@ -237,6 +244,7 @@ lang token = script where
 
   command = do
     (com,args) <- parseListSep word ws1
+    -- TODO: call fail before args for bettter err messages
     when (com `elem` map Word ["exit","exec"]) fail -- give way to syntax
     rs <- redirects
     mode <- alts [ do eps; pure Wait,

@@ -20,6 +20,9 @@ run sham = Testing.run sham $ do
   test ["help &"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]
 
+  test ["cat README"] Image.readme
+  --test ["cp README xx", "cat xx"] Image.readme
+
   test [] []
   test [""] []
   test ["echo"] [""]
@@ -39,9 +42,9 @@ run sham = Testing.run sham $ do
   test ["rev < days"] rw
   test ["rev < days > rw", "cat rw"] rw
 
-  -- TODO: adapt to new parse error messge
-  --test ["."] ["(stderr) source (.): takes exactly one argument"]
-  --test ["exit nope"] ["(stderr) exit: takes no arguments"]
+  test ["*"] ["(stderr) unexpected '*' at position 1"]
+  test ["."] ["(stderr) unexpected end of line"]
+  test ["exit nope"] ["(stderr) unexpected end of line"] -- TODO: improve this message
 
   test ["rev nope"] ["(stderr) rev: takes no arguments"]
   test ["rev nope < days"] ["(stderr) rev: takes no arguments"]
