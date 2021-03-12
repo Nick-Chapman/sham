@@ -5,18 +5,18 @@ import Control.Monad (when)
 import Data.Map (Map)
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile)
 import Interaction (Prompt(..))
+import MeNicks (Prog,Pid(..),Command(..),SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import Misc (EOF(..),PipeEnds(..))
 import Native (withOpen,err2)
 import Path (Path)
 import Prelude hiding (Word,read,fail)
-import Prog (Prog,Pid(..),Command(..),SysCall(..),OpenMode(..),WriteOpenMode(..),FD(..))
 import SysCall (BadFileDescriptor(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
+import qualified MeNicks (Prog(..))
 import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,man,readAll,read,write,checkNoArgs)
 import qualified Path (create)
-import qualified Prog (Prog(..))
 
 newtype Bins = Bins (Map String (Prog ()))
 
@@ -69,7 +69,7 @@ sham0 level bins = Native.checkNoArgs $ loop 1 where
       Left EOF -> pure ()
       Right line -> do
         let script = parseLine line
-        --Prog.Trace (show script)
+        --MeNicks.Trace (show script)
         interpret bins script
         loop (n+1)
 
@@ -105,7 +105,7 @@ interpret :: Bins -> Script -> Prog ()
 interpret bins = \case
   Null -> pure ()
   ShamError message -> err2 message
-  BuiltinExit -> Prog.Exit
+  BuiltinExit -> MeNicks.Exit
   BuiltinExec com args -> doExec bins com args
   BuiltinEcho args -> builtinEcho args
   BuiltinSource path -> runShamScript bins path
@@ -115,29 +115,29 @@ interpret bins = \case
 
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
-  PipeEnds{r,w} <- Prog.Call SysPipe ()
+  PipeEnds{r,w} <- MeNicks.Call SysPipe ()
   let command = Command ("sham",[])
   spawn1 command (do -- TODO: dont loose the name of the actual pipe element
                dup2 (FD 1) w
-               Prog.Call Close w
-               Prog.Call Close r
+               MeNicks.Call Close w
+               MeNicks.Call Close r
                prog1
            ) $ \child1 -> do
     spawn1 command (do
                  dup2 (FD 0) r
-                 Prog.Call Close w
-                 Prog.Call Close r
+                 MeNicks.Call Close w
+                 MeNicks.Call Close r
                  prog2
              ) $ \child2 -> do
-      Prog.Call Close w
-      Prog.Call Close r
-      Prog.Wait child1
-      Prog.Wait child2
+      MeNicks.Call Close w
+      MeNicks.Call Close r
+      MeNicks.Wait child1
+      MeNicks.Wait child2
 
 spawn1 :: Command -> Prog () -> (Pid -> Prog a) -> Prog a
 spawn1 command child parent = do
-  Prog.Fork >>= \case
-    Nothing -> Prog.Exec command child
+  MeNicks.Fork >>= \case
+    Nothing -> MeNicks.Exec command child
     Just pid -> parent pid
 
 
@@ -148,12 +148,12 @@ builtinEcho args = do
 
 executeCommand :: Bins -> Word -> [Word] -> [Redirect] -> WaitMode -> Prog ()
 executeCommand bins com args rs mode = do
-  Prog.Fork >>= \case
+  MeNicks.Fork >>= \case
     Nothing -> do
       mapM_ execRedirect rs
       doExec bins com args
     Just pid -> case mode of
-      Wait -> Prog.Wait pid
+      Wait -> MeNicks.Wait pid
       NoWait -> pure ()
 
 doExec :: Bins -> Word -> [Word] -> Prog ()
@@ -169,12 +169,12 @@ runCommand bins command = do
         case lookupBins bins com of
           Just prog -> prog
           Nothing -> runShamScript bins (Path.create com)
-  Prog.Exec command prog
+  MeNicks.Exec command prog
 
 evalWord :: Word -> Prog String
 evalWord = \case
   Word s -> pure s
-  DolDol -> do Pid n <- Prog.MyPid; pure (show n)
+  DolDol -> do Pid n <- MeNicks.MyPid; pure (show n)
 
 runShamScript :: Bins -> Path -> Prog ()
 runShamScript bins path = do
@@ -194,10 +194,10 @@ execRedirect r =
 
 dup2 :: FD -> FD -> Prog ()
 dup2 d s = do
-  Prog.Call Dup2 (d,s) >>= \case
+  MeNicks.Call Dup2 (d,s) >>= \case
     Left BadFileDescriptor -> do
       err2 $ "bad file descriptor: " ++ show s
-      Prog.Exit
+      MeNicks.Exit
     Right () -> pure ()
 
 

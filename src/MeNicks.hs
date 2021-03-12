@@ -1,9 +1,8 @@
-
-module Prog ( -- TODO: rename MeNicks?
+module MeNicks (
   Prog(..), Pid(..),Command(..),
   SysCall(..),
-  OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..),
-  runMeNicks,
+  OpenMode(..), WriteOpenMode(..), NoSuchPath(..), FD(..),
+  run,
   ) where
 
 import Control.Monad (ap,liftM)
@@ -36,8 +35,8 @@ data Prog a where
   Procs :: Prog [(Pid,Command)]
   Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
 
-runMeNicks :: FileSystem -> Prog () -> Interaction
-runMeNicks fs prog = do
+run :: FileSystem -> Prog () -> Interaction
+run fs prog = do
   let action = linearize prog (\() -> A_Halt)
   let (state,pid) = newPid (initState fs)
   resume pid (Proc (Command ("init",[])) env0 action) state

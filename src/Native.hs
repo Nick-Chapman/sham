@@ -1,29 +1,29 @@
 module Native (
-  echo,cat,rev,grep,head,ls,ps,bins,xargs,man,
-  withOpen,readAll,read,write,err2,checkNoArgs
+  echo, cat, rev, grep, head, ls, ps, bins, xargs, man,
+  withOpen, readAll, read, write, err2, checkNoArgs
   ) where
 
 import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Interaction (Prompt(..))
+import MeNicks (Prog,Command(..),OpenMode(..),NoSuchPath(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
-import Prog (Prog,Command(..),OpenMode(..),NoSuchPath(..))
 import Path (Path)
 import Prelude hiding (all,head,read)
 import SysCall (SysCall(..),FD)
 import qualified Data.Map.Strict as Map
-import qualified Prog
+import qualified MeNicks (Prog(..))
 import qualified Path (create,toString)
 
 echo :: Prog ()
 echo = do
-  Command(_,args) <- Prog.Argv
+  Command(_,args) <- MeNicks.Argv
   write stdout (unwords args)
 
 cat :: Prog ()
 cat = do
-  Command(_,args) <- Prog.Argv
+  Command(_,args) <- MeNicks.Argv
   case args of
     [] -> catFd stdin
     args -> sequence_ [ catProg1 (Path.create arg) | arg <- args ]
@@ -73,12 +73,12 @@ head = checkNoArgs $ do
 
 ls :: Prog ()
 ls = checkNoArgs $ do
-  paths <- Prog.Call Paths ()
+  paths <- MeNicks.Call Paths ()
   mapM_ (write stdout . Path.toString) (sort paths)
 
 ps :: Prog ()
 ps = checkNoArgs $ do
-  xs <- Prog.Procs
+  xs <- MeNicks.Procs
   sequence_
     [ write stdout (show pid ++ " " ++ show com)  | (pid,com) <- sortOn fst xs ]
 
@@ -88,7 +88,7 @@ bins names = checkNoArgs $ do
 
 xargs :: (Command -> Prog ()) -> Prog ()
 xargs runCommand = do
-  Command(_,args) <- Prog.Argv
+  Command(_,args) <- MeNicks.Argv
   case args of
     [] -> err2 "xargs: needs at least 1 argument"
     com:args -> do
@@ -97,7 +97,7 @@ xargs runCommand = do
 
 man :: Map String String -> Prog ()
 man docsMap  = do
-  Command(_,args) <- Prog.Argv
+  Command(_,args) <- MeNicks.Argv
   mapM_ manline args
   where
     manline :: String -> Prog ()
@@ -108,27 +108,27 @@ man docsMap  = do
 
 checkNoArgs :: Prog () -> Prog ()
 checkNoArgs prog = do
-  Command(com,args) <- Prog.Argv
+  Command(com,args) <- MeNicks.Argv
   case args of
     [] -> prog
     _ -> err2 (com ++ ": takes no arguments")
 
 getSingleArg :: (String -> Prog ()) -> Prog ()
 getSingleArg f = do
-  Command(com,args) <- Prog.Argv
+  Command(com,args) <- MeNicks.Argv
   case args of
     [arg] -> f arg
     _ -> err2 (com ++ ": takes a single argument")
 
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
-  Prog.Call Open (path,mode) >>= \case
+  MeNicks.Call Open (path,mode) >>= \case
     Left NoSuchPath -> do
       err2 $ "no such path: " ++ Path.toString path
-      Prog.Exit
+      MeNicks.Exit
     Right fd -> do
       res <- action fd
-      Prog.Call Close fd
+      MeNicks.Call Close fd
       pure res
 
 readAll :: FD -> Prog [String]
@@ -141,22 +141,22 @@ readAll fd = loop []
 
 read :: Prompt -> FD -> Prog (Either EOF String)
 read prompt fd =
-  Prog.Call (Read prompt) fd >>= \case
-    Left NotReadable -> do err2 (show fd ++ " not readable"); Prog.Exit
+  MeNicks.Call (Read prompt) fd >>= \case
+    Left NotReadable -> do err2 (show fd ++ " not readable"); MeNicks.Exit
     Right eofOrLine -> pure eofOrLine
 
 write :: FD -> String -> Prog ()
 write fd line = do
-  Prog.Call Write (fd,line) >>= \case
-    Left NotWritable -> do err2 (show fd ++ " not writable"); Prog.Exit
-    Right (Left EPIPE) -> Prog.Exit
+  MeNicks.Call Write (fd,line) >>= \case
+    Left NotWritable -> do err2 (show fd ++ " not writable"); MeNicks.Exit
+    Right (Left EPIPE) -> MeNicks.Exit
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()
 err2 line = do
-  Prog.Call Write (stderr, line) >>= \case
-    Left NotWritable -> Prog.Trace (show stderr ++ " not writable")
-    Right (Left EPIPE) -> Prog.Trace "EPIPE when writing to fd2"
+  MeNicks.Call Write (stderr, line) >>= \case
+    Left NotWritable -> MeNicks.Trace (show stderr ++ " not writable")
+    Right (Left EPIPE) -> MeNicks.Trace "EPIPE when writing to fd2"
     Right (Right ()) -> pure ()
 
 stdin,stdout,stderr :: FD

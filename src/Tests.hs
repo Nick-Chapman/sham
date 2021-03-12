@@ -1,14 +1,14 @@
 module Tests (run) where
 
 import Data.List (isInfixOf)
-import Prog (Prog)
 import Testing (test)
 import qualified FileSystem (ls)
 import qualified Image (fs0,days,readme)
+import qualified MeNicks (Prog)
 import qualified Path (toString)
 import qualified Testing (run)
 
-run :: Prog () -> IO ()
+run :: MeNicks.Prog () -> IO ()
 run sham = Testing.run sham $ do
   let days = Image.days
   let rw = map reverse days
