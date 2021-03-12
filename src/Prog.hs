@@ -11,10 +11,10 @@ import Data.Map (Map)
 import FileSystem (FileSystem,NoSuchPath(..))
 import Interaction (Interaction(..))
 import Misc (Block(..))
-import OsState (OsState,OpenMode(..),WriteOpenMode(..))
+import OpenFiles (OpenFiles,OpenMode(..),WriteOpenMode(..))
 import SysCall (SysCall(..),Env,env0,dupEnv,closeEnv,runSys,FD(..))
 import qualified Data.Map.Strict as Map
-import qualified OsState (init)
+import qualified OpenFiles (init)
 
 instance Functor Prog where fmap = liftM
 instance Applicative Prog where pure = return; (<*>) = ap
@@ -148,7 +148,7 @@ newtype Pid = Pid Int deriving (Eq,Ord,Num)
 instance Show Pid where show (Pid n) = "[" ++ show n ++ "]"
 
 data State = State
-  { os :: OsState
+  { os :: OpenFiles
   , nextPid :: Pid
   , waiting :: Map Pid Proc
   , suspended :: Map Pid Proc
@@ -163,7 +163,7 @@ allProcs State{waiting,suspended} =
 
 initState :: FileSystem -> State
 initState fs = State
-  { os = OsState.init fs
+  { os = OpenFiles.init fs
   , nextPid = 1
   , waiting = Map.empty
   , suspended = Map.empty

@@ -9,10 +9,10 @@ import Data.Map (Map)
 import FileSystem (NoSuchPath(..))
 import Interaction (Interaction(..),Prompt,OutMode(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
-import OsState (OsState,OpenMode(..))
+import OpenFiles (OpenFiles,OpenMode(..))
 import Path (Path)
 import qualified Data.Map.Strict as Map
-import qualified OsState (ls,open,pipe,Key,close,dup,read,write)
+import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write)
 
 data SysCall a b where
   Open :: SysCall (Path,OpenMode) (Either NoSuchPath FD)
@@ -36,13 +36,13 @@ instance Show (SysCall a b) where -- TODO: automate?
     SysPipe -> "Pipe"
 
 runSys :: SysCall a b ->
-  OsState -> Env -> a ->
-  Either Block ((OsState -> Env -> b -> Interaction) -> Interaction)
+  OpenFiles -> Env -> a ->
+  Either Block ((OpenFiles -> Env -> b -> Interaction) -> Interaction)
 
 runSys sys s env arg = case sys of
 
   SysPipe -> do
-    case OsState.pipe s of
+    case OpenFiles.pipe s of
       (PipeEnds{r=keyR,w=keyW},s) -> do
         let fdR = smallestUnused env
         env <- pure $ Env (Map.insert fdR (File keyR) (unEnv env))
@@ -53,7 +53,7 @@ runSys sys s env arg = case sys of
 
   Open -> do
     let (path,mode) = arg
-    case OsState.open s path mode of
+    case OpenFiles.open s path mode of
       Left NoSuchPath -> do
         Right $ \k ->
           k s env (Left NoSuchPath)
@@ -67,7 +67,7 @@ runSys sys s env arg = case sys of
     let fd = arg
     Right $ \k -> do
       case (case look "Sys.Close" fd (unEnv env) of
-              File key -> OsState.close s key
+              File key -> OpenFiles.close s key
               Console{} -> (False,s))
         of (_closing,s) -> do
              --(if closing then (I_Trace "**CLOSED**") else id) $ do
@@ -83,14 +83,14 @@ runSys sys s env arg = case sys of
             Nothing -> (False,s)
             Just oldTarget ->
               case oldTarget of
-                File key -> OsState.close s key
+                File key -> OpenFiles.close s key
                 Console{} -> (False,s)
       --(if closing then (I_Trace "**CLOSED (by dup2)**") else id) $ do
       case Map.lookup fdSrc (unEnv env) of
         Nothing -> k s' env (Left BadFileDescriptor)
         Just target -> do
           let s'' = case target of
-                File key -> OsState.dup s' key
+                File key -> OpenFiles.dup s' key
                 Console{}-> s'
           let env' = Env (Map.insert fdDest target (unEnv env))
           k s'' env' (Right ())
@@ -99,7 +99,7 @@ runSys sys s env arg = case sys of
     let fd = arg
     case look "Sys.Read" fd (unEnv env) of
       File key -> do
-        case OsState.read s key of
+        case OpenFiles.read s key of
           Left NotReadable -> do
             Right $ \k ->
               k s env (Left NotReadable)
@@ -120,7 +120,7 @@ runSys sys s env arg = case sys of
     let (fd,line) = arg
     case look "Sys.Write" fd (unEnv env) of
       File key -> do
-        case OsState.write s key line of
+        case OpenFiles.write s key line of
           Left NotWritable -> do
             Right $ \k ->
               k s env (Left NotWritable)
@@ -138,7 +138,7 @@ runSys sys s env arg = case sys of
 
   Paths{} -> do
     Right $ \k -> do
-      let paths = OsState.ls s
+      let paths = OpenFiles.ls s
       k s env paths
 
 -- TODO: split out Env into new module
@@ -146,7 +146,7 @@ newtype Env = Env { unEnv :: Map FD Target } -- per process state, currently jus
 
 data Target
   = Console OutMode -- TODO: plan to deprecate this, and handle console via tty/pipes
-  | File OsState.Key
+  | File OpenFiles.Key
 
 instance Show Env where
   show Env{unEnv=m} =
@@ -162,25 +162,25 @@ env0 :: Env
 env0 = Env $ Map.fromList
   [ (FD n, Console m) | (n,m) <- [(0,Normal),(1,Normal),(2,StdErr)] ]
 
-dupEnv :: Env -> OsState -> OsState
+dupEnv :: Env -> OpenFiles -> OpenFiles
 dupEnv (Env m) s =
   foldr dupTarget s [ t | (_,t) <- Map.toList m ]
 
-closeEnv :: Env -> OsState -> OsState
+closeEnv :: Env -> OpenFiles -> OpenFiles
 closeEnv (Env m) s =
   foldr closeTarget s [ t | (_,t) <- Map.toList m ]
 
 -- TOOD: use {dup,close}Target in code above, for better sharing
-dupTarget :: Target -> OsState -> OsState
+dupTarget :: Target -> OpenFiles -> OpenFiles
 dupTarget tar s =
   case tar of
-    File key -> OsState.dup s key
+    File key -> OpenFiles.dup s key
     Console{}-> s
 
-closeTarget :: Target -> OsState -> OsState
+closeTarget :: Target -> OpenFiles -> OpenFiles
 closeTarget tar s =
   case tar of
-    File key -> snd (OsState.close s key)
+    File key -> snd (OpenFiles.close s key)
     Console{}-> s
 
 newtype FD = FD Int

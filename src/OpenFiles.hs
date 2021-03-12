@@ -1,6 +1,6 @@
-module OsState (  -- TODO: rename OpenFiles?
+module OpenFiles (
   init,
-  OsState,
+  OpenFiles,
   Key,
   open, OpenMode(..), WriteOpenMode(..),
   pipe,
@@ -24,7 +24,7 @@ import qualified File (empty,append,lines)
 import qualified FileSystem (ls,read,link,safeUnlink)
 import qualified PipeSystem (empty,createPipe,readPipe,writePipe,closeForReading,closeForWriting)
 
-data OsState = OsState
+data OpenFiles = OpenFiles
   { fs :: FileSystem
   , pipeSystem :: PipeSystem
   , table :: FileTable
@@ -63,16 +63,16 @@ instance Show What where
     FileAppend path -> "Append:"++show path
     FileContents xs -> "Contents[size=#"++show (length xs)++"]"
 
-init :: FileSystem -> OsState
-init fs = OsState
+init :: FileSystem -> OpenFiles
+init fs = OpenFiles
   { fs
   , pipeSystem = PipeSystem.empty
   , table = Tab Map.empty
   , nextKey = 21
   }
 
-instance Show OsState where
-  show OsState{fs=_,pipeSystem=ps,table,nextKey=_} =
+instance Show OpenFiles where
+  show OpenFiles{fs=_,pipeSystem=ps,table,nextKey=_} =
     "open: " ++ show table ++ "\n" ++
     "pipe: " ++ show ps
 
@@ -83,8 +83,8 @@ data OpenMode
 
 data WriteOpenMode = Truncate | Append deriving Show
 
-open :: OsState -> Path -> OpenMode -> Either NoSuchPath (Key,OsState)
-open state@OsState{nextKey=key,fs,table} path = \case
+open :: OpenFiles -> Path -> OpenMode -> Either NoSuchPath (Key,OpenFiles)
+open state@OpenFiles{nextKey=key,fs,table} path = \case
   OpenForReading{} -> do
     let nextKey = key+1
     case FileSystem.read fs path of
@@ -106,8 +106,8 @@ open state@OsState{nextKey=key,fs,table} path = \case
     Right (key,state')
 
 
-pipe :: OsState -> (PipeEnds Key,OsState)
-pipe state@OsState{nextKey=key,pipeSystem,table} = do
+pipe :: OpenFiles -> (PipeEnds Key,OpenFiles)
+pipe state@OpenFiles{nextKey=key,pipeSystem,table} = do
   let (r,w,nextKey) = (key,key+1,key+2)
   let (pk,pipeSystem') = PipeSystem.createPipe pipeSystem
   let re = Entry { rc = 1, what = PipeRead pk}
@@ -118,16 +118,16 @@ pipe state@OsState{nextKey=key,pipeSystem,table} = do
   (ends, state')
 
 
-dup :: OsState -> Key -> OsState
-dup state@OsState{table} key = do
+dup :: OpenFiles -> Key -> OpenFiles
+dup state@OpenFiles{table} key = do
   let e@Entry{rc} = look "dup" key (unTab table)
   let e' = e { rc = rc + 1 }
   let table' = Tab (Map.insert key e' (unTab table))
   state { table = table' }
 
 
-close :: OsState -> Key -> (Bool,OsState)
-close state0@OsState{pipeSystem,table} key = do
+close :: OpenFiles -> Key -> (Bool,OpenFiles)
+close state0@OpenFiles{pipeSystem,table} key = do
   let e@Entry{rc,what} = look "close" key (unTab table)
   let closing = (rc == 1)
   (closing, case closing of
@@ -145,8 +145,8 @@ close state0@OsState{pipeSystem,table} key = do
         FileContents{} -> state)
 
 
-read :: OsState -> Key -> Either NotReadable (Either Block (Either EOF String, OsState))
-read state@OsState{table,pipeSystem} key = do
+read :: OpenFiles -> Key -> Either NotReadable (Either Block (Either EOF String, OpenFiles))
+read state@OpenFiles{table,pipeSystem} key = do
   let e@Entry{what} = look "read" key (unTab table)
   case what of
     PipeWrite{} -> Left NotReadable
@@ -168,8 +168,8 @@ read state@OsState{table,pipeSystem} key = do
 
 
 
-write :: OsState -> Key -> String -> Either NotWritable (Either Block (Either EPIPE OsState))
-write state@OsState{table,pipeSystem,fs} key line = do
+write :: OpenFiles -> Key -> String -> Either NotWritable (Either Block (Either EPIPE OpenFiles))
+write state@OpenFiles{table,pipeSystem,fs} key line = do
   let Entry{what} = look "write" key (unTab table)
   case what of
     PipeRead{} -> Left NotWritable
@@ -188,8 +188,8 @@ write state@OsState{table,pipeSystem,fs} key line = do
       Right (Right (Right state { fs = fs' }))
 
 
-ls :: OsState -> [Path]
-ls OsState{fs} = FileSystem.ls fs
+ls :: OpenFiles -> [Path]
+ls OpenFiles{fs} = FileSystem.ls fs
 
 -- helper for map lookup
 look :: (Show k, Ord k) => String -> k -> Map k b -> b
