@@ -34,6 +34,7 @@ To build, test and run, type `stack run`.
 - builtin "echo" (runs in process). critical to making "yes | head" work! (give absence of exit codes)
 - command line arguments: $0 $1 $2 etc
 - predefined scripts: help, yes, bomb, yes, cp
+- comments (#)
 
 ### Ideas/Plans
 - fork initial "sham" from "init"
@@ -42,7 +43,7 @@ To build, test and run, type `stack run`.
 - scripts: head N, drop N, countdown N, wc-l
 - lsof
 - rm
-- comments (#), quoting (''), sham-vars (foo=something, $foo)
+- quoting (''), sham-vars (foo=something, $foo)
 - grouping and sequencing: (...), foo;bar
 - introduce tty, which is connected by 3 pipes
 - restructure: Interaction stays at level of Prog (not SysCall)

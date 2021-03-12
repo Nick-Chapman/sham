@@ -14,7 +14,7 @@ fs0 = FileSystem.create [ (Path.create p, File.create lines) | (p,lines) <- imag
     , ("yes"   , ["echo yes","exec yes"])
     , ("bomb"  , ["echo $$ >&2", "bomb | bomb"])
     , ("me"    , ["echo $$"])
-    , ("cp"    , ["cat $1 > $2"])
+    , ("cp"    , ["# cp SRC DEST: copy a file from SRC to DEST","cat $1 > $2"])
     ]
 
 readme :: [String]

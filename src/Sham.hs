@@ -226,8 +226,15 @@ prettyParseError str = \case
 lang :: Gram Char -> Gram Script
 lang token = script where
 
-  script = do ws; alts [ do res <- alts [ exit, exec, source, pipeline ]; ws; pure res
-                       , do eps; pure Null ]
+  script = do
+    ws
+    res <- alts [ do res <- alts [ exit, exec, source, pipeline ]; ws; pure res
+                , do eps; pure Null ]
+    alts [eps,lineComment]
+    pure res
+
+  lineComment = do symbol '#'; skipWhile dot
+  dot = do _ <- token; pure ()
 
   -- TODO: builtin exit/exec/source -- should be allowed a pipe-stage ? (like builtin-echo)
   exit = do keyword "exit"; pure BuiltinExit
