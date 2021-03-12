@@ -48,9 +48,9 @@ fs0 = FileSystem.create
 
 readme :: [String]
 readme =
-  [ "Welcome to Nick's simulated bash."
-  , "Some available commands: bins, echo, cat, rev, grep, ls, ps, xargs, exit."
-  , "For more help, perhaps run: bins | xargs man"
+  [ "Welcome to *sham*."
+  , "Some available commands include: bins, echo, cat, rev, grep, ls, man, ps, xargs."
+  , "Type 'exit' or Ctrl-D to quit."
   ]
 
 days :: [String]

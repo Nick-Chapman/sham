@@ -1,5 +1,5 @@
 
-module Bash (Bins(..),bash,runCommand) where
+module Sham (Bins(..),sham,runCommand) where
 
 import Control.Monad (when)
 import Data.Map (Map)
@@ -21,7 +21,7 @@ import qualified Prog (Prog(..))
 
 data Script
   = Null
-  | BashError String
+  | ShamError String
   -- TODO: sequencing operator ";"
   | Pipe Script Script
   | BuiltinExit
@@ -51,8 +51,8 @@ newtype Bins = Bins (Map String (Prog ()))
 lookupBins :: Bins -> String -> Maybe (Prog ())
 lookupBins (Bins m) k = Map.lookup k m
 
-bash :: Int -> Bins -> Prog ()
-bash level bins = Native.checkNoArgs $ loop 1 where
+sham :: Int -> Bins -> Prog ()
+sham level bins = Native.checkNoArgs $ loop 1 where
   loop :: Int -> Prog ()
   loop n = do
     let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
@@ -67,11 +67,11 @@ bash level bins = Native.checkNoArgs $ loop 1 where
 interpret :: Bins -> Script -> Prog ()
 interpret bins = \case
   Null -> pure ()
-  BashError message -> err2 message
+  ShamError message -> err2 message
   BuiltinExit -> Prog.Exit
   BuiltinExec com args -> doExec bins com args
   BuiltinEcho args -> builtinEcho args
-  BuiltinSource path -> runBashScript bins path
+  BuiltinSource path -> runShamScript bins path
   Run com args rs mode -> executeCommand bins com args rs mode
   Pipe script1 script2 -> pipe (interpret bins script1) (interpret bins script2)
 
@@ -79,7 +79,7 @@ interpret bins = \case
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
   PipeEnds{r,w} <- Prog.Call SysPipe ()
-  let command = Command ("bash",[])
+  let command = Command ("sham",[])
   spawn1 command (do -- TODO: dont loose the name of the actual pipe element
                dup2 (FD 1) w
                Prog.Call Close w
@@ -131,7 +131,7 @@ runCommand bins command = do
   let prog =
         case lookupBins bins com of
           Just prog -> prog
-          Nothing -> runBashScript bins (Path.create com)
+          Nothing -> runShamScript bins (Path.create com)
   Prog.Exec command prog
 
 evalWord :: Word -> Prog String
@@ -139,8 +139,8 @@ evalWord = \case
   Word s -> pure s
   DolDol -> do Pid n <- Prog.MyPid; pure (show n)
 
-runBashScript :: Bins -> Path -> Prog ()
-runBashScript bins path = do
+runShamScript :: Bins -> Path -> Prog ()
+runShamScript bins path = do
   lines <- do
     withOpen path OpenForReading $ \fd -> do
       Native.readAll fd
@@ -171,7 +171,7 @@ parseLine :: String -> Script
 parseLine str = do
   case EM.parse (lang <$> getToken) str of
     EM.Parsing{EM.outcome} -> case outcome of
-      Left pe -> BashError $ show pe -- TODO: improve parse error message for humans
+      Left pe -> ShamError $ show pe -- TODO: improve parse error message for humans
       Right script -> script
 
 

@@ -1,10 +1,10 @@
-name:                bash-sim
+name:                sham
 version:             0.1.0.0
-description:         Simulate a bash-style shell, coded on top of an unix-style OS.
+description:         Sham is a command shell which runs on MeNicks, a simulated unix-style OS.
 license:             BSD3
 author:              Nick Chapman
 maintainer:          nic@amadido.co.uk
-github:              https://github.com/Nick-Chapman/bash-sim.git
+github:              https://github.com/Nick-Chapman/sham.git
 
 extra-source-files:
 - README.md
@@ -57,4 +57,4 @@ library:
 executables:
   main.exe:
     main:                app/main.hs
-    dependencies:        bash-sim
+    dependencies:        sham

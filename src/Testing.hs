@@ -18,8 +18,7 @@ run console testing = do
   let numPass = length [ () | res <- bools, res ]
   let numFail = numTests - numPass
   putStrLn $
-    "ran " ++ show numTests ++ " tests; "
-    ++ (if numFail > 0 then show numFail ++ " FAIL" else "all pass")
+    show numTests ++ " tests ran; " ++ (if numFail > 0 then show numFail ++ " fail." else "all pass.")
 
 instance Functor Testing where fmap = liftM
 instance Applicative Testing where pure = return; (<*>) = ap

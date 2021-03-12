@@ -7,7 +7,7 @@ import FileSystem (fs0)
 import Interaction (Interaction(..),Prompt(..),OutMode(..))
 import Misc (EOF(..))
 import Prog (Prog)
-import qualified Bash (Bins(..),bash,runCommand)
+import qualified Sham (Bins(..),sham,runCommand)
 import qualified Data.Map.Strict as Map
 import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,man)
 import qualified Prog (run)
@@ -18,14 +18,14 @@ import qualified Tests (run)
 
 main :: IO ()
 main = do
-  Tests.run (bash 1)
-  putStrLn "*bash-sim* (try typing help)"
-  runInteraction (Prog.run fs0 (bash 1))
+  Tests.run (sham 1)
+  putStrLn "Welcome to *sham*. You can type 'help'."
+  runInteraction (Prog.run fs0 (sham 1))
 
-bash :: Int -> Prog ()
-bash level = Bash.bash level bins
+sham :: Int -> Prog ()
+sham level = Sham.sham level bins
   where
-    bins = Bash.Bins binMap
+    bins = Sham.Bins binMap
 
     binMap :: Map String (Prog ())
     binMap = Map.fromList [ (name,prog) | (name,prog,_) <- table ]
@@ -37,8 +37,8 @@ bash level = Bash.bash level bins
     table =
       [ ("echo",Native.echo,
         "write given arguments to stdout")
-      , ("bash",bash (level+1),
-        "start a nested bash console")
+      , ("sham",sham (level+1),
+        "start a nested sham console")
       , ("cat",Native.cat,
         "write named files (or stdin in no files given) to stdout")
       , ("rev",Native.rev,
@@ -51,7 +51,7 @@ bash level = Bash.bash level bins
         "list all files on the filesystem")
       , ("ps",Native.ps,
         "list all running process")
-      , ("xargs",Native.xargs (Bash.runCommand bins),
+      , ("xargs",Native.xargs (Sham.runCommand bins),
         "concatenate lines from stdin, and pass as arguments to the given command")
       , ("bins",Native.bins (Map.keys binMap),
         "list builtin executables")
@@ -92,7 +92,7 @@ runInteraction i0 = do
         loop i
 
       I_Halt -> do
-        lift $ putStrLn "*halt*"
+        lift $ putStrLn "*MeNicks* halted"
 
 
 col :: AN.Color -> String -> String

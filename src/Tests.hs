@@ -8,7 +8,7 @@ import qualified Testing (run)
 import qualified FileSystem (ls,fs0,days,readme)
 
 run :: Prog () -> IO ()
-run bash = Testing.run bash $ do
+run sham = Testing.run sham $ do
   let days = FileSystem.days
   let rw = map reverse days
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
@@ -83,7 +83,7 @@ run bash = Testing.run bash $ do
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
 
   test ["ps"] ["[1] init","[2] ps"]
-  test ["bins"] ["bash","bins","cat","echo","grep","head","ls","man","ps","rev","xargs"]
+  test ["bins"] ["bins","cat","echo","grep","head","ls","man","ps","rev","sham","xargs"]
   test ["ls | xargs echo"] [unwords paths0]
   test ["cat days | grep u"] [ d | d <- days, "u" `isInfixOf` d ]
   test ["grep"] ["(stderr) grep: takes a single argument"]
