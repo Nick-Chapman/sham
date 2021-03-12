@@ -17,12 +17,12 @@ import Data.Map (Map)
 import FileSystem (FileSystem,NoSuchPath(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import Path (Path)
-import PipeSystem (PipeSystem,PipeKey)
+import PipeSystem (PipeSystem)
 import Prelude hiding (init,read)
 import qualified Data.Map.Strict as Map
 import qualified File (empty,append,lines)
 import qualified FileSystem (ls,read,link,safeUnlink)
-import qualified PipeSystem (empty,createPipe,readPipe,writePipe,closeForReading,closeForWriting)
+import qualified PipeSystem (Key,empty,createPipe,readPipe,writePipe,closeForReading,closeForWriting)
 
 data OpenFiles = OpenFiles
   { fs :: FileSystem
@@ -51,8 +51,8 @@ instance Show Entry where
     show what ++ "(" ++ show rc ++ ")"
 
 data What
-  = PipeRead PipeKey
-  | PipeWrite PipeKey
+  = PipeRead PipeSystem.Key
+  | PipeWrite PipeSystem.Key
   | FileAppend Path -- nothing done when opened
   | FileContents [String] -- full contents read when opened
 

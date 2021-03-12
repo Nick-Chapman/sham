@@ -1,7 +1,7 @@
 module PipeSystem (
   PipeSystem,
   empty,
-  createPipe, PipeKey,
+  createPipe, Key,
   writePipe,
   readPipe,
   closeForReading, closeForWriting,
@@ -15,15 +15,15 @@ import qualified Data.Map.Strict as Map
 import qualified Pipe
 
 empty :: PipeSystem
-createPipe :: PipeSystem -> (PipeKey, PipeSystem)
-writePipe :: PipeSystem -> PipeKey -> String -> Either Block (Either EPIPE PipeSystem)
-readPipe :: PipeSystem -> PipeKey -> Either Block (Either EOF String,PipeSystem)
-closeForReading :: PipeSystem -> PipeKey -> PipeSystem
-closeForWriting :: PipeSystem -> PipeKey -> PipeSystem
+createPipe :: PipeSystem -> (Key, PipeSystem)
+writePipe :: PipeSystem -> Key -> String -> Either Block (Either EPIPE PipeSystem)
+readPipe :: PipeSystem -> Key -> Either Block (Either EOF String,PipeSystem)
+closeForReading :: PipeSystem -> Key -> PipeSystem
+closeForWriting :: PipeSystem -> Key -> PipeSystem
 
 data PipeSystem = State
-  { m :: Map PipeKey (Pipe,Mode)
-  , next :: PipeKey
+  { m :: Map Key (Pipe,Mode)
+  , next :: Key
   }
 
 data Mode = Active | Drain | Unwatched
@@ -37,8 +37,8 @@ instance Show PipeSystem where
   show State{m} =
     intercalate "," [ show k ++ show m ++ show p | (k,(p,m)) <- Map.toList m ]
 
-newtype PipeKey = PK Int deriving (Eq,Ord,Num) -- TODO: rename Key
-instance Show PipeKey where show (PK n) = "pipe"++show n
+newtype Key = Key Int deriving (Eq,Ord,Num)
+instance Show Key where show (Key n) = "pipe"++show n
 
 empty = State { m = Map.empty, next = 1 }
 
