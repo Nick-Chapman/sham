@@ -142,17 +142,14 @@ readAll fd = loop []
 read :: Prompt -> FD -> Prog (Either EOF String)
 read prompt fd =
   Prog.Call (Read prompt) fd >>= \case
-    Left NotReadable -> do
-      err2 (show fd ++ " not readable")
-      pure (Left EOF) -- TODO: better to exit?
-    Right eofOrLine -> do
-      pure eofOrLine
+    Left NotReadable -> do err2 (show fd ++ " not readable"); Prog.Exit
+    Right eofOrLine -> pure eofOrLine
 
 write :: FD -> String -> Prog ()
 write fd line = do
   Prog.Call Write (fd,line) >>= \case
-    Left NotWritable -> err2 (show fd ++ " not writable")
-    Right (Left EPIPE) -> Prog.Exit --err2 "EPIPE when writing to fd1"
+    Left NotWritable -> do err2 (show fd ++ " not writable"); Prog.Exit
+    Right (Left EPIPE) -> Prog.Exit
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()
