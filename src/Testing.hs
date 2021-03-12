@@ -6,7 +6,7 @@ import Image (fs0)
 import Interaction (Interaction(..),OutMode(..))
 import Misc (EOF(..))
 import Prog (Prog)
-import qualified Prog (run)
+import qualified Prog (runMeNicks)
 
 test :: [String] -> [String] -> Testing ()
 test is xs = T1 (Test (Lines is) (Lines xs))
@@ -59,7 +59,7 @@ runTest console n t@(Test input expected) = do
         pure False
 
 runConsole :: Prog () -> Lines -> Either Unconsumed Lines
-runConsole console input = runInteraction (Prog.run fs0 console) input
+runConsole console input = runInteraction (Prog.runMeNicks fs0 console) input
 
 runInteraction :: Interaction -> Lines -> Either Unconsumed Lines
 runInteraction i (Lines xs0) = loop xs0 [] i where

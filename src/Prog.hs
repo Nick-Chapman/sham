@@ -1,9 +1,9 @@
 
-module Prog ( -- with support for multi-threading!
+module Prog ( -- TODO: rename MeNicks?
   Prog(..), Pid(..),Command(..),
   SysCall(..),
   OpenMode(..),WriteOpenMode(..),NoSuchPath(..),FD(..),
-  run,
+  runMeNicks,
   ) where
 
 import Control.Monad (ap,liftM)
@@ -36,8 +36,8 @@ data Prog a where
   Procs :: Prog [(Pid,Command)]
   Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
 
-run :: FileSystem -> Prog () -> Interaction
-run fs prog = do
+runMeNicks :: FileSystem -> Prog () -> Interaction
+runMeNicks fs prog = do
   let action = linearize prog (\() -> A_Halt)
   let (state,pid) = newPid (initState fs)
   resume pid (Proc (Command ("init",[])) env0 action) state

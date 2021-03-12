@@ -1,5 +1,5 @@
 
-module Sham (Bins(..),sham,runCommand) where
+module Sham (sham) where
 
 import Control.Monad (when)
 import Data.Map (Map)
@@ -14,9 +14,64 @@ import SysCall (BadFileDescriptor(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
-import qualified Native (read,write,readAll,checkNoArgs)
+import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,man,readAll,read,write,checkNoArgs)
 import qualified Path (create)
 import qualified Prog (Prog(..))
+
+newtype Bins = Bins (Map String (Prog ()))
+
+lookupBins :: Bins -> String -> Maybe (Prog ())
+lookupBins (Bins m) k = Map.lookup k m
+
+sham :: Int -> Prog ()
+sham level = sham0 level bins
+  where
+    bins = Bins binMap
+
+    binMap :: Map String (Prog ())
+    binMap = Map.fromList [ (name,prog) | (name,prog,_) <- table ]
+
+    docMap :: Map String String
+    docMap = Map.fromList [ (name,text) | (name,_,text) <- table ]
+
+    table :: [(String,Prog (),String)]
+    table =
+      [ ("echo",Native.echo,
+        "write given arguments to stdout")
+      , ("cat",Native.cat,
+        "write named files (or stdin in no files given) to stdout")
+      , ("rev",Native.rev,
+        "copy stdin to stdout, reversing each line")
+      , ("grep",Native.grep,
+        "copy lines which match the given pattern to stdout ")
+      , ("head",Native.head,
+        "copy just the first line on stdin to stdout, then exit")
+      , ("ls",Native.ls,
+        "list all files on the filesystem")
+      , ("ps",Native.ps,
+        "list all running process")
+      , ("sham",sham (level+1),
+        "start a nested sham console")
+      , ("xargs",Native.xargs (runCommand bins),
+        "concatenate lines from stdin, and pass as arguments to the given command")
+      , ("bins",Native.bins (Map.keys binMap),
+        "list builtin executables")
+      , ("man",Native.man docMap,
+         "list the manual entries for the given commands")
+      ]
+
+sham0 :: Int -> Bins -> Prog ()
+sham0 level bins = Native.checkNoArgs $ loop 1 where
+  loop :: Int -> Prog ()
+  loop n = do
+    let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
+    Native.read (Prompt prompt) (FD 0) >>= \case
+      Left EOF -> pure ()
+      Right line -> do
+        let script = parseLine line
+        --Prog.Trace (show script)
+        interpret bins script
+        loop (n+1)
 
 
 data Script
@@ -45,24 +100,6 @@ data RedirectSource
   = FromPath Path
   | FromFD FD
   deriving Show
-
-newtype Bins = Bins (Map String (Prog ()))
-
-lookupBins :: Bins -> String -> Maybe (Prog ())
-lookupBins (Bins m) k = Map.lookup k m
-
-sham :: Int -> Bins -> Prog ()
-sham level bins = Native.checkNoArgs $ loop 1 where
-  loop :: Int -> Prog ()
-  loop n = do
-    let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
-    Native.read (Prompt prompt) (FD 0) >>= \case
-      Left EOF -> pure ()
-      Right line -> do
-        let script = parseLine line
-        --Prog.Trace (show script)
-        interpret bins script
-        loop (n+1)
 
 interpret :: Bins -> Script -> Prog ()
 interpret bins = \case
