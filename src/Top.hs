@@ -1,16 +1,16 @@
 module Top (main) where
 
-import Control.Monad.Trans.Class (lift)
 import Control.Monad (when)
+import Control.Monad.Trans.Class (lift)
 import Data.Map (Map)
-import FileSystem (fs0)
+import Image (fs0)
 import Interaction (Interaction(..),Prompt(..),OutMode(..))
 import Misc (EOF(..))
 import Prog (Prog)
-import qualified Sham (Bins(..),sham,runCommand)
 import qualified Data.Map.Strict as Map
 import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,man)
 import qualified Prog (run)
+import qualified Sham (Bins(..),sham,runCommand)
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
 import qualified System.Console.Haskeline.History as HL

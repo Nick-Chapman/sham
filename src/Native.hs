@@ -1,4 +1,3 @@
-
 module Native (
   echo,cat,rev,grep,head,ls,ps,bins,xargs,man,
   withOpen,readAll,read,write,err2,checkNoArgs

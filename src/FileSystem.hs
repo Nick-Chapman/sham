@@ -1,12 +1,10 @@
 module FileSystem (
-  FileSystem,
-  create,
+  create, FileSystem,
   ls,
   link,
   exists,
   read, unlink, NoSuchPath(..),
   safeUnlink,
-  fs0, readme, days
   ) where
 
 import Data.Map (Map)
@@ -14,8 +12,6 @@ import File (File)
 import Path (Path)
 import Prelude hiding (read,words)
 import qualified Data.Map.Strict as Map
-import qualified Path (create)
-import qualified File (create)
 
 data NoSuchPath = NoSuchPath deriving Show
 
@@ -35,23 +31,3 @@ exists fs path = Map.member path fs
 read fs path = maybe (Left NoSuchPath) Right (Map.lookup path fs)
 unlink fs path = if exists fs path then Right (Map.delete path fs) else Left NoSuchPath
 safeUnlink fs path = Map.delete path fs
-
-fs0 :: FileSystem
-fs0 = FileSystem.create
-  [ (Path.create "README", File.create readme)
-  , (Path.create "days", File.create days)
-  , (Path.create "help", File.create ["cat README"])
-  , (Path.create "yes", File.create ["echo yes","exec yes"])
-  , (Path.create "bomb", File.create ["echo $$ >&2", "bomb | bomb"])
-  , (Path.create "me", File.create ["echo $$"])
-  ]
-
-readme :: [String]
-readme =
-  [ "Welcome to *sham*."
-  , "Some available commands include: bins, echo, cat, rev, grep, ls, man, ps, xargs."
-  , "Type 'exit' or Ctrl-D to quit."
-  ]
-
-days :: [String]
-days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]

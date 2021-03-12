@@ -2,7 +2,7 @@ module Testing (test,run) where
 
 import Control.Monad (ap,liftM)
 import Data.List (intercalate)
-import FileSystem (fs0)
+import Image (fs0)
 import Interaction (Interaction(..),OutMode(..))
 import Misc (EOF(..))
 import Prog (Prog)

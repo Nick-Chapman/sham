@@ -1,22 +1,23 @@
 module Tests (run) where
 
 import Data.List (isInfixOf)
-import Testing (test)
 import Prog (Prog)
+import Testing (test)
+import qualified FileSystem (ls)
+import qualified Image (fs0,days,readme)
 import qualified Path (toString)
 import qualified Testing (run)
-import qualified FileSystem (ls,fs0,days,readme)
 
 run :: Prog () -> IO ()
 run sham = Testing.run sham $ do
-  let days = FileSystem.days
+  let days = Image.days
   let rw = map reverse days
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
-  let paths0 = map Path.toString (FileSystem.ls FileSystem.fs0)
+  let paths0 = map Path.toString (FileSystem.ls Image.fs0)
 
   test ["ls"] paths0
-  test ["help"] FileSystem.readme
-  test ["help &"] FileSystem.readme
+  test ["help"] Image.readme
+  test ["help &"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]
 
   test [] []
