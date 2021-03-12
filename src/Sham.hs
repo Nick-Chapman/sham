@@ -14,7 +14,7 @@ import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
 import qualified MeNicks (Prog(..))
-import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,man,readAll,read,write,checkNoArgs)
+import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,xargs,ifeq,man,readAll,read,write,checkNoArgs)
 import qualified Path (create)
 
 newtype Bins = Bins (Map String (Prog ()))
@@ -53,6 +53,8 @@ sham level = sham0 level bins
         "start a nested sham console")
       , ("xargs",Native.xargs (runCommand bins),
         "concatenate lines from stdin, and pass as arguments to the given command")
+      , ("ifeq",Native.ifeq (runCommand bins),
+        "run a command only if $1 == $2")
       , ("bins",Native.bins (Map.keys binMap),
         "list builtin executables")
       , ("man",Native.man docMap,
@@ -303,7 +305,7 @@ lang token = script where
   keyword string = mapM_ symbol string
 
   ident0 = do
-    x <- alts [alpha,numer]
+    x <- alts [alpha,numer,dash]
     xs <- many (alts [alpha,numer,dash])
     pure (x : xs)
 

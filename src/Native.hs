@@ -1,5 +1,5 @@
 module Native (
-  echo, cat, rev, grep, head, ls, ps, bins, xargs, man,
+  echo, cat, rev, grep, head, ls, ps, bins, xargs, ifeq, man,
   withOpen, readAll, read, write, err2, checkNoArgs
   ) where
 
@@ -88,12 +88,21 @@ bins names = checkNoArgs $ do
 
 xargs :: (Command -> Prog ()) -> Prog ()
 xargs runCommand = do
-  Command(_,args) <- MeNicks.Argv
+  Command(me,args) <- MeNicks.Argv
   case args of
-    [] -> err2 "xargs: needs at least 1 argument"
+    [] -> err2 (me ++ ": takes at least 1 argument")
     com:args -> do
       lines <- readAll stdin
       runCommand (Command (com, args ++ lines))
+
+ifeq :: (Command -> Prog ()) -> Prog ()
+ifeq runCommand = do
+  Command(me,args) <- MeNicks.Argv
+  case args of
+    a:b:com:args -> do
+      if a == b then runCommand (Command (com, args)) else pure ()
+    _ ->
+      err2 (me ++ ": takes at least 3 arguments")
 
 man :: Map String String -> Prog ()
 man docsMap  = do

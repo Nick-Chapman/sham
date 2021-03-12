@@ -15,6 +15,15 @@ fs0 = FileSystem.create [ (Path.create p, File.create lines) | (p,lines) <- imag
     , ("bomb"  , ["echo $$ >&2", "bomb | bomb"])
     , ("me"    , ["echo $$"])
     , ("cp"    , ["# cp SRC DEST: copy a file from SRC to DEST","cat $1 > $2"])
+    , ("countdown", [
+          "# countdown N: generate decrementing sequence of numbers starting at N",
+          "echo $1",
+          "ifeq $1 42 echo boo",
+          "ifeq $1 0 exit",
+          "#sum $1 -1 | exec countdown #TODO: allow exec here!",
+          "#sum $1 -1 | countdown",
+          "sum $1 -1 | echo countdown"
+          ])
     ]
 
 readme :: [String]
