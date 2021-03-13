@@ -12,7 +12,7 @@ import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnd
 import OpenFiles (OpenFiles,OpenMode(..))
 import Path (Path)
 import qualified Data.Map.Strict as Map
-import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write)
+import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write,devnull)
 
 data SysCall a b where
   Open :: SysCall (Path,OpenMode) (Either NoSuchPath FD)
@@ -22,10 +22,11 @@ data SysCall a b where
   Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
   Paths :: SysCall () [Path]
   SysPipe :: SysCall () (PipeEnds FD)
+  Unused :: SysCall () FD -- TODO: for used for by with redirectsa
 
 data BadFileDescriptor = BadFileDescriptor deriving Show
 
-instance Show (SysCall a b) where -- TODO: automate?
+{-instance Show (SysCall a b) where -- TODO: automate?
   show = \case
     Open -> "Open"
     Close -> "Close"
@@ -34,12 +35,19 @@ instance Show (SysCall a b) where -- TODO: automate?
     Write -> "Write"
     Paths -> "Paths"
     SysPipe -> "Pipe"
+    Unused -> "Unused"-}
 
 runSys :: SysCall a b ->
   OpenFiles -> Env -> a ->
   Either Block ((OpenFiles -> Env -> b -> Interaction) -> Interaction)
 
 runSys sys s env arg = case sys of
+
+  Unused -> do
+    let fd = smallestUnused env
+    env <- pure $ Env (Map.insert fd (File OpenFiles.devnull) (unEnv env))
+    let env' = env
+    Right $ \k -> k s env' fd
 
   SysPipe -> do
     case OpenFiles.pipe s of

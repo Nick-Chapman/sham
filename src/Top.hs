@@ -2,12 +2,12 @@ module Top (main) where
 
 import Console (runInteraction)
 import Image (fs0)
-import Sham (sham)
+import Sham (shamConsole)
 import qualified MeNicks (run)
 import qualified Tests (run)
 
 main :: IO ()
 main = do
-  Tests.run (sham 1)
+  Tests.run (shamConsole 1)
   putStrLn "Welcome to *sham*. You can type 'help'."
-  Console.runInteraction (MeNicks.run fs0 (sham 1))
+  Console.runInteraction (MeNicks.run fs0 (shamConsole 1))

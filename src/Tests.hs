@@ -21,14 +21,14 @@ run sham = Testing.run sham $ do
   test ["cat README"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]
 
-  test ["echo $0"] ["init"]
-  test ["echo $1"] ["(stderr) $1 undefined",""]
-  test ["echo $1","echo qaz"] ["(stderr) $1 undefined","","qaz"]
-  test ["echo $1 qaz"] ["(stderr) $1 undefined"," qaz"]
+  test ["echo $0"] ["sham"]
+  test ["echo $1"] ["(stderr) $1 unbound",""]
+  test ["echo $1","echo qaz"] ["(stderr) $1 unbound","","qaz"]
+  test ["echo $1 qaz"] ["(stderr) $1 unbound"," qaz"]
 
   test ["cp README xx", "cat xx"] Image.readme
-  test ["cp"] ["(stderr) $2 undefined", "(stderr) $1 undefined", "(stderr) no such path: "]
-  test ["cp foo"] ["(stderr) $2 undefined", "(stderr) no such path: foo"]
+  test ["cp"] ["(stderr) $1 unbound", "(stderr) $2 unbound", "(stderr) no such path: "]
+  test ["cp foo"] ["(stderr) $2 unbound", "(stderr) no such path: foo"]
   test ["cp foo bar"] ["(stderr) no such path: foo"]
 
   test [] []
@@ -51,8 +51,8 @@ run sham = Testing.run sham $ do
   test ["rev < days > rw", "cat rw"] rw
 
   test ["*"] ["(stderr) unexpected '*' at position 1"]
-  test ["."] ["(stderr) unexpected end of line"]
-  test ["exit nope"] ["(stderr) unexpected end of line"] -- TODO: improve this message
+  test ["."] ["(stderr) source takes at least one argument, but no redirects or (&)"]
+  test ["exit nope"] ["(stderr) exit takes no args, redirects, or (&)"]
 
   test ["rev nope"] ["(stderr) rev: takes no arguments"]
   test ["rev nope < days"] ["(stderr) rev: takes no arguments"]
@@ -95,7 +95,7 @@ run sham = Testing.run sham $ do
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
 
   test ["ps"] ["[1] init","[2] ps"]
-  test ["bins"] ["bins","cat","echo","grep","head","ifeq","ls","man","ps","rev","sham","xargs"]
+  test ["bins"] ["bins","cat","echo","grep","head","ls","man","ps","rev","sham","xargs"]
   test ["ls | xargs echo"] [unwords paths0]
   test ["cat days | grep u"] [ d | d <- days, "u" `isInfixOf` d ]
   test ["grep"] ["(stderr) grep: takes a single argument"]
@@ -111,3 +111,5 @@ run sham = Testing.run sham $ do
   test ["cat me > a","echo exec me >> a","a","me"] ["4","4","5"]
 
   test ["yes | head", "echo woo hoo"] ["yes","woo hoo"]
+
+  -- TODO: test use of sham to run a file with/out args

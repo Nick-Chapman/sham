@@ -43,7 +43,7 @@ newtype Lines = Lines [String] deriving Eq
 instance Show Lines where show (Lines xs) = intercalate "/" xs
 
 instance Show Test where
-  show (Test is xs) = "input: " ++ show is ++ "\n- expected: " ++ show xs
+  show (Test is xs) = "input: " ++ show is ++ "\n- expect: " ++ show xs
 
 runTest :: Prog () -> Int -> Test -> IO Bool
 runTest console n t@(Test input expected) = do

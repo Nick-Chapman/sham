@@ -2,6 +2,7 @@ module OpenFiles (
   init,
   OpenFiles,
   Key,
+  devnull,
   open, OpenMode(..), WriteOpenMode(..),
   pipe,
   dup,
@@ -55,6 +56,7 @@ data What
   | PipeWrite PipeSystem.Key
   | FileAppend Path -- nothing done when opened
   | FileContents [String] -- full contents read when opened
+  | DevNull
 
 instance Show What where
   show = \case
@@ -62,14 +64,18 @@ instance Show What where
     PipeWrite pk -> "Write:"++show pk
     FileAppend path -> "Append:"++show path
     FileContents xs -> "Contents[size=#"++show (length xs)++"]"
+    DevNull -> "/dev/null"
 
 init :: FileSystem -> OpenFiles
 init fs = OpenFiles
   { fs
   , pipeSystem = PipeSystem.empty
-  , table = Tab Map.empty
-  , nextKey = 21
+  , table = Tab $ Map.fromList [(21, Entry { rc = 1, what = DevNull })]
+  , nextKey = 22
   }
+
+devnull :: Key
+devnull = 21
 
 instance Show OpenFiles where
   show OpenFiles{fs=_,pipeSystem=ps,table,nextKey=_} =
@@ -139,6 +145,7 @@ close state0@OpenFiles{pipeSystem,table} key = do
       let table' = Tab (Map.delete key (unTab table))
       let state = state0 { table = table' }
       case what of
+        DevNull -> state
         PipeRead pk -> state { pipeSystem = PipeSystem.closeForReading pipeSystem pk }
         PipeWrite pk -> state { pipeSystem = PipeSystem.closeForWriting pipeSystem pk }
         FileAppend{} -> state
@@ -149,6 +156,7 @@ read :: OpenFiles -> Key -> Either NotReadable (Either Block (Either EOF String,
 read state@OpenFiles{table,pipeSystem} key = do
   let e@Entry{what} = look "read" key (unTab table)
   case what of
+    DevNull -> Right (Right (Left EOF, state))
     PipeWrite{} -> Left NotReadable
     FileAppend{} -> Left NotReadable
     PipeRead pk  -> do
@@ -172,6 +180,7 @@ write :: OpenFiles -> Key -> String -> Either NotWritable (Either Block (Either 
 write state@OpenFiles{table,pipeSystem,fs} key line = do
   let Entry{what} = look "write" key (unTab table)
   case what of
+    DevNull -> Right (Right (Right state))
     PipeRead{} -> Left NotWritable
     FileContents{} -> Left NotWritable
     PipeWrite pk ->

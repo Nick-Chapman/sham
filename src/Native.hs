@@ -1,6 +1,6 @@
 module Native (
-  echo, cat, rev, grep, head, ls, ps, bins, xargs, ifeq, man,
-  withOpen, readAll, read, write, err2, checkNoArgs
+  echo, cat, rev, grep, head, ls, ps, bins, xargs, man,
+  loadFile, withOpen, readAll, read, write, err2, checkNoArgs
   ) where
 
 import Control.Monad (when)
@@ -95,15 +95,6 @@ xargs runCommand = do
       lines <- readAll stdin
       runCommand (Command (com, args ++ lines))
 
-ifeq :: (Command -> Prog ()) -> Prog ()
-ifeq runCommand = do
-  Command(me,args) <- MeNicks.Argv
-  case args of
-    a:b:com:args -> do
-      if a == b then runCommand (Command (com, args)) else pure ()
-    _ ->
-      err2 (me ++ ": takes at least 3 arguments")
-
 man :: Map String String -> Prog ()
 man docsMap  = do
   Command(_,args) <- MeNicks.Argv
@@ -128,6 +119,11 @@ getSingleArg f = do
   case args of
     [arg] -> f arg
     _ -> err2 (com ++ ": takes a single argument")
+
+loadFile :: String -> Prog [String]
+loadFile path = do
+  withOpen (Path.create path) OpenForReading $ \fd -> do
+    readAll fd
 
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
