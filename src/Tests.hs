@@ -65,6 +65,9 @@ run sham = Testing.run sham $ do
   test ["echo ps | xargs man"] ["ps : list all running process"]
   test ["echo ls ps | xargs man"] ["(stderr) man : no manual entry for 'ls ps'"]
 
+  test ["ifeq 2 3 echo foo"] []
+  test ["ifeq 4 4 echo foo"] ["foo"]
+
   test ["help &"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]
 

@@ -121,12 +121,21 @@ lang token = script0 where
 
   script0 = do
     ws
-    res <- alts [ do res <- pipeline; ws; pure res
+    res <- alts [ do res <- command; ws; pure res
                 , do eps; pure Null ]
     alts [eps,lineComment]
     pure res
 
   lineComment = do symbol '#'; skipWhile (skip token)
+
+  command = alts [ pipeline, conditional ]
+
+  conditional = do
+    keyword "ifeq"
+    ws1; x1 <- word
+    ws1; x2 <- word
+    ws1; s <- step
+    pure $ IfEq x1 x2 (Invoke1 s Wait) Null
 
   pipeline = do
     (x,xs) <- parseListSep step (do ws; symbol '|'; ws)
@@ -141,6 +150,7 @@ lang token = script0 where
 
   step = do
     (com,args) <- parseListSep word ws1
+    case com of Word "ifeq" -> fail; _ -> pure ()
     rs <- redirects
     pure $ Run com args rs
 

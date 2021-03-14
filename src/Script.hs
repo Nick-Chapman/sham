@@ -62,7 +62,7 @@ runScript env = run where
     ShamError s -> err2 s
     Seq s1 s2 -> do run s1; run s2
 
-    IfEq w1 w2 s1 s2 -> do -- TODO: example for this
+    IfEq w1 w2 s1 s2 -> do
       x1 <- evalWord env w1
       x2 <- evalWord env w2
       run (if x1 == x2 then s1 else s2)
