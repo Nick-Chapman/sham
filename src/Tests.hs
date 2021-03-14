@@ -15,6 +15,10 @@ run sham = Testing.run sham $ do
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
   let paths0 = map Path.toString (FileSystem.ls Image.fs0)
 
+  test ["echo foo"] ["foo"]
+  test ["sham echo foo"] ["(stderr) no such path: echo"]
+  test ["sham -c echo foo"] ["foo"]
+
   test ["help"] Image.readme
   test [". help"] Image.readme
   test ["exec help"] Image.readme
@@ -22,13 +26,20 @@ run sham = Testing.run sham $ do
   test ["echo help | sham"] Image.readme
   test ["ls | grep h | sham"] Image.readme
   test ["cat README"] Image.readme
+  test ["sham cat README"] ["(stderr) no such path: cat"]
+  test ["sham -c cat README"] Image.readme
   test ["echo README | xargs cat"] Image.readme
   test ["cat README | xargs echo"] [ unwords Image.readme ]
 
+  test ["README"] ["(stderr) unexpected '*' at position 12",
+                   "(stderr) unexpected ':' at position 32",
+                   "(stderr) unexpected ''' at position 6"]
+
   test ["ls"] paths0
+  test ["sham ls"] ["(stderr) no such path: ls"]
+  test ["sham -c ls"] paths0
   test [". ls"] ["(stderr) no such path: ls"]
   test ["exec ls"] paths0
-  test ["sham ls"] ["(stderr) no such path: ls"] -- TODO: nice if this worked
   test ["echo ls | sham"] paths0
   test ["ls | xargs echo"] [unwords paths0]
 
@@ -62,7 +73,6 @@ run sham = Testing.run sham $ do
   test [] []
   test [""] []
   test ["echo"] [""]
-  test ["echo foo"] ["foo"]
   test ["echo foo", "echo bar"] ["foo","bar"]
   test ["echo foo bar"] ["foo bar"]
   test ["echo foo  bar"] ["foo bar"]

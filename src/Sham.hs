@@ -64,6 +64,10 @@ shamConsole level = runConsole level
       Command(_,args) <- MeNicks.Argv
       case args of
         [] -> runConsole level
+        "-c":args -> do
+          let script = parseLine (unwords args)
+          MeNicks.Trace (show script) -- for debug
+          runScript script []
         path:args -> do
           lines <- Native.loadFile path
           let script = parseLines lines
