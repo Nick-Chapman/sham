@@ -15,6 +15,8 @@ run sham = Testing.run sham $ do
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
   let paths0 = map Path.toString (FileSystem.ls Image.fs0)
 
+  test ["bins"] ["bins","cat","echo","grep","head","ls","man","ps","rev","sham","xargs"]
+
   test ["echo foo"] ["foo"]
   test ["sham echo foo"] ["(stderr) no such path: echo"]
   test ["sham -c echo foo"] ["foo"]
@@ -45,7 +47,17 @@ run sham = Testing.run sham $ do
 
   test ["echo cat | sham"] []
 
-  test ["bins"] ["bins","cat","echo","grep","head","ls","man","ps","rev","sham","xargs"]
+  test ["echo foo | rev"] ["oof"]
+  test ["echo foo > x"," cat x | rev"] ["oof"]
+  test ["echo rev > x","echo foo >> x"," cat x | sham"] ["oof"]
+  test ["rev < days"] rw
+  test ["cat days | rev"] rw
+  test ["echo rev > x","cat days >> x","cat x | sham"] rw
+
+  test ["rev < days > rw", "cat rw"] rw
+  test ["cat days | rev | rev"] days
+  test ["cat days | rev | rev | rev"] rw
+
   test ["echo foo | xargs bins"] ["(stderr) bins: takes no arguments"]
 
   test ["man foo"] ["(stderr) man : no manual entry for 'foo'"]
@@ -81,8 +93,6 @@ run sham = Testing.run sham $ do
   test ["cat days","cat days"] (days ++ days)
   test ["cat days","echo foo"] (days ++ ["foo"])
   test ["cat < days"] days
-  test ["rev < days"] rw
-  test ["rev < days > rw", "cat rw"] rw
 
   test ["*"] ["(stderr) unexpected '*' at position 1"]
   test ["."] ["(stderr) source takes at least one argument, but no redirects or (&)"]
@@ -117,11 +127,6 @@ run sham = Testing.run sham $ do
 
   test ["cat > x","echo OUT","echo ERR >&2","","x"] ["OUT","(stderr) ERR"]
   test ["cat > x","echo OUT","echo ERR >&2","",". x"] ["OUT","(stderr) ERR"]
-
-  test ["echo foo | rev"] ["oof"]
-  test ["cat days | rev"] rw
-  test ["cat days | rev | rev"] days
-  test ["cat days | rev | rev | rev"] rw
 
   test ["exit"] []
   test ["cat > x","echo 1","exit","echo 2","","x"] ["1"]
