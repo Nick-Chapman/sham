@@ -15,10 +15,38 @@ run sham = Testing.run sham $ do
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
   let paths0 = map Path.toString (FileSystem.ls Image.fs0)
 
-  test ["ls"] paths0
   test ["help"] Image.readme
-  test ["help &"] Image.readme
+  test [". help"] Image.readme
+  test ["exec help"] Image.readme
+  test ["sham help"] Image.readme
+  test ["echo help | sham"] Image.readme
+  test ["ls | grep h | sham"] Image.readme
   test ["cat README"] Image.readme
+  test ["echo README | xargs cat"] Image.readme
+  test ["cat README | xargs echo"] [ unwords Image.readme ]
+
+  test ["ls"] paths0
+  test [". ls"] ["(stderr) no such path: ls"]
+  test ["exec ls"] paths0
+  test ["sham ls"] ["(stderr) no such path: ls"] -- TODO: nice if this worked
+  test ["echo ls | sham"] paths0
+  test ["ls | xargs echo"] [unwords paths0]
+
+  test ["bins"] ["bins","cat","echo","grep","head","ls","man","ps","rev","sham","xargs"]
+  test ["echo foo | xargs bins"] ["(stderr) bins: takes no arguments"]
+
+  test ["man foo"] ["(stderr) foo : no manual entry"]
+  test ["man ps"] ["ps : list all running process"]
+  test ["echo ps | xargs man"] ["ps : list all running process"]
+  test ["echo ls ps | xargs man"] ["(stderr) ls ps : no manual entry"]
+
+  --test ["ls | xargs sham"] [] -- TODO: odd behav
+
+  --test ["echo cat | sham"] [] -- TODO: crashes
+  --test ["bins | sham"] [] -- TODO: crashes
+  --test ["echo foo | xargs grep"] [] -- TODO: crashes
+
+  test ["help &"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]
 
   test ["echo $0"] ["sham"]
@@ -95,8 +123,6 @@ run sham = Testing.run sham $ do
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
 
   test ["ps"] ["[1] init","[2] ps"]
-  test ["bins"] ["bins","cat","echo","grep","head","ls","man","ps","rev","sham","xargs"]
-  test ["ls | xargs echo"] [unwords paths0]
   test ["cat days | grep u"] [ d | d <- days, "u" `isInfixOf` d ]
   test ["grep"] ["(stderr) grep: takes a single argument"]
   test ["cat days | head"] ["Monday"]
@@ -111,5 +137,3 @@ run sham = Testing.run sham $ do
   test ["cat me > a","echo exec me >> a","a","me"] ["4","4","5"]
 
   test ["yes | head", "echo woo hoo"] ["yes","woo hoo"]
-
-  -- TODO: test use of sham to run a file with/out args
