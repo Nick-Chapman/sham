@@ -62,19 +62,19 @@ readPipe s@State{m} k = do
     Left Block ->
       case mode of
         Active -> Left Block
-        Drain -> Right (Left EOF, s { m = Map.delete k m }) --TODO: here or when closeForReading
-        Unwatched -> error "reading from an unwatched pipe (closed for reading); should be impossible"
+        Drain -> Right (Left EOF, s)
+        Unwatched ->
+          error "reading from an unwatched pipe (closed for reading); should be impossible"
     Right (str,pipe) ->
       Right (Right str, s { m = Map.insert k (pipe,mode) m })
 
 closeForReading s@State{m} k = do
-  case Map.lookup k m of
-    Nothing -> s --TODO: impossible if we only delete when both ends are closed
-    Just (pipe,mode) ->
-      case mode of
-        Active -> s { m = Map.insert k (pipe,Unwatched) m }
-        Drain -> s
-        Unwatched -> error "already closed for reading; should be impossible"
+  let (pipe,mode) = look "closeForReading" k m
+  case mode of
+    Active -> s { m = Map.insert k (pipe,Unwatched) m }
+    Drain -> s { m = Map.delete k m }
+    Unwatched ->
+      error "already closed for reading; should be impossible"
 
 closeForWriting s@State{m} k = do
   let (pipe,mode) = look "closeForWriting" k m

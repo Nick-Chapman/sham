@@ -68,7 +68,7 @@ data Action where
 
 resume :: Pid -> Proc -> State -> Interaction
 resume me proc0@(Proc{command=command0,env,action=action0}) state@State{os} =
- --I_Trace (show ("resume",me,action0)) $
+  --I_Trace (show ("resume",me,action0)) $
   case action0 of
 
   A_Halt -> do
@@ -110,23 +110,25 @@ resume me proc0@(Proc{command=command0,env,action=action0}) state@State{os} =
     yield me proc0 { action = f res } state
 
   A_Call sys arg f -> do
-    -- TODO: allow trace tobe turned on/off interactively at the console
-    --trace me (show sys ++ show arg ++"...") $ do
+    trace (me,proc0) (show sys ++ show arg ++"...") $ do
     case runSys sys os env arg of
       Left Block ->
-        --trace me (show sys ++ show arg ++" BLOCKED") $ do
+        trace (me,proc0) (show sys ++ show arg ++" BLOCKED") $ do
         block me proc0 state
       Right proceed -> do
         proceed $ \os env res -> do
-          --trace me (show sys ++ show arg ++" --> " ++ show res) $ do
+          trace (me,proc0) (show sys ++ show arg ++" --> " ++ show res) $ do
           --trace me ("env: " ++ show env) $ do
           let state' = state { os }
           --I_Trace (show state') $ do
           let action = f res
           yield me proc0 { env, action } state'
 
-_trace :: Pid -> String -> Interaction -> Interaction
-_trace me mes = I_Trace (show me ++ " " ++ mes)
+trace :: (Pid,Proc) -> String -> Interaction -> Interaction
+trace (me,Proc{command}) mes =
+  -- TODO: allow trace tobe turned on/off interactively at the console
+  if True then id else
+    I_Trace (show me ++ "(" ++ show command ++ ") " ++ mes)
 
 block :: Pid -> Proc -> State -> Interaction
 block = yield -- TODO: track blocked Procs

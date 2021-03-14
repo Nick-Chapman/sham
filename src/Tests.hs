@@ -43,6 +43,8 @@ run sham = Testing.run sham $ do
   test ["echo ls | sham"] paths0
   test ["ls | xargs echo"] [unwords paths0]
 
+  test ["echo cat | sham"] []
+
   test ["bins"] ["bins","cat","echo","grep","head","ls","man","ps","rev","sham","xargs"]
   test ["echo foo | xargs bins"] ["(stderr) bins: takes no arguments"]
 
@@ -50,12 +52,6 @@ run sham = Testing.run sham $ do
   test ["man ps"] ["ps : list all running process"]
   test ["echo ps | xargs man"] ["ps : list all running process"]
   test ["echo ls ps | xargs man"] ["(stderr) man : no manual entry for 'ls ps'"]
-
-  --test ["ls | xargs sham"] [] -- TODO: odd behav
-
-  --test ["echo cat | sham"] [] -- TODO: crashes
-  --test ["bins | sham"] [] -- TODO: crashes
-  --test ["echo foo | xargs grep"] [] -- TODO: crashes
 
   test ["help &"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]

@@ -26,7 +26,7 @@ data SysCall a b where
 
 data BadFileDescriptor = BadFileDescriptor deriving Show
 
-{-instance Show (SysCall a b) where -- TODO: automate?
+instance Show (SysCall a b) where -- TODO: automate?
   show = \case
     Open -> "Open"
     Close -> "Close"
@@ -35,7 +35,7 @@ data BadFileDescriptor = BadFileDescriptor deriving Show
     Write -> "Write"
     Paths -> "Paths"
     SysPipe -> "Pipe"
-    Unused -> "Unused"-}
+    Unused -> "Unused"
 
 runSys :: SysCall a b ->
   OpenFiles -> Env -> a ->

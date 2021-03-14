@@ -93,14 +93,15 @@ runPipeline env wm steps = do
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
   PipeEnds{r,w} <- MeNicks.Call SysPipe ()
-  let command = Command ("sham",[])
-  spawn1 command (do -- TODO: dont loose the name of the actual pipe element
+  let com1 = Command ("LEFT",[])
+  let com2 = Command ("RIGHT",[])
+  spawn1 com1 (do -- TODO: use the name of the actual pipe commands!
                dup2 (FD 1) w
                MeNicks.Call Close w
                MeNicks.Call Close r
                prog1
            ) $ \child1 -> do
-    spawn1 command (do
+    spawn1 com2 (do
                  dup2 (FD 0) r
                  MeNicks.Call Close w
                  MeNicks.Call Close r
