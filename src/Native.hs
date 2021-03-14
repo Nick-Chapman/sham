@@ -97,14 +97,14 @@ xargs runCommand = do
 
 man :: Map String String -> Prog ()
 man docsMap  = do
-  Command(_,args) <- MeNicks.Argv
-  mapM_ manline args
-  where
+  Command(me,args) <- MeNicks.Argv
+  let
     manline :: String -> Prog ()
     manline name =
       case Map.lookup name docsMap of
         Just text -> write stdout (name ++ " : " ++ text)
-        Nothing -> write stderr (name ++ " : no manual entry")
+        Nothing -> write stderr (me ++ " : no manual entry for '" ++ name ++ "'")
+  mapM_ manline args
 
 checkNoArgs :: Prog () -> Prog ()
 checkNoArgs prog = do

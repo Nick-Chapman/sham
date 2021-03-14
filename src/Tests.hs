@@ -35,10 +35,10 @@ run sham = Testing.run sham $ do
   test ["bins"] ["bins","cat","echo","grep","head","ls","man","ps","rev","sham","xargs"]
   test ["echo foo | xargs bins"] ["(stderr) bins: takes no arguments"]
 
-  test ["man foo"] ["(stderr) foo : no manual entry"]
+  test ["man foo"] ["(stderr) man : no manual entry for 'foo'"]
   test ["man ps"] ["ps : list all running process"]
   test ["echo ps | xargs man"] ["ps : list all running process"]
-  test ["echo ls ps | xargs man"] ["(stderr) ls ps : no manual entry"]
+  test ["echo ls ps | xargs man"] ["(stderr) man : no manual entry for 'ls ps'"]
 
   --test ["ls | xargs sham"] [] -- TODO: odd behav
 
