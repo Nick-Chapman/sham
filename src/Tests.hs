@@ -15,7 +15,8 @@ run sham = Testing.run sham $ do
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
   let paths0 = map Path.toString (FileSystem.ls Image.fs0)
 
-  test ["bins"] ["bins","cat","echo","grep","head","ls","man","ps","rev","sham","sum", "xargs"]
+  -- TODO: make this test less fragile
+  test ["bins"] ["bins","cat","echo","grep","head1","ls","man","ps","rev","sham","sum", "xargs"]
 
   test ["echo foo"] ["foo"]
   test ["sham echo foo"] ["(stderr) no such path: echo"]
@@ -26,7 +27,7 @@ run sham = Testing.run sham $ do
   test ["exec help"] Image.readme
   test ["sham help"] Image.readme
   test ["echo help | sham"] Image.readme
-  test ["ls | grep h | sham"] Image.readme
+  test ["ls | grep lp | sham"] Image.readme
   test ["cat README"] Image.readme
   test ["sham cat README"] ["(stderr) no such path: cat"]
   test ["sham -c cat README"] Image.readme
@@ -75,7 +76,7 @@ run sham = Testing.run sham $ do
 
   test ["countdown 0"] ["0"]
   test ["countdown 3"] ["3","2","1","0"]
-  test ["countdown -1 | head"] ["-1"]
+  test ["countdown -1 | head1"] ["-1"]
 
   test ["help &"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]
@@ -148,8 +149,8 @@ run sham = Testing.run sham $ do
   test ["ps"] ["[1] init","[2] ps"]
   test ["cat days | grep u"] [ d | d <- days, "u" `isInfixOf` d ]
   test ["grep"] ["(stderr) grep: takes a single argument"]
-  test ["cat days | head"] ["Monday"]
-  test ["cat days | grep u | head"] ["Tuesday"]
+  test ["cat days | head1"] ["Monday"]
+  test ["cat days | grep u | head1"] ["Tuesday"]
 
   test ["echo my pid is $$"] ["my pid is 1"]
 
@@ -159,4 +160,4 @@ run sham = Testing.run sham $ do
   test ["cat me > a","echo me >> a","a","me"] ["4","5","6"]
   test ["cat me > a","echo exec me >> a","a","me"] ["4","4","5"]
 
-  test ["yes | head", "echo woo hoo"] ["yes","woo hoo"]
+  test ["yes | head1", "echo woo hoo"] ["yes","woo hoo"]

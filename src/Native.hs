@@ -1,5 +1,5 @@
 module Native (
-  echo, cat, rev, grep, head, ls, ps, bins, xargs, man, sum,
+  echo, cat, rev, grep, head1, ls, ps, bins, xargs, man, sum,
   loadFile, withOpen, readAll, read, write, err2, checkNoArgs, exit,
   ) where
 
@@ -67,10 +67,10 @@ grep = do
           loop
   loop
 
-head :: Prog ()
-head = checkNoArgs $ do
+head1 :: Prog ()
+head1 = checkNoArgs $ do
   Native.read NoPrompt stdin >>= \case
-    Left EOF -> pure ()
+    Left EOF -> pure () -- TODO: exit?
     Right line -> write stdout line
 
 ls :: Prog ()
