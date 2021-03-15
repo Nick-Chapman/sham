@@ -1,6 +1,6 @@
 module Native (
-  echo, cat, rev, grep, head, ls, ps, bins, xargs, man,
-  loadFile, withOpen, readAll, read, write, err2, checkNoArgs
+  echo, cat, rev, grep, head, ls, ps, bins, xargs, man, sum,
+  loadFile, withOpen, readAll, read, write, err2, checkNoArgs, exit,
   ) where
 
 import Control.Monad (when)
@@ -10,7 +10,9 @@ import Interaction (Prompt(..))
 import MeNicks (Prog,Command(..),OpenMode(..),NoSuchPath(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
-import Prelude hiding (all,head,read)
+import Prelude hiding (head,read,sum)
+import Text.Read (readMaybe)
+import qualified Prelude
 import SysCall (SysCall(..),FD)
 import qualified Data.Map.Strict as Map
 import qualified MeNicks (Prog(..))
@@ -106,6 +108,21 @@ man docsMap  = do
         Nothing -> write stderr (me ++ " : no manual entry for '" ++ name ++ "'")
   mapM_ manline args
 
+sum :: Prog ()
+sum = do
+  Command(me,args) <- MeNicks.Argv
+  let
+    toInt :: String -> Prog Int
+    toInt s =
+      case readMaybe s of
+        Just n -> pure n
+        Nothing -> do
+          err2 (me ++ ": unable to convert '" ++ s ++ "' to a number")
+          pure 0
+  ns <- mapM toInt args
+  let res = Prelude.sum ns
+  write stdout (show res)
+
 checkNoArgs :: Prog () -> Prog ()
 checkNoArgs prog = do
   Command(com,args) <- MeNicks.Argv
@@ -130,7 +147,7 @@ withOpen path mode action =
   MeNicks.Call Open (path,mode) >>= \case
     Left NoSuchPath -> do
       err2 $ "no such path: " ++ Path.toString path
-      MeNicks.Exit
+      exit
     Right fd -> do
       res <- action fd
       MeNicks.Call Close fd
@@ -147,14 +164,14 @@ readAll fd = loop []
 read :: Prompt -> FD -> Prog (Either EOF String)
 read prompt fd =
   MeNicks.Call (Read prompt) fd >>= \case
-    Left NotReadable -> do err2 (show fd ++ " not readable"); MeNicks.Exit
+    Left NotReadable -> do err2 (show fd ++ " not readable"); exit
     Right eofOrLine -> pure eofOrLine
 
 write :: FD -> String -> Prog ()
 write fd line = do
   MeNicks.Call Write (fd,line) >>= \case
-    Left NotWritable -> do err2 (show fd ++ " not writable"); MeNicks.Exit
-    Right (Left EPIPE) -> MeNicks.Exit
+    Left NotWritable -> do err2 (show fd ++ " not writable"); exit
+    Right (Left EPIPE) -> exit
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()
@@ -163,6 +180,9 @@ err2 line = do
     Left NotWritable -> MeNicks.Trace (show stderr ++ " not writable")
     Right (Left EPIPE) -> MeNicks.Trace "EPIPE when writing to fd2"
     Right (Right ()) -> pure ()
+
+exit :: Prog a
+exit = MeNicks.Exit
 
 stdin,stdout,stderr :: FD
 stdin = 0

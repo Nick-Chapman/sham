@@ -1,7 +1,7 @@
 module Script (
   Script(..), WaitMode(..),
   Step(..), Redirect(..), RedirectSource(..),
-  Word(..),
+  Pred(..),Word(..),
   run,
   runScript, Env(..)
   ) where
@@ -10,7 +10,7 @@ import MeNicks (Pid(..),Prog,Command(..),OpenMode(..))
 import Prelude hiding (Word)
 import SysCall (FD(..),SysCall(..), BadFileDescriptor(..), PipeEnds(..))
 import qualified MeNicks (Prog(..))
-import Native (err2)
+import Native (err2,exit)
 import qualified Native (echo,write,withOpen,readAll)
 import qualified Path (create)
 
@@ -33,9 +33,14 @@ data Script
   = Null
   | ShamError String
   | Seq Script Script
-  | IfEq Word Word Script Script
+  | If Pred Script Script
   | Invoke1 Step WaitMode
   | Pipeline [Step] WaitMode
+  deriving Show
+
+data Pred
+  = Eq Word Word
+  | NotEq Word Word
   deriving Show
 
 data WaitMode = Wait | NoWait
@@ -46,7 +51,7 @@ data Step
   | SubShell Script [Redirect]
   deriving Show
 
-data Word = Word String | DollarN Int | DollarDollar
+data Word = Word String | DollarHash | DollarN Int | DollarDollar
   deriving Show
 
 data Redirect = Redirect OpenMode FD RedirectSource
@@ -62,10 +67,9 @@ runScript env = run where
     ShamError s -> err2 s
     Seq s1 s2 -> do run s1; run s2
 
-    IfEq w1 w2 s1 s2 -> do
-      x1 <- evalWord env w1
-      x2 <- evalWord env w2
-      run (if x1 == x2 then s1 else s2)
+    If pred s1 s2 -> do
+      b <- evalPred env pred
+      run (if b then s1 else s2)
 
     Null -> do
       pure ()
@@ -76,7 +80,6 @@ runScript env = run where
 
     Pipeline steps mode ->
       runPipeline env mode steps
-
 
 runPipeline :: Env -> WaitMode -> [Step] -> Prog ()
 runPipeline env wm steps = do
@@ -119,7 +122,6 @@ spawn1 command child parent = do
     Just pid -> parent pid
 
 
-
 runStep :: Env -> WaitMode -> Step -> Prog ()
 runStep env mode = \case
   Run w ws rs -> do
@@ -129,13 +131,29 @@ runStep env mode = \case
 
   SubShell{} -> undefined
 
+
+evalPred :: Env -> Pred -> Prog Bool
+evalPred env = \case
+  Eq w1 w2 -> do
+    x1 <- evalWord env w1
+    x2 <- evalWord env w2
+    pure (x1 == x2)
+  NotEq w1 w2 -> do
+    x1 <- evalWord env w1
+    x2 <- evalWord env w2
+    pure (x1 /= x2)
+
 evalWord :: Env -> Word -> Prog String
 evalWord Env{pid,com,args} = \case
   Word s -> pure s
   DollarDollar -> let (Pid n) = pid in pure $ show n
+  DollarHash -> pure $ show (length args)
   DollarN n ->
-    if n > length args then do err2 ("$" ++ show n ++ " unbound"); pure "" else
-      pure $ (com:args)!!n
+    if n > length args
+    then do
+      err2 ("$" ++ show n ++ " unbound")
+      pure ""
+    else pure $ (com:args)!!n
 
 decode :: String -> Act
 decode = \case
@@ -202,7 +220,7 @@ lookupCommand env name args =
     Just prog -> pure (Command (name,args),prog)
     Nothing -> do
       case lookNative env "sham" of
-        Nothing -> do err2 "cant find sham interpreter"; MeNicks.Exit
+        Nothing -> do err2 "cant find sham interpreter"; exit
         Just shamProg -> pure (Command ("sham",name:args),shamProg)
 
 
@@ -238,5 +256,5 @@ dup2 d s = do
   MeNicks.Call Dup2 (d,s) >>= \case
     Left BadFileDescriptor -> do
       err2 $ "bad file descriptor: " ++ show s
-      MeNicks.Exit
+      exit
     Right () -> pure ()

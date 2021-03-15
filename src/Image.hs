@@ -17,12 +17,13 @@ fs0 = FileSystem.create [ (Path.create p, File.create lines) | (p,lines) <- imag
     , ("cp"    , ["# cp SRC DEST: copy a file from SRC to DEST","cat $1 > $2"])
     , ("countdown", [
           "# countdown N: generate decrementing sequence of numbers starting at N",
+          "if $# != 1 echo countdown: takes one argument >&2",
+          "if $# != 1 exit",
           "echo $1",
-          "ifeq $1 42 echo boo",
-          "ifeq $1 0 exit",
-          "#sum $1 -1 | exec countdown #TODO: allow exec here!",
-          "#sum $1 -1 | countdown",
-          "sum $1 -1 | echo countdown"
+          --"if $1=0 ps #debug",
+          "if $1=0 exit",
+          --TODO: support backgrounded pipelines to avoid process explosion
+          "sum $1 -1 | xargs countdown"
           ])
     ]
 

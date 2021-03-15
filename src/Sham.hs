@@ -7,13 +7,13 @@ import Interaction (Prompt(..))
 import MeNicks (Prog(Trace),Command(..),OpenMode(..),WriteOpenMode(..))
 import Misc (EOF(..))
 import Prelude hiding (Word,read,fail)
-import Script (Script(..),Step(..),WaitMode(..),Redirect(..),RedirectSource(..),Word(..),)
+import Script (Script(..),Step(..),WaitMode(..),Redirect(..),RedirectSource(..),Pred(..),Word(..),)
 import SysCall (FD(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
 import qualified MeNicks (Prog(Argv,MyPid))
-import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,man,read,xargs,checkNoArgs,loadFile)
+import qualified Native (echo,cat,rev,grep,head,ls,ps,bins,man,read,xargs,sum,checkNoArgs,loadFile)
 import qualified Script (runScript,Env(..))
 
 
@@ -51,6 +51,8 @@ shamConsole level = runConsole level
         "list builtin executables")
       , ("man",Native.man docMap,
          "list the manual entries for the given commands")
+      , ("sum",Native.sum,
+         "write sum of the given numeric arguments to stdout")
       ]
 
     runCommand :: Command -> Prog ()
@@ -131,11 +133,24 @@ lang token = script0 where
   command = alts [ pipeline, conditional ]
 
   conditional = do
-    keyword "ifeq"
-    ws1; x1 <- word
-    ws1; x2 <- word
+    keyword "if"
+    ws1; p <- pred
     ws1; s <- step
-    pure $ IfEq x1 x2 (Invoke1 s Wait) Null
+    pure $ If p (Invoke1 s Wait) Null
+
+  pred = alts [equal,notEqual]
+
+  equal = do
+    x1 <- word
+    ws; keyword "="; ws
+    x2 <- word
+    pure (Eq x1 x2)
+
+  notEqual = do
+    x1 <- word
+    ws; keyword "!="; ws
+    x2 <- word
+    pure (NotEq x1 x2)
 
   pipeline = do
     (x,xs) <- parseListSep step (do ws; symbol '|'; ws)
@@ -188,14 +203,15 @@ lang token = script0 where
 
   word = alts [ Word <$> ident0
               , do keyword "$$"; pure DollarDollar
+              , do keyword "$#"; pure DollarHash
               , do keyword "$"; DollarN <$> digit
               ]
 
   keyword string = mapM_ symbol string
 
   ident0 = do
-    x <- alts [alpha,numer,dash,dot]
-    xs <- many (alts [alpha,numer,dash,dot])
+    x <- alts [alpha,numer,dash,dot,colon]
+    xs <- many (alts [alpha,numer,dash,dot,colon])
     pure (x : xs)
 
   digit = do c <- numer; pure (digitOfChar c)
@@ -204,6 +220,7 @@ lang token = script0 where
   numer = sat Char.isDigit
   dash = sat (== '-')
   dot = sat (== '.')
+  colon = sat (== ':')
   space = skip (sat Char.isSpace)
 
   symbol x = do t <-token; if t==x then pure () else fail
