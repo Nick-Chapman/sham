@@ -34,9 +34,7 @@ run sham = Testing.run sham $ do
   test ["echo README | xargs cat"] Image.readme
   test ["cat README | xargs echo"] [ unwords Image.readme ]
 
-  test ["README"] ["(stderr) unexpected '*' at position 12",
-                   "(stderr) unexpected ',' at position 38",
-                   "(stderr) unexpected ''' at position 6"]
+  test ["README"] ["(stderr) unexpected '*' at position 12"]
 
   test ["ls"] paths0
   test ["sham ls"] ["(stderr) no such path: ls"]
@@ -74,9 +72,15 @@ run sham = Testing.run sham $ do
   test ["sum 100 -1 0 200"] ["299"]
   test ["sum 100 -1 0 x200"] ["(stderr) sum: unable to convert 'x200' to a number","99"]
 
-  test ["countdown 0"] ["0"]
-  test ["countdown 3"] ["3","2","1","0"]
+  test ["countdown 0"] []
+  test ["countdown 1"] ["1"]
+  test ["countdown 3"] ["3","2","1"]
   test ["countdown -1 | head1"] ["-1"]
+
+  test ["countdown 3 | repeat-const hi"] ["hi","hi","hi"]
+  test ["cat days | head 3"] (take 3 days)
+  test ["head 3 < days"] (take 3 days)
+  test ["countdown -1 | head 3"] ["-1","-2","-3"]
 
   test ["help &"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]

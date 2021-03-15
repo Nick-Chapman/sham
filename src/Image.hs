@@ -15,16 +15,55 @@ fs0 = FileSystem.create [ (Path.create p, File.create lines) | (p,lines) <- imag
     , ("bomb"  , ["echo $$ >&2", "bomb | bomb"])
     , ("me"    , ["echo $$"])
     , ("cp"    , ["# cp SRC DEST: copy a file from SRC to DEST","cat $1 > $2"])
+
     , ("countdown", [
           "# countdown N: generate decrementing sequence of numbers starting at N",
+          "# if N is negative, the sequence will never stop",
           "if $# != 1 echo countdown: takes one argument >&2",
           "if $# != 1 exit",
-          "echo $1",
           --"if $1=0 ps #debug",
           "if $1=0 exit",
+          "echo $1",
           --TODO: support backgrounded pipelines to avoid process explosion
           "sum $1 -1 | xargs countdown"
           ])
+
+    , ("like-cat", [
+          "# like-cat: this script should have the same behavior as cat",
+          "read x",
+          "echo $x",
+          "like-cat"
+          ])
+
+    , ("repeat-const", [
+          "# repeat-const: output $1 per each line of input",
+          "if $# != 1 echo repeat-const: takes one argument >&2",
+          "if $# != 1 exit",
+          "read ignored",
+          "echo $1",
+          "repeat-const $1"])
+
+    , ("head", [
+          "# head N: take first N line from stdin",
+          "# if N is negative, this script will hang",
+          "if $# != 1 echo head: takes one numeric argument >&2",
+          "if $# != 1 exit",
+          "echo > tmp", -- TODO: fix ">>" so this is not necessary
+          "countdown $1 | repeat-const head1 >> tmp",
+          "tmp"
+          ])
+
+{-
+    , ("wip-head-needs-proc-sub", [
+          "# head N: take first N line from stdin",
+          "if $# != 1 echo head: takes one numeric argument >&2",
+          "if $# != 1 exit",
+          "if $1=0 exit",
+          "read | cat",
+          "exec head $(sum $1 -1)" -- TODO: support process substituion
+          ])
+-}
+
     ]
 
 readme :: [String]

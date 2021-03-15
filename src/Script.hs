@@ -1,7 +1,7 @@
 module Script (
   Script(..), WaitMode(..),
   Step(..), Redirect(..), RedirectSource(..),
-  Pred(..),Word(..),
+  Pred(..),Word(..),Var(..),
   run,
   runScript, Env(..)
   ) where
@@ -10,20 +10,28 @@ import MeNicks (Pid(..),Prog,Command(..),OpenMode(..))
 import Prelude hiding (Word)
 import SysCall (FD(..),SysCall(..), BadFileDescriptor(..), PipeEnds(..))
 import qualified MeNicks (Prog(..))
-import Native (err2,exit)
-import qualified Native (echo,write,withOpen,readAll)
+import Native (err2,exit,stdin)
+import qualified Native (echo,write,withOpen,readAll,read,write)
 import qualified Path (create)
+
+import qualified Data.Map.Strict as Map
+import Data.Map (Map)
+import Interaction (Prompt(..))
+import Misc (EOF(..))
+
 
 run :: (String -> Maybe (Prog ())) -> ([String] -> Script) -> Script -> Prog ()
 run lookNative shamParser script = do
   Command(com,args) <- MeNicks.Argv
   pid <- MeNicks.MyPid
-  let env = Env { pid, com, args, lookNative, shamParser }
+  let bindings = Map.empty
+  let env = Env { pid, com, args, bindings, lookNative, shamParser }
   runScript env script
 
 data Env = Env
   { com :: String
   , args :: [String]
+  , bindings :: Map Var String
   , pid :: Pid
   , lookNative :: String -> Maybe (Prog ())
   , shamParser :: [String] -> Script
@@ -34,6 +42,7 @@ data Script
   | ShamError String
   | Seq Script Script
   | If Pred Script Script
+  | ReadIntoVar Var
   | Invoke1 Step WaitMode
   | Pipeline [Step] WaitMode
   deriving Show
@@ -51,8 +60,18 @@ data Step
   | SubShell Script [Redirect]
   deriving Show
 
-data Word = Word String | DollarHash | DollarN Int | DollarDollar
+data Word
+  = Word String
+  | DollarHash
+  | DollarN Int
+  | DollarDollar
+  | DollarName Var
   deriving Show
+
+newtype Var = Var String
+  deriving (Eq,Ord)
+
+instance Show Var where show (Var s) = s
 
 data Redirect = Redirect OpenMode FD RedirectSource
   deriving Show
@@ -61,25 +80,39 @@ data RedirectSource = FromPath Word | FromFD FD
   deriving Show
 
 runScript :: Env -> Script -> Prog ()
-runScript env = run where
-  run :: Script -> Prog ()
-  run = \case
-    ShamError s -> err2 s
-    Seq s1 s2 -> do run s1; run s2
+runScript env0 script0 = loop env0 script0 (\_ -> pure ()) where
 
-    If pred s1 s2 -> do
+  loop :: Env -> Script -> (Env -> Prog ()) -> Prog ()
+  loop env = \case
+    ShamError s -> \_k -> do err2 s
+    Seq s1 s2 -> \k -> loop env s1 (\env -> loop env s2 k)
+
+    If pred s1 s2 -> \k -> do
       b <- evalPred env pred
-      run (if b then s1 else s2)
+      loop env (if b then s1 else s2) k
 
-    Null -> do
-      pure ()
+    ReadIntoVar x -> \k -> do
+      line <- builtinRead
+      let Env{bindings} = env
+      k env { bindings = Map.insert x line bindings }
 
-    Invoke1 step mode ->
+    Null -> \k -> do
+      k env
+
+    Invoke1 step mode -> \k -> do
       runStep env mode step
-      --runPipeline env mode [step] -- TODO: can it just be this?
+      k env
 
-    Pipeline steps mode ->
+    Pipeline steps mode -> \k -> do
       runPipeline env mode steps
+      k env
+
+builtinRead :: Prog String
+builtinRead =
+  Native.read NoPrompt stdin >>= \case
+    Left EOF -> exit
+    Right line -> return line
+
 
 runPipeline :: Env -> WaitMode -> [Step] -> Prog ()
 runPipeline env wm steps = do
@@ -144,7 +177,7 @@ evalPred env = \case
     pure (x1 /= x2)
 
 evalWord :: Env -> Word -> Prog String
-evalWord Env{pid,com,args} = \case
+evalWord Env{pid,com,args,bindings} = \case
   Word s -> pure s
   DollarDollar -> let (Pid n) = pid in pure $ show n
   DollarHash -> pure $ show (length args)
@@ -154,6 +187,13 @@ evalWord Env{pid,com,args} = \case
       err2 ("$" ++ show n ++ " unbound")
       pure ""
     else pure $ (com:args)!!n
+  DollarName x ->
+    case Map.lookup x bindings of
+      Nothing -> do
+        err2 ("$" ++ show x ++ " unbound")
+        pure ""
+      Just v ->
+        pure v
 
 decode :: String -> Act
 decode = \case
@@ -165,7 +205,7 @@ decode = \case
 
 data Act
   = Exit
-  | Echo
+  | Echo -- TODO: rename BuiltinEcho
   | SourceSham
   | RunExternal String
   | Exec
@@ -181,6 +221,7 @@ runAct env (rs,wm) args = \case
       _ -> err2 "exit takes no args, redirects, or (&)"
 
   Echo ->
+    -- TODO: check redirects/wait here & switch builtin/external echo
     echo env args (rs,wm)
 
   SourceSham -> do

@@ -7,7 +7,7 @@ import Interaction (Prompt(..))
 import MeNicks (Prog(Trace),Command(..),OpenMode(..),WriteOpenMode(..))
 import Misc (EOF(..))
 import Prelude hiding (Word,read,fail)
-import Script (Script(..),Step(..),WaitMode(..),Redirect(..),RedirectSource(..),Pred(..),Word(..),)
+import Script (Script(..),Step(..),WaitMode(..),Redirect(..),RedirectSource(..),Pred(..),Word(..),Var(..))
 import SysCall (FD(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
@@ -95,6 +95,7 @@ shamConsole level = runConsole level
             { pid
             , com = "sham"
             , args
+            , bindings = Map.empty
             , lookNative = \s -> Map.lookup s binMap
             , shamParser = parseLines
             }
@@ -110,6 +111,7 @@ parseLine str = do
       Left pe -> ShamError $ prettyParseError str pe
       Right script -> script
 
+-- TODO: when parsing a script it would be nice to see the line number for a parse error
 prettyParseError :: String -> ParseError -> String
 prettyParseError str = \case
   AmbiguityError (Ambiguity _ p1 p2) -> "ambiguous parse between positions " ++ show p1 ++ "--" ++ show p2
@@ -130,7 +132,7 @@ lang token = script0 where
 
   lineComment = do symbol '#'; skipWhile (skip token)
 
-  command = alts [ pipeline, conditional ]
+  command = alts [ pipeline, conditional, readIntoVar ]
 
   conditional = do
     keyword "if"
@@ -152,6 +154,11 @@ lang token = script0 where
     x2 <- word
     pure (NotEq x1 x2)
 
+  readIntoVar = do
+    keyword "read"
+    ws1; x <- varname
+    pure $ ReadIntoVar x
+
   pipeline = do
     (x,xs) <- parseListSep step (do ws; symbol '|'; ws)
     m <- mode
@@ -165,7 +172,7 @@ lang token = script0 where
 
   step = do
     (com,args) <- parseListSep word ws1
-    case com of Word "ifeq" -> fail; _ -> pure ()
+    case com of Word "read" -> fail; _ -> pure ()
     rs <- redirects
     pure $ Run com args rs
 
@@ -181,7 +188,7 @@ lang token = script0 where
 
   redirect = alts
     [ do
-        dest <- alts [ do eps; pure 0, do n <- fd; ws; pure n ]
+        dest <- alts [ do eps; pure 0, do n <- fd; pure n ]
         let mode = OpenForReading
         symbol '<'
         ws
@@ -205,9 +212,15 @@ lang token = script0 where
               , do keyword "$$"; pure DollarDollar
               , do keyword "$#"; pure DollarHash
               , do keyword "$"; DollarN <$> digit
+              , do keyword "$"; DollarName <$> varname
               ]
 
   keyword string = mapM_ symbol string
+
+  varname = Var <$> do
+    x <- alpha
+    xs <- many (alts [alpha,numer])
+    pure (x : xs)
 
   ident0 = do
     x <- alts [alpha,numer,dash,dot,colon]
