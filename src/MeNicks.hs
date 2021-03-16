@@ -68,11 +68,10 @@ data Action where
 
 resume :: Pid -> Proc -> State -> Interaction
 resume me proc0@(Proc{command=command0,env,action=action0}) state@State{os} =
-  --I_Trace (show ("resume",me,action0)) $
   case action0 of
 
   A_Halt -> do
-    --trace me "Halt" $ do
+    trace (me,proc0) "Halt" $ do
     let state' = state { os = closeEnv env os }
     --I_Trace (show state') $ do
     case choose state' of
@@ -86,7 +85,7 @@ resume me proc0@(Proc{command=command0,env,action=action0}) state@State{os} =
   A_Fork f -> do
     let state' = state { os = dupEnv env os }
     let (state'',pid) = newPid state'
-    --_trace me ("Fork:"++show pid) $ do
+    trace (me,proc0) ("Fork:"++show pid) $ do
     let child = proc0 { action = f Nothing }
     let parent = proc0 { action = f (Just pid) }
     yield me parent (suspend pid child state'')
@@ -95,7 +94,7 @@ resume me proc0@(Proc{command=command0,env,action=action0}) state@State{os} =
     yield me proc0 { command, action } state
 
   A_Wait pid action ->
-    --trace me ("Wait:"++show pid) $ do -- This happens a lot!
+    --trace (me,proc0) ("Wait:"++show pid) $ do -- This happens a lot!
     if running pid state
     then block me proc0 state
      -- TODO: resume instead of yield (less rr)

@@ -76,6 +76,7 @@ run sham = Testing.run sham $ do
   test ["cat days | grep u | head 1"] ["Tuesday"]
   test ["yes | head 1", "echo woo hoo"] ["yes","woo hoo"]
   test ["yes | head 2", "echo woo hoo"] ["yes","yes","woo hoo"]
+  test ["yes | head 1", "yes | head 1"] ["yes","yes"]
 
   test ["countdown 0"] []
   test ["countdown 1"] ["1"]

@@ -49,7 +49,7 @@ createPipe s@State{m,next=key} = do
 writePipe s@State{m} k str = do
   let (pipe,mode) = look "writePipe" k m
   case mode of
-    Drain -> error "writing to a draining pipe (closed for writing); should be impossible"
+    Drain -> error "writing to a draining pipe (closed for writing)"
     Unwatched -> Right (Left EPIPE)
     Active -> do
       case Pipe.write pipe str of
@@ -64,7 +64,7 @@ readPipe s@State{m} k = do
         Active -> Left Block
         Drain -> Right (Left EOF, s)
         Unwatched ->
-          error "reading from an unwatched pipe (closed for reading); should be impossible"
+          error "reading from an unwatched pipe (closed for reading)"
     Right (str,pipe) ->
       Right (Right str, s { m = Map.insert k (pipe,mode) m })
 
@@ -74,15 +74,15 @@ closeForReading s@State{m} k = do
     Active -> s { m = Map.insert k (pipe,Unwatched) m }
     Drain -> s { m = Map.delete k m }
     Unwatched ->
-      error "already closed for reading; should be impossible"
+      error "already closed for reading"
 
 closeForWriting s@State{m} k = do
   let (pipe,mode) = look "closeForWriting" k m
   case mode of
     Active -> s { m = Map.insert k (pipe,Drain) m }
-    Drain -> error "already closed for writing; should be impossible"
-    Unwatched -> s -- TODO: delete here?
+    Drain -> error "already closed for writing"
+    Unwatched -> s { m = Map.delete k m }
 
--- helper for map lookup
+
 look :: (Show k, Ord k) => String -> k -> Map k b -> b
 look tag k env = maybe (error (show (tag,k))) id (Map.lookup k env)
