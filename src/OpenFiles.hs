@@ -1,17 +1,6 @@
 module OpenFiles (
-  init,
-  OpenFiles,
-  Key,
-  devnull,
-  open, OpenMode(..), WriteOpenMode(..), OpenError(..),
-  pipe,
-  dup,
-  close,
-  Block(..),
-  read, EOF(..),
-  write, EPIPE(..),
-  ls,
-  loadBinary, LoadBinaryError(..),
+  init, OpenFiles, Key,
+  devnull, open, pipe, dup, close, read, write, ls, loadBinary,
   ) where
 
 import Data.List (intercalate)
@@ -21,10 +10,12 @@ import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnd
 import Path (Path)
 import PipeSystem (PipeSystem)
 import Prelude hiding (init,read)
+import Prog (Prog,OpenMode(..),WriteOpenMode(..),OpenError(..),LoadBinaryError(..))
 import qualified Data.Map.Strict as Map
-import qualified File (createData,accessData,accessProg,Prog)
-import qualified FileSystem (ls,read,link,safeUnlink)
-import qualified PipeSystem (Key,empty,createPipe,readPipe,writePipe,closeForReading,closeForWriting)
+import qualified File
+import qualified FileSystem
+import qualified PipeSystem
+
 
 data OpenFiles = OpenFiles
   { fs :: FileSystem
@@ -83,17 +74,6 @@ instance Show OpenFiles where
     "open: " ++ show table ++ "\n" ++
     "pipe: " ++ show ps
 
-data OpenMode
-  = OpenForReading -- creating if doesn't exist
-  | OpenForWriting WriteOpenMode -- rm, then append
-  deriving Show
-
-data WriteOpenMode = Truncate | Append deriving Show
-
-data OpenError
-  = OE_NoSuchPath
-  | OE_CantOpenForReading
-  deriving Show
 
 open :: OpenFiles -> Path -> OpenMode -> Either OpenError (Key,OpenFiles)
 open state@OpenFiles{nextKey=key,fs,table} path = \case
@@ -213,12 +193,7 @@ ls :: OpenFiles -> [Path]
 ls OpenFiles{fs} = FileSystem.ls fs
 
 
-data LoadBinaryError
-  = LBE_NoSuchPath
-  | LBE_CantLoadAsBinary
-  deriving Show
-
-loadBinary :: OpenFiles -> Path -> Either LoadBinaryError File.Prog
+loadBinary :: OpenFiles -> Path -> Either LoadBinaryError (Prog ())
 loadBinary OpenFiles{fs} path =
   case FileSystem.read fs path of
     Left NoSuchPath -> Left LBE_NoSuchPath

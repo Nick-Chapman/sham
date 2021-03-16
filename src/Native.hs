@@ -8,25 +8,24 @@ import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Interaction (Prompt(..))
-import MeNicks (Prog,Command(..),OpenMode(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
+import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,OpenError(..))
 import Text.Read (readMaybe)
-import qualified Prelude
-import SysCall (SysCall(..),FD,OpenError(..))
 import qualified Data.Map.Strict as Map
-import qualified MeNicks (Prog(..))
 import qualified Path (create,toString)
+import qualified Prelude
+import qualified Prog (Prog(..))
 
 echo :: Prog ()
 echo = do
-  Command(_,args) <- MeNicks.Argv
+  Command(_,args) <- Prog.Argv
   write stdout (unwords args)
 
 cat :: Prog ()
 cat = do
-  Command(_,args) <- MeNicks.Argv
+  Command(_,args) <- Prog.Argv
   case args of
     [] -> catFd stdin
     args -> sequence_ [ catProg1 (Path.create arg) | arg <- args ]
@@ -70,12 +69,12 @@ grep = do
 
 ls :: Prog ()
 ls = checkNoArgs $ do
-  paths <- MeNicks.Call Paths ()
+  paths <- Prog.Call Paths ()
   mapM_ (write stdout . Path.toString) (sort paths)
 
 ps :: Prog ()
 ps = checkNoArgs $ do
-  xs <- MeNicks.Procs
+  xs <- Prog.Procs
   sequence_
     [ write stdout (show pid ++ " " ++ show com)  | (pid,com) <- sortOn fst xs ]
 
@@ -85,7 +84,7 @@ bins names = checkNoArgs $ do
 
 xargs :: (Command -> Prog ()) -> Prog ()
 xargs runCommand = do
-  Command(me,args) <- MeNicks.Argv
+  Command(me,args) <- Prog.Argv
   case args of
     [] -> err2 (me ++ ": takes at least 1 argument")
     com:args -> do
@@ -94,7 +93,7 @@ xargs runCommand = do
 
 man :: Map String String -> Prog ()
 man docsMap  = do
-  Command(me,args) <- MeNicks.Argv
+  Command(me,args) <- Prog.Argv
   let
     manline :: String -> Prog ()
     manline name =
@@ -105,7 +104,7 @@ man docsMap  = do
 
 sum :: Prog ()
 sum = do
-  Command(me,args) <- MeNicks.Argv
+  Command(me,args) <- Prog.Argv
   let
     toInt :: String -> Prog Int
     toInt s =
@@ -120,14 +119,14 @@ sum = do
 
 checkNoArgs :: Prog () -> Prog ()
 checkNoArgs prog = do
-  Command(com,args) <- MeNicks.Argv
+  Command(com,args) <- Prog.Argv
   case args of
     [] -> prog
     _ -> err2 (com ++ ": takes no arguments")
 
 getSingleArg :: (String -> Prog ()) -> Prog ()
 getSingleArg f = do
-  Command(com,args) <- MeNicks.Argv
+  Command(com,args) <- Prog.Argv
   case args of
     [arg] -> f arg
     _ -> err2 (com ++ ": takes a single argument")
@@ -139,7 +138,7 @@ loadFile path = do
 
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
-  MeNicks.Call Open (path,mode) >>= \case
+  Prog.Call Open (path,mode) >>= \case
     Left OE_NoSuchPath -> do
       err2 $ "no such path: " ++ Path.toString path
       exit
@@ -148,7 +147,7 @@ withOpen path mode action =
       exit
     Right fd -> do
       res <- action fd
-      MeNicks.Call Close fd
+      Prog.Call Close fd
       pure res
 
 readAll :: FD -> Prog [String]
@@ -161,26 +160,26 @@ readAll fd = loop []
 
 read :: Prompt -> FD -> Prog (Either EOF String)
 read prompt fd =
-  MeNicks.Call (Read prompt) fd >>= \case
+  Prog.Call (Read prompt) fd >>= \case
     Left NotReadable -> do err2 (show fd ++ " not readable"); exit
     Right eofOrLine -> pure eofOrLine
 
 write :: FD -> String -> Prog ()
 write fd line = do
-  MeNicks.Call Write (fd,line) >>= \case
+  Prog.Call Write (fd,line) >>= \case
     Left NotWritable -> do err2 (show fd ++ " not writable"); exit
     Right (Left EPIPE) -> exit
     Right (Right ()) -> pure ()
 
 err2 :: String -> Prog ()
 err2 line = do
-  MeNicks.Call Write (stderr, line) >>= \case
-    Left NotWritable -> MeNicks.Trace (show stderr ++ " not writable")
-    Right (Left EPIPE) -> MeNicks.Trace "EPIPE when writing to fd2"
+  Prog.Call Write (stderr, line) >>= \case
+    Left NotWritable -> Prog.Trace (show stderr ++ " not writable")
+    Right (Left EPIPE) -> Prog.Trace "EPIPE when writing to fd2"
     Right (Right ()) -> pure ()
 
 exit :: Prog a
-exit = MeNicks.Exit
+exit = Prog.Exit
 
 stdin,stdout,stderr :: FD
 stdin = 0

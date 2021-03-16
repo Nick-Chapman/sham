@@ -6,24 +6,22 @@ module Script (
   runScript, Env(..)
   ) where
 
-import MeNicks (Pid(..),Prog,Command(..),OpenMode(..))
-import Prelude hiding (Word)
-import SysCall (FD(..),SysCall(..), BadFileDescriptor(..), PipeEnds(..), LoadBinaryError(..))
-import qualified MeNicks (Prog(..))
-import Native (err2,exit,stdin)
-import qualified Native (echo,write,withOpen,readAll,read,write)
-import qualified Path (create)
-
-import qualified Data.Map.Strict as Map
 import Data.Map (Map)
 import Interaction (Prompt(..))
 import Misc (EOF(..))
-
+import Misc (PipeEnds(..))
+import Native (err2,exit,stdin)
+import Prelude hiding (Word)
+import Prog (FD(..),SysCall(..),BadFileDescriptor(..),LoadBinaryError(..),Pid(..),Prog,Command(..),OpenMode(..))
+import qualified Data.Map.Strict as Map
+import qualified Native (echo,write,withOpen,readAll,read,write)
+import qualified Path (create)
+import qualified Prog (Prog(..))
 
 run :: (String -> Maybe (Prog ())) -> ([String] -> Script) -> Script -> Prog ()
 run lookNative shamParser script = do
-  Command(com,args) <- MeNicks.Argv
-  pid <- MeNicks.MyPid
+  Command(com,args) <- Prog.Argv
+  pid <- Prog.MyPid
   let bindings = Map.empty
   let env = Env { pid, com, args, bindings, lookNative, shamParser }
   runScript env script
@@ -128,30 +126,30 @@ runPipeline env wm steps = do
 
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
-  PipeEnds{r,w} <- MeNicks.Call SysPipe ()
+  PipeEnds{r,w} <- Prog.Call SysPipe ()
   let com1 = Command ("LEFT",[])
   let com2 = Command ("RIGHT",[])
   spawn1 com1 (do -- TODO: use the name of the actual pipe commands!
                dup2 (FD 1) w
-               MeNicks.Call Close w
-               MeNicks.Call Close r
+               Prog.Call Close w
+               Prog.Call Close r
                prog1
            ) $ \child1 -> do
     spawn1 com2 (do
                  dup2 (FD 0) r
-                 MeNicks.Call Close w
-                 MeNicks.Call Close r
+                 Prog.Call Close w
+                 Prog.Call Close r
                  prog2
              ) $ \child2 -> do
-      MeNicks.Call Close w
-      MeNicks.Call Close r
-      MeNicks.Wait child1
-      MeNicks.Wait child2
+      Prog.Call Close w
+      Prog.Call Close r
+      Prog.Wait child1
+      Prog.Wait child2
 
 spawn1 :: Command -> Prog () -> (Pid -> Prog a) -> Prog a
 spawn1 command child parent = do
-  MeNicks.Fork >>= \case
-    Nothing -> MeNicks.Exec command child
+  Prog.Fork >>= \case
+    Nothing -> Prog.Exec command child
     Just pid -> parent pid
 
 
@@ -217,7 +215,7 @@ runAct env (rs,wm) args = \case
 
   Exit ->
     case (rs,wm,args) of
-      ([],Wait,[]) -> MeNicks.Exit
+      ([],Wait,[]) -> Prog.Exit
       _ -> err2 "exit takes no args, redirects, or (&)"
 
   Echo ->
@@ -244,7 +242,7 @@ runAct env (rs,wm) args = \case
           [] -> pure ()
           name:args -> do
             (command,prog) <- lookupCommand env name args
-            MeNicks.Exec command prog
+            Prog.Exec command prog
 
 
 loadShamScript :: Env -> String -> Prog Script
@@ -271,9 +269,8 @@ lookupCommand env name args =
 
 tryLoadBinary :: String -> Prog (Maybe (Prog ()))
 tryLoadBinary name = do
-  MeNicks.Call LoadBinary (Path.create name) >>= \case
-    Right dummy -> do
-      let prog = undefined dummy
+  Prog.Call LoadBinary (Path.create name) >>= \case
+    Right prog -> do
       pure (Just prog)
     Left LBE_CantLoadAsBinary -> do
       pure Nothing
@@ -293,12 +290,12 @@ echo env args = \case
 
 runCommandInProcess :: Env -> Context -> Command -> Prog () -> Prog ()
 runCommandInProcess env (rs,mode) command prog = do
-  MeNicks.Fork >>= \case
+  Prog.Fork >>= \case
     Nothing -> do
       mapM_ (execRedirect env) rs
-      MeNicks.Exec command prog
+      Prog.Exec command prog
     Just pid -> case mode of
-      Wait -> MeNicks.Wait pid
+      Wait -> Prog.Wait pid
       NoWait -> pure ()
 
 
@@ -313,7 +310,7 @@ execRedirect env = \case
 
 dup2 :: FD -> FD -> Prog ()
 dup2 d s = do
-  MeNicks.Call Dup2 (d,s) >>= \case
+  Prog.Call Dup2 (d,s) >>= \case
     Left BadFileDescriptor -> do
       err2 $ "bad file descriptor: " ++ show s
       exit

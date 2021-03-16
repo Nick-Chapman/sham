@@ -1,39 +1,15 @@
-module MeNicks (
-  Prog(..), Pid(..),Command(..),
-  SysCall(..),
-  OpenMode(..), WriteOpenMode(..), NoSuchPath(..), FD(..),
-  run,
-  ) where
+module MeNicks (Prog, run) where
 
-import Control.Monad (ap,liftM)
 import Data.Map (Map)
-import FileSystem (FileSystem,NoSuchPath(..))
+import FileSystem (FileSystem)
 import Interaction (Interaction(..))
 import Misc (Block(..))
-import OpenFiles (OpenFiles,OpenMode(..),WriteOpenMode(..))
-import SysCall (SysCall(..),Env,env0,dupEnv,closeEnv,runSys,FD(..))
+import OpenFiles (OpenFiles)
+import SysCall (Env,env0,dupEnv,closeEnv,runSys)
 import qualified Data.Map.Strict as Map
 import qualified OpenFiles (init)
 
-instance Functor Prog where fmap = liftM
-instance Applicative Prog where pure = return; (<*>) = ap
-instance Monad Prog where return = Ret; (>>=) = Bind
-
-data Command = Command { argv :: (String,[String]) }
-instance Show Command where show (Command (x,xs)) = unwords (x:xs)
-
-data Prog a where
-  Ret :: a -> Prog a
-  Bind :: Prog a -> (a -> Prog b) -> Prog b
-  Exit :: Prog a
-  Trace :: String -> Prog ()
-  Fork :: Prog (Maybe Pid)
-  Exec :: Command -> Prog a -> Prog b
-  Wait :: Pid -> Prog ()
-  Argv :: Prog Command
-  MyPid :: Prog Pid
-  Procs :: Prog [(Pid,Command)]
-  Call :: (Show a,Show b) => SysCall a b -> a -> Prog b
+import Prog (Prog(..),Pid(..),Command(..),SysCall)
 
 run :: FileSystem -> Prog () -> Interaction
 run fs prog = do
@@ -64,7 +40,7 @@ data Action where
   A_Argv :: (Command -> Action) -> Action
   A_MyPid :: (Pid -> Action) -> Action
   A_Procs :: ([(Pid,Command)] -> Action) -> Action
-  A_Call :: (Show a, Show b) => SysCall a b -> a -> (b -> Action) -> Action
+  A_Call :: (Show a) => SysCall a b -> a -> (b -> Action) -> Action
 
 resume :: Pid -> Proc -> State -> Interaction
 resume me proc0@(Proc{command=command0,env,action=action0}) state@State{os} =
@@ -116,7 +92,8 @@ resume me proc0@(Proc{command=command0,env,action=action0}) state@State{os} =
         block me proc0 state
       Right proceed -> do
         proceed $ \os env res -> do
-          trace (me,proc0) (show sys ++ show arg ++" --> " ++ show res) $ do
+          -- TODO: Cant show res because of LoadBinary syscall
+          --trace (me,proc0) (show sys ++ show arg ++" --> " ++ show res) $ do
           --trace me ("env: " ++ show env) $ do
           let state' = state { os }
           --I_Trace (show state') $ do
@@ -143,9 +120,6 @@ yield me proc1 state = do
       resume other proc2 (suspend me proc1 state)
 
 data Proc = Proc { command :: Command, env :: Env, action :: Action }
-
-newtype Pid = Pid Int deriving (Eq,Ord,Num)
-instance Show Pid where show (Pid n) = "[" ++ show n ++ "]"
 
 data State = State
   { os :: OpenFiles

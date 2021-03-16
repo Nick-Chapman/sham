@@ -1,17 +1,17 @@
 module Image (fs0,readme,days) where
 
 import FileSystem (FileSystem)
-import qualified FileSystem (create)
-import qualified Path (create)
 import qualified File (createData,createProg)
---import qualified Native (ps)
+import qualified FileSystem (create)
+import qualified Native (ps)
+import qualified Path (create)
 
 fs0 :: FileSystem
 fs0 = FileSystem.create image where
   image =
     [ (Path.create p, File.createData lines) | (p,lines) <- scripts ] ++
     [ (Path.create p, File.createProg prog) | (p,prog) <- bins ]
-  bins = [] --("ps1",undefined Native.ps)]
+  bins = [("ps1",Native.ps)]
   scripts  =
     [ ("README", readme)
     , ("days"  , days)

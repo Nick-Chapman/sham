@@ -1,43 +1,16 @@
 module SysCall (
-  SysCall(..),runSys,
+  SysCall,runSys,
   Env,env0,dupEnv,closeEnv,
-  FD(..), BadFileDescriptor(..), PipeEnds(..),OpenError(..), LoadBinaryError(..),
   ) where
 
 import Data.List (intercalate)
 import Data.Map (Map)
-import Interaction (Interaction(..),Prompt,OutMode(..))
+import Interaction (Interaction(..),OutMode(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
-import OpenFiles (OpenFiles,OpenMode(..),OpenError(..),LoadBinaryError(..))
-import Path (Path)
+import OpenFiles (OpenFiles)
+import Prog (SysCall(..),FD(..),BadFileDescriptor(..))
 import qualified Data.Map.Strict as Map
 import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write,devnull,loadBinary)
-import qualified File (Prog)
-
-data SysCall a b where
-  LoadBinary :: SysCall Path (Either LoadBinaryError File.Prog)
-  Open :: SysCall (Path,OpenMode) (Either OpenError FD)
-  Close :: SysCall FD ()
-  Dup2 :: SysCall (FD,FD) (Either BadFileDescriptor ())
-  Read :: Prompt -> SysCall FD (Either NotReadable (Either EOF String))
-  Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
-  Paths :: SysCall () [Path]
-  SysPipe :: SysCall () (PipeEnds FD)
-  Unused :: SysCall () FD -- TODO: for used for by with redirectsa
-
-data BadFileDescriptor = BadFileDescriptor deriving Show
-
-instance Show (SysCall a b) where -- TODO: automate?
-  show = \case
-    LoadBinary -> "LoadBinary"
-    Open -> "Open"
-    Close -> "Close"
-    Dup2 -> "Dup2"
-    Read _ -> "Read"
-    Write -> "Write"
-    Paths -> "Paths"
-    SysPipe -> "Pipe"
-    Unused -> "Unused"
 
 runSys :: SysCall a b ->
   OpenFiles -> Env -> a ->
@@ -197,11 +170,6 @@ closeTarget tar s =
   case tar of
     File key -> snd (OpenFiles.close s key)
     Console{}-> s
-
-newtype FD = FD Int
-  deriving (Eq,Ord,Enum,Num)
-
-instance Show FD where show (FD n) = "&" ++ show n
 
 smallestUnused :: Env -> FD
 smallestUnused (Env m) = head [ fd | fd <- [FD 0..], fd `notElem` used ]

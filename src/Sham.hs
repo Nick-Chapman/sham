@@ -4,16 +4,15 @@ module Sham (shamConsole) where
 import Data.Map (Map)
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile,ParseError(..),Ambiguity(..),SyntaxError(..))
 import Interaction (Prompt(..))
-import MeNicks (Prog(Trace),Command(..),OpenMode(..),WriteOpenMode(..))
 import Misc (EOF(..))
 import Prelude hiding (Word,read,fail)
+import Prog (Prog(Trace),FD(..),Command(..),OpenMode(..),WriteOpenMode(..))
 import Script (Script(..),Step(..),WaitMode(..),Redirect(..),RedirectSource(..),Pred(..),Word(..),Var(..))
-import SysCall (FD(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
-import qualified MeNicks (Prog(Argv,MyPid))
 import qualified Native (echo,cat,rev,grep,ls,ps,bins,man,read,xargs,sum,checkNoArgs,loadFile)
+import qualified Prog (Prog(Argv,MyPid))
 import qualified Script (runScript,Env(..))
 
 
@@ -61,12 +60,12 @@ shamConsole level = runConsole level
 
     sham :: Int -> Prog ()
     sham level = do
-      Command(_,args) <- MeNicks.Argv
+      Command(_,args) <- Prog.Argv
       case args of
         [] -> runConsole level
         "-c":args -> do
           let script = parseLine (unwords args)
-          MeNicks.Trace (show script) -- for debug
+          Prog.Trace (show script) -- for debug
           runScript script []
         path:args -> do
           lines <- Native.loadFile path
@@ -82,13 +81,13 @@ shamConsole level = runConsole level
           Left EOF -> pure ()
           Right line -> do
             let script = parseLine line
-            let _ = MeNicks.Trace (show script) -- for debug
+            let _ = Prog.Trace (show script) -- for debug
             runScript script []
             loop (n+1)
 
     runScript :: Script -> [String] -> Prog ()
     runScript script args = do
-      pid <- MeNicks.MyPid
+      pid <- Prog.MyPid
       let env = Script.Env
             { pid
             , com = "sham"
