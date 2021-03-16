@@ -13,7 +13,7 @@ import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
 import qualified MeNicks (Prog(Argv,MyPid))
-import qualified Native (echo,cat,rev,grep,head1,ls,ps,bins,man,read,xargs,sum,checkNoArgs,loadFile)
+import qualified Native (echo,cat,rev,grep,ls,ps,bins,man,read,xargs,sum,checkNoArgs,loadFile)
 import qualified Script (runScript,Env(..))
 
 
@@ -37,8 +37,6 @@ shamConsole level = runConsole level
         "copy stdin to stdout, reversing each line")
       , ("grep",Native.grep,
         "copy lines which match the given pattern to stdout ")
-      , ("head1",Native.head1,
-        "copy just the first line on stdin to stdout, then exit")
       , ("ls",Native.ls,
         "list all files on the filesystem")
       , ("ps",Native.ps,

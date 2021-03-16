@@ -35,13 +35,17 @@ fs0 = FileSystem.create [ (Path.create p, File.create lines) | (p,lines) <- imag
           "like-cat"
           ])
 
-    , ("repeat-const", [
-          "# repeat-const: output $1 per each line of input",
-          "if $# != 1 echo repeat-const: takes one argument >&2",
-          "if $# != 1 exit",
+    , ("head-1", [
+          "# head-1: copy the first line on stdin to stdout",
+          "read x",
+          "echo $x"
+          ])
+
+    , ("make-head-N", [
+          "# make-head: output a head-script for N determined by size of input",
           "read ignored",
-          "echo $1",
-          "repeat-const $1"])
+          "echo head-1",
+          "make-head-N"])
 
     , ("head", [
           "# head N: take first N line from stdin",
@@ -49,7 +53,7 @@ fs0 = FileSystem.create [ (Path.create p, File.create lines) | (p,lines) <- imag
           "if $# != 1 echo head: takes one numeric argument >&2",
           "if $# != 1 exit",
           "echo > tmp", -- TODO: fix ">>" so this is not necessary
-          "countdown $1 | repeat-const head1 >> tmp",
+          "countdown $1 | make-head-N >> tmp",
           "tmp"
           ])
 

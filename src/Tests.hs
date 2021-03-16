@@ -16,7 +16,7 @@ run sham = Testing.run sham $ do
   let paths0 = map Path.toString (FileSystem.ls Image.fs0)
 
   -- TODO: make this test less fragile
-  test ["bins"] ["bins","cat","echo","grep","head1","ls","man","ps","rev","sham","sum", "xargs"]
+  test ["bins"] ["bins","cat","echo","grep","ls","man","ps","rev","sham","sum", "xargs"]
 
   test ["echo foo"] ["foo"]
   test ["sham echo foo"] ["(stderr) no such path: echo"]
@@ -72,12 +72,16 @@ run sham = Testing.run sham $ do
   test ["sum 100 -1 0 200"] ["299"]
   test ["sum 100 -1 0 x200"] ["(stderr) sum: unable to convert 'x200' to a number","99"]
 
+  test ["cat days | head 1"] ["Monday"]
+  test ["cat days | grep u | head 1"] ["Tuesday"]
+  test ["yes | head 1", "echo woo hoo"] ["yes","woo hoo"]
+  test ["yes | head 2", "echo woo hoo"] ["yes","yes","woo hoo"]
+
   test ["countdown 0"] []
   test ["countdown 1"] ["1"]
   test ["countdown 3"] ["3","2","1"]
-  test ["countdown -1 | head1"] ["-1"]
+  test ["countdown -1 | head-1"] ["-1"]
 
-  test ["countdown 3 | repeat-const hi"] ["hi","hi","hi"]
   test ["cat days | head 3"] (take 3 days)
   test ["head 3 < days"] (take 3 days)
   test ["countdown -1 | head 3"] ["-1","-2","-3"]
@@ -153,8 +157,6 @@ run sham = Testing.run sham $ do
   test ["ps"] ["[1] init","[2] ps"]
   test ["cat days | grep u"] [ d | d <- days, "u" `isInfixOf` d ]
   test ["grep"] ["(stderr) grep: takes a single argument"]
-  test ["cat days | head1"] ["Monday"]
-  test ["cat days | grep u | head1"] ["Tuesday"]
 
   test ["echo my pid is $$"] ["my pid is 1"]
 
@@ -163,5 +165,3 @@ run sham = Testing.run sham $ do
   test ["exec me"] ["1"]
   test ["cat me > a","echo me >> a","a","me"] ["4","5","6"]
   test ["cat me > a","echo exec me >> a","a","me"] ["4","4","5"]
-
-  test ["yes | head1", "echo woo hoo"] ["yes","woo hoo"]
