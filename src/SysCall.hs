@@ -1,21 +1,22 @@
 module SysCall (
   SysCall(..),runSys,
   Env,env0,dupEnv,closeEnv,
-  FD(..), BadFileDescriptor(..), PipeEnds(..),
+  FD(..), BadFileDescriptor(..), PipeEnds(..),OpenError(..), LoadBinaryError(..),
   ) where
 
 import Data.List (intercalate)
 import Data.Map (Map)
-import FileSystem (NoSuchPath(..))
 import Interaction (Interaction(..),Prompt,OutMode(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
-import OpenFiles (OpenFiles,OpenMode(..))
+import OpenFiles (OpenFiles,OpenMode(..),OpenError(..),LoadBinaryError(..))
 import Path (Path)
 import qualified Data.Map.Strict as Map
-import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write,devnull)
+import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write,devnull,loadBinary)
+import qualified File (Prog)
 
 data SysCall a b where
-  Open :: SysCall (Path,OpenMode) (Either NoSuchPath FD)
+  LoadBinary :: SysCall Path (Either LoadBinaryError File.Prog)
+  Open :: SysCall (Path,OpenMode) (Either OpenError FD)
   Close :: SysCall FD ()
   Dup2 :: SysCall (FD,FD) (Either BadFileDescriptor ())
   Read :: Prompt -> SysCall FD (Either NotReadable (Either EOF String))
@@ -28,6 +29,7 @@ data BadFileDescriptor = BadFileDescriptor deriving Show
 
 instance Show (SysCall a b) where -- TODO: automate?
   show = \case
+    LoadBinary -> "LoadBinary"
     Open -> "Open"
     Close -> "Close"
     Dup2 -> "Dup2"
@@ -42,6 +44,11 @@ runSys :: SysCall a b ->
   Either Block ((OpenFiles -> Env -> b -> Interaction) -> Interaction)
 
 runSys sys s env arg = case sys of
+
+  LoadBinary -> do
+    let path = arg
+    let res =  OpenFiles.loadBinary s path
+    Right $ \k -> k s env res
 
   Unused -> do
     let fd = smallestUnused env
@@ -62,9 +69,9 @@ runSys sys s env arg = case sys of
   Open -> do
     let (path,mode) = arg
     case OpenFiles.open s path mode of
-      Left NoSuchPath -> do
+      Left err -> do
         Right $ \k ->
-          k s env (Left NoSuchPath)
+          k s env (Left err)
       Right (key,s) -> do
         Right $ \k -> do
           let fd = smallestUnused env

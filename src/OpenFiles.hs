@@ -3,7 +3,7 @@ module OpenFiles (
   OpenFiles,
   Key,
   devnull,
-  open, OpenMode(..), WriteOpenMode(..),
+  open, OpenMode(..), WriteOpenMode(..), OpenError(..),
   pipe,
   dup,
   close,
@@ -11,6 +11,7 @@ module OpenFiles (
   read, EOF(..),
   write, EPIPE(..),
   ls,
+  loadBinary, LoadBinaryError(..),
   ) where
 
 import Data.List (intercalate)
@@ -21,7 +22,7 @@ import Path (Path)
 import PipeSystem (PipeSystem)
 import Prelude hiding (init,read)
 import qualified Data.Map.Strict as Map
-import qualified File (empty,append,lines)
+import qualified File (createData,accessData,accessProg,Prog)
 import qualified FileSystem (ls,read,link,safeUnlink)
 import qualified PipeSystem (Key,empty,createPipe,readPipe,writePipe,closeForReading,closeForWriting)
 
@@ -89,17 +90,25 @@ data OpenMode
 
 data WriteOpenMode = Truncate | Append deriving Show
 
-open :: OpenFiles -> Path -> OpenMode -> Either NoSuchPath (Key,OpenFiles)
+data OpenError
+  = OE_NoSuchPath
+  | OE_CantOpenForReading
+  deriving Show
+
+open :: OpenFiles -> Path -> OpenMode -> Either OpenError (Key,OpenFiles)
 open state@OpenFiles{nextKey=key,fs,table} path = \case
   OpenForReading{} -> do
     let nextKey = key+1
     case FileSystem.read fs path of
-      Left NoSuchPath -> Left NoSuchPath
+      Left NoSuchPath -> Left OE_NoSuchPath
       Right file -> do
-        let entry = Entry { rc = 1, what = FileContents (File.lines file) }
-        let table' = Tab (Map.insert key entry (unTab table))
-        let state' = state { nextKey, table = table' }
-        Right (key,state')
+        case File.accessData file of
+          Nothing -> Left OE_CantOpenForReading
+          Just contents -> do
+            let entry = Entry { rc = 1, what = FileContents contents }
+            let table' = Tab (Map.insert key entry (unTab table))
+            let state' = state { nextKey, table = table' }
+            Right (key,state')
   OpenForWriting wom -> do
     let
       fs' = case wom of
@@ -190,15 +199,33 @@ write state@OpenFiles{table,pipeSystem,fs} key line = do
         Right (Right pipeSystem) -> Right (Right (Right state { pipeSystem }))
     FileAppend path -> do
       let file = case FileSystem.read fs path of
-            Left NoSuchPath -> File.empty
+            Left NoSuchPath -> File.createData []
             Right file -> file
-      let file' = File.append file line
-      let fs' = FileSystem.link fs path file'
-      Right (Right (Right state { fs = fs' }))
+      case File.accessData file of
+        Nothing -> Left NotWritable
+        Just lines -> do
+          let file' = File.createData (lines ++ [line])
+          let fs' = FileSystem.link fs path file'
+          Right (Right (Right state { fs = fs' }))
 
 
 ls :: OpenFiles -> [Path]
 ls OpenFiles{fs} = FileSystem.ls fs
+
+
+data LoadBinaryError
+  = LBE_NoSuchPath
+  | LBE_CantLoadAsBinary
+  deriving Show
+
+loadBinary :: OpenFiles -> Path -> Either LoadBinaryError File.Prog
+loadBinary OpenFiles{fs} path =
+  case FileSystem.read fs path of
+    Left NoSuchPath -> Left LBE_NoSuchPath
+    Right file ->
+      case File.accessProg file of
+        Nothing -> Left LBE_CantLoadAsBinary
+        Just prog -> Right prog
 
 -- helper for map lookup
 look :: (Show k, Ord k) => String -> k -> Map k b -> b

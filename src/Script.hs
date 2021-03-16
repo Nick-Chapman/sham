@@ -8,7 +8,7 @@ module Script (
 
 import MeNicks (Pid(..),Prog,Command(..),OpenMode(..))
 import Prelude hiding (Word)
-import SysCall (FD(..),SysCall(..), BadFileDescriptor(..), PipeEnds(..))
+import SysCall (FD(..),SysCall(..), BadFileDescriptor(..), PipeEnds(..), LoadBinaryError(..))
 import qualified MeNicks (Prog(..))
 import Native (err2,exit,stdin)
 import qualified Native (echo,write,withOpen,readAll,read,write)
@@ -257,12 +257,31 @@ loadShamScript env path = do
 
 lookupCommand :: Env -> String -> [String] -> Prog (Command,Prog ())
 lookupCommand env name args =
-  case lookNative env name of
-    Just prog -> pure (Command (name,args),prog)
+  case lookNative env name of  -- TODO: lookNative will be killed
+    Just prog ->
+      pure (Command (name,args),prog)
     Nothing -> do
-      case lookNative env "sham" of
-        Nothing -> do err2 "cant find sham interpreter"; exit
-        Just shamProg -> pure (Command ("sham",name:args),shamProg)
+      tryLoadBinary name >>= \case
+        Just prog ->
+          pure (Command (name,args),prog)
+        Nothing ->
+          case lookNative env "sham" of
+            Nothing -> do err2 "cant find sham interpreter"; exit
+            Just shamProg -> pure (Command ("sham",name:args),shamProg)
+
+tryLoadBinary :: String -> Prog (Maybe (Prog ()))
+tryLoadBinary name = do
+  MeNicks.Call LoadBinary (Path.create name) >>= \case
+    Right dummy -> do
+      let prog = undefined dummy
+      pure (Just prog)
+    Left LBE_CantLoadAsBinary -> do
+      pure Nothing
+    Left LBE_NoSuchPath -> do
+      -- TODO: err2/exit, but tests will need updating
+      --err2 $ "no such executable: " ++ name
+      --exit
+      pure Nothing
 
 
 echo :: Env -> [String] -> Context -> Prog ()

@@ -8,13 +8,13 @@ import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Interaction (Prompt(..))
-import MeNicks (Prog,Command(..),OpenMode(..),NoSuchPath(..))
+import MeNicks (Prog,Command(..),OpenMode(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
 import Text.Read (readMaybe)
 import qualified Prelude
-import SysCall (SysCall(..),FD)
+import SysCall (SysCall(..),FD,OpenError(..))
 import qualified Data.Map.Strict as Map
 import qualified MeNicks (Prog(..))
 import qualified Path (create,toString)
@@ -140,8 +140,11 @@ loadFile path = do
 withOpen :: Path -> OpenMode -> (FD -> Prog a) -> Prog a
 withOpen path mode action =
   MeNicks.Call Open (path,mode) >>= \case
-    Left NoSuchPath -> do
+    Left OE_NoSuchPath -> do
       err2 $ "no such path: " ++ Path.toString path
+      exit
+    Left OE_CantOpenForReading -> do
+      err2 $ "cant open for reading: " ++ Path.toString path
       exit
     Right fd -> do
       res <- action fd
