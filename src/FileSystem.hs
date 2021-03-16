@@ -3,7 +3,7 @@ module FileSystem (
   ls,
   link,
   exists,
-  read, unlink, NoSuchPath(..),
+  read, unlink,
   safeUnlink,
   ) where
 
@@ -11,9 +11,8 @@ import Data.Map (Map)
 import File (File)
 import Path (Path)
 import Prelude hiding (read,words)
+import Prog (NoSuchPath(..))
 import qualified Data.Map.Strict as Map
-
-data NoSuchPath = NoSuchPath deriving Show
 
 create :: [(Path,File)] -> FileSystem
 ls :: FileSystem -> [Path]

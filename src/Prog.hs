@@ -1,7 +1,7 @@
 module Prog (
-  Prog(..), SysCall(..),
+  Prog(..), SysCall(..), FileKind(..),BinaryMeta(..),
   OpenMode(..), WriteOpenMode(..),
-  BadFileDescriptor(..), OpenError(..), LoadBinaryError(..),
+  BadFileDescriptor(..), OpenError(..), LoadBinaryError(..), NoSuchPath(..),
   Command(..), FD(..), Pid(..)
   ) where
 
@@ -42,6 +42,7 @@ instance Monad Prog where return = Ret; (>>=) = Bind
 
 data SysCall a b where
   LoadBinary :: SysCall Path (Either LoadBinaryError (Prog ()))
+  Kind :: SysCall Path (Either NoSuchPath FileKind)
   Open :: SysCall (Path,OpenMode) (Either OpenError FD)
   Close :: SysCall FD ()
   Dup2 :: SysCall (FD,FD) (Either BadFileDescriptor ())
@@ -50,6 +51,12 @@ data SysCall a b where
   Paths :: SysCall () [Path]
   SysPipe :: SysCall () (PipeEnds FD)
   Unused :: SysCall () FD -- TODO: for used for by with redirectsa
+
+data NoSuchPath = NoSuchPath deriving Show
+
+data BinaryMeta = BinaryMeta String
+
+data FileKind = K_Data | K_Binary BinaryMeta
 
 data OpenMode
   = OpenForReading -- creating if doesn't exist
@@ -70,6 +77,7 @@ data LoadBinaryError
 
 instance Show (SysCall a b) where -- TODO: automate?
   show = \case
+    Kind -> "Kind"
     LoadBinary -> "LoadBinary"
     Open -> "Open"
     Close -> "Close"

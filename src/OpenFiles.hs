@@ -1,16 +1,16 @@
 module OpenFiles (
   init, OpenFiles, Key,
-  devnull, open, pipe, dup, close, read, write, ls, loadBinary,
+  devnull, open, pipe, dup, close, read, write, ls, fileKind, loadBinary,
   ) where
 
 import Data.List (intercalate)
 import Data.Map (Map)
-import FileSystem (FileSystem,NoSuchPath(..))
+import FileSystem (FileSystem)
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import Path (Path)
 import PipeSystem (PipeSystem)
 import Prelude hiding (init,read)
-import Prog (Prog,OpenMode(..),WriteOpenMode(..),OpenError(..),LoadBinaryError(..))
+import Prog (Prog,OpenMode(..),WriteOpenMode(..),OpenError(..),LoadBinaryError(..),NoSuchPath(..),FileKind)
 import qualified Data.Map.Strict as Map
 import qualified File
 import qualified FileSystem
@@ -192,6 +192,11 @@ write state@OpenFiles{table,pipeSystem,fs} key line = do
 ls :: OpenFiles -> [Path]
 ls OpenFiles{fs} = FileSystem.ls fs
 
+fileKind :: OpenFiles -> Path -> Either NoSuchPath FileKind
+fileKind OpenFiles{fs} path =
+  case FileSystem.read fs path of
+    Left NoSuchPath -> Left NoSuchPath
+    Right file -> Right (File.kind file)
 
 loadBinary :: OpenFiles -> Path -> Either LoadBinaryError (Prog ())
 loadBinary OpenFiles{fs} path =

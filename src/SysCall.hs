@@ -10,13 +10,18 @@ import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnd
 import OpenFiles (OpenFiles)
 import Prog (SysCall(..),FD(..),BadFileDescriptor(..))
 import qualified Data.Map.Strict as Map
-import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write,devnull,loadBinary)
+import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write,devnull,loadBinary,fileKind)
 
 runSys :: SysCall a b ->
   OpenFiles -> Env -> a ->
   Either Block ((OpenFiles -> Env -> b -> Interaction) -> Interaction)
 
 runSys sys s env arg = case sys of
+
+  Kind -> do
+    let path = arg
+    let res =  OpenFiles.fileKind s path
+    Right $ \k -> k s env res
 
   LoadBinary -> do
     let path = arg

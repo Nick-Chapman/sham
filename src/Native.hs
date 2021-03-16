@@ -1,5 +1,5 @@
 module Native (
-  echo, cat, rev, grep, ls, ps, bins, xargs, man, sum,
+  echo, cat, rev, grep, ls, ps, bins, xargs, man, sum, type_,
   loadFile, withOpen, readAll, read, write, err2, checkNoArgs, exit,
   stdin, stdout,
   ) where
@@ -11,12 +11,28 @@ import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
-import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,OpenError(..))
+import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,OpenError(..),FileKind(..),BinaryMeta(..))
 import Text.Read (readMaybe)
 import qualified Data.Map.Strict as Map
 import qualified Path (create,toString)
 import qualified Prelude
 import qualified Prog (Prog(..))
+
+type_ :: Prog ()
+type_ = do
+  Command(_,args) <- Prog.Argv
+  let
+    typeline :: String -> Prog ()
+    typeline name = do
+      Prog.Call Kind (Path.create name) >>= \case
+        Left _ ->  err2 $ "no such path: " ++ name
+        Right kind -> do
+          let
+            str = case kind of
+              K_Data -> "Data/Script"
+              K_Binary (BinaryMeta s) -> "Binary *" ++ s ++ "*"
+          write stdout (name ++ " : " ++ str)
+  mapM_ typeline args
 
 echo :: Prog ()
 echo = do
@@ -114,6 +130,7 @@ man = do
      , ("xargs", "concatenate lines from stdin, and pass as arguments to the given command")
      , ("man"  , "list the manual entries for the given commands")
      , ("sum"  , "write sum of the given numeric arguments to stdout")
+     , ("type" , "determine kind of named files: binary or data")
      ]
 
 

@@ -1,6 +1,7 @@
 module Image (fs0,readme,days) where
 
 import FileSystem (FileSystem)
+import Prog (BinaryMeta(..))
 import qualified File (createData,createProg)
 import qualified FileSystem (create)
 import qualified Native
@@ -11,7 +12,7 @@ fs0 :: FileSystem
 fs0 = FileSystem.create image where
   image =
     [ (Path.create p, File.createData lines) | (p,lines) <- scripts ] ++
-    [ (Path.create p, File.createProg prog) | (p,prog) <- bins ]
+    [ (Path.create p, File.createProg prog (BinaryMeta p)) | (p,prog) <- bins ]
 
   bins =
     [ ("echo",Native.echo)
@@ -24,6 +25,7 @@ fs0 = FileSystem.create image where
     , ("xargs",Native.xargs Sham.runCommand)
     , ("man",Native.man)
     , ("sum",Native.sum)
+    , ("type",Native.type_)
     ]
 
   scripts  =
