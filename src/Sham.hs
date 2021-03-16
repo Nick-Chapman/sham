@@ -1,7 +1,6 @@
 
-module Sham (shamConsole) where
+module Sham (shamConsole,runCommand,sham) where
 
-import Data.Map (Map)
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile,ParseError(..),Ambiguity(..),SyntaxError(..))
 import Interaction (Prompt(..))
 import Misc (EOF(..))
@@ -11,92 +10,55 @@ import Script (Script(..),Step(..),WaitMode(..),Redirect(..),RedirectSource(..),
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
-import qualified Native (echo,cat,rev,grep,ls,ps,bins,man,read,xargs,sum,checkNoArgs,loadFile)
+import qualified Native (loadFile,checkNoArgs,read)
 import qualified Prog (Prog(Argv,MyPid))
 import qualified Script (runScript,Env(..))
 
-
-shamConsole :: Int -> Prog ()
-shamConsole level = runConsole level
-  where
-
-    binMap :: Map String (Prog ())
-    binMap = Map.fromList [ (name,prog) | (name,prog,_) <- table ]
-
-    docMap :: Map String String
-    docMap = Map.fromList [ (name,text) | (name,_,text) <- table ]
-
-    table :: [(String,Prog (),String)]
-    table =
-      [ ("echo",Native.echo,
-        "write given arguments to stdout")
-      , ("cat",Native.cat,
-        "write named files (or stdin in no files given) to stdout")
-      , ("rev",Native.rev,
-        "copy stdin to stdout, reversing each line")
-      , ("grep",Native.grep,
-        "copy lines which match the given pattern to stdout ")
-      , ("ls",Native.ls,
-        "list all files on the filesystem")
-      , ("ps",Native.ps,
-        "list all running process")
-      , ("sham",sham (level+1),
-        "start a nested sham console")
-      , ("xargs",Native.xargs runCommand,
-         "concatenate lines from stdin, and pass as arguments to the given command")
-      , ("bins",Native.bins (Map.keys binMap),
-        "list builtin executables")
-      , ("man",Native.man docMap,
-         "list the manual entries for the given commands")
-      , ("sum",Native.sum,
-         "write sum of the given numeric arguments to stdout")
-      ]
-
-    runCommand :: Command -> Prog ()
-    runCommand (Command (com,args)) = do
-      -- TODO: reconstructing the command seems hacky
-      let script = Invoke1 (Run (Word com) (map Word args) []) Wait
+sham :: Prog ()
+sham = do
+  Command(_,args) <- Prog.Argv
+  case args of
+    -- TODO: to increase level in each sub consoles will require tracking in some kind of env
+    [] -> shamConsole 2
+    "-c":args -> do
+      let script = parseLine (unwords args)
+      let _ = Prog.Trace (show script) -- for debug
+      runScript script []
+    path:args -> do
+      lines <- Native.loadFile path
+      let script = parseLines lines
       runScript script args
 
-    sham :: Int -> Prog ()
-    sham level = do
-      Command(_,args) <- Prog.Argv
-      case args of
-        [] -> runConsole level
-        "-c":args -> do
-          let script = parseLine (unwords args)
-          Prog.Trace (show script) -- for debug
-          runScript script []
-        path:args -> do
-          lines <- Native.loadFile path
-          let script = parseLines lines
-          runScript script args
+shamConsole :: Int -> Prog ()
+shamConsole level = Native.checkNoArgs $ loop 1 where
+  loop :: Int -> Prog ()
+  loop n = do
+    let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
+    Native.read (Prompt prompt) (FD 0) >>= \case
+      Left EOF -> pure ()
+      Right line -> do
+        let script = parseLine line
+        let _ = Prog.Trace (show script) -- for debug
+        runScript script []
+        loop (n+1)
 
-    runConsole :: Int -> Prog ()
-    runConsole level = Native.checkNoArgs $ loop 1 where
-      loop :: Int -> Prog ()
-      loop n = do
-        let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
-        Native.read (Prompt prompt) (FD 0) >>= \case
-          Left EOF -> pure ()
-          Right line -> do
-            let script = parseLine line
-            let _ = Prog.Trace (show script) -- for debug
-            runScript script []
-            loop (n+1)
+runCommand :: Command -> Prog ()
+runCommand (Command (com,args)) = do
+  -- TODO: reconstructing the command seems hacky
+  let script = Invoke1 (Run (Word com) (map Word args) []) Wait
+  runScript script args
 
-    runScript :: Script -> [String] -> Prog ()
-    runScript script args = do
-      pid <- Prog.MyPid
-      let env = Script.Env
-            { pid
-            , com = "sham"
-            , args
-            , bindings = Map.empty
-            , lookNative = \s -> Map.lookup s binMap
-            , shamParser = parseLines
-            }
-      Script.runScript env script
+runScript :: Script -> [String] -> Prog ()
+runScript script args = do
+  pid <- Prog.MyPid
+  let env = Script.Env
+        { pid
+        , com = "sham"
+        , args
+        , bindings = Map.empty
+        , shamParser = parseLines
+        }
+  Script.runScript env script
 
 parseLines :: [String] -> Script
 parseLines lines = foldl Seq Null (map parseLine lines)

@@ -91,8 +91,8 @@ xargs runCommand = do
       lines <- readAll stdin
       runCommand (Command (com, args ++ lines))
 
-man :: Map String String -> Prog ()
-man docsMap  = do
+man :: Prog ()
+man = do
   Command(me,args) <- Prog.Argv
   let
     manline :: String -> Prog ()
@@ -101,6 +101,21 @@ man docsMap  = do
         Just text -> write stdout (name ++ " : " ++ text)
         Nothing -> write stderr (me ++ " : no manual entry for '" ++ name ++ "'")
   mapM_ manline args
+  where
+    docsMap :: Map String String
+    docsMap = Map.fromList
+     [ ("echo" , "write given arguments to stdout")
+     , ("cat"  , "write named files (or stdin in no files given) to stdout")
+     , ("rev"  , "copy stdin to stdout, reversing each line")
+     , ("grep" , "copy lines which match the given pattern to stdout ")
+     , ("ls"   , "list all files on the filesystem")
+     , ("ps"   , "list all running process")
+     , ("sham" , "start a nested sham console")
+     , ("xargs", "concatenate lines from stdin, and pass as arguments to the given command")
+     , ("man"  , "list the manual entries for the given commands")
+     , ("sum"  , "write sum of the given numeric arguments to stdout")
+     ]
+
 
 sum :: Prog ()
 sum = do

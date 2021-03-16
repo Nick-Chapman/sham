@@ -16,10 +16,10 @@ run sham = Testing.run sham $ do
   let paths0 = map Path.toString (FileSystem.ls Image.fs0)
 
   -- TODO: make this test less fragile
-  test ["bins"] ["bins","cat","echo","grep","ls","man","ps","rev","sham","sum", "xargs"]
+  --test ["bins"] ["bins","cat","echo","grep","ls","man","ps","rev","sham","sum", "xargs"]
 
   test ["echo foo"] ["foo"]
-  test ["sham echo foo"] ["(stderr) no such path: echo"]
+  test ["sham echo foo"] ["(stderr) cant open for reading: echo"]
   test ["sham -c echo foo"] ["foo"]
 
   test ["help"] Image.readme
@@ -29,7 +29,7 @@ run sham = Testing.run sham $ do
   test ["echo help | sham"] Image.readme
   test ["ls | grep lp | sham"] Image.readme
   test ["cat README"] Image.readme
-  test ["sham cat README"] ["(stderr) no such path: cat"]
+  test ["sham cat README"] ["(stderr) cant open for reading: cat"]
   test ["sham -c cat README"] Image.readme
   test ["echo README | xargs cat"] Image.readme
   test ["cat README | xargs echo"] [ unwords Image.readme ]
@@ -37,9 +37,9 @@ run sham = Testing.run sham $ do
   test ["README"] ["(stderr) unexpected '*' at position 12"]
 
   test ["ls"] paths0
-  test ["sham ls"] ["(stderr) no such path: ls"]
+  test ["sham ls"] ["(stderr) cant open for reading: ls"]
   test ["sham -c ls"] paths0
-  test [". ls"] ["(stderr) no such path: ls"]
+  test [". ls"] ["(stderr) cant open for reading: ls"]
   test ["exec ls"] paths0
   test ["echo ls | sham"] paths0
   test ["ls | xargs echo"] [unwords paths0]
@@ -57,7 +57,7 @@ run sham = Testing.run sham $ do
   test ["cat days | rev | rev"] days
   test ["cat days | rev | rev | rev"] rw
 
-  test ["echo foo | xargs bins"] ["(stderr) bins: takes no arguments"]
+  test ["echo foo | xargs ps"] ["(stderr) ps: takes no arguments"]
 
   test ["man foo"] ["(stderr) man : no manual entry for 'foo'"]
   test ["man ps"] ["ps : list all running process"]
@@ -144,7 +144,7 @@ run sham = Testing.run sham $ do
   test ["doh 4< days"] ["(stderr) no such path: doh"]
   test ["doh 4< days 2>&4"] [] -- redirecting stderr to unwritable FD looses error
 
-  test ["cat days &", "cat days"] (head days : merge (tail days) days)
+  test ["cat days &", "cat days"] (take 2 days ++ merge (drop 2 days) days) -- rather fragile
   test ["cat days &", "echo FOO"] ("FOO" : days)
 
   test ["cat > x","echo OUT","echo ERR >&2","","x"] ["OUT","(stderr) ERR"]

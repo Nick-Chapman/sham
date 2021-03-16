@@ -3,15 +3,29 @@ module Image (fs0,readme,days) where
 import FileSystem (FileSystem)
 import qualified File (createData,createProg)
 import qualified FileSystem (create)
-import qualified Native (ps)
+import qualified Native
 import qualified Path (create)
+import qualified Sham (runCommand,sham)
 
 fs0 :: FileSystem
 fs0 = FileSystem.create image where
   image =
     [ (Path.create p, File.createData lines) | (p,lines) <- scripts ] ++
     [ (Path.create p, File.createProg prog) | (p,prog) <- bins ]
-  bins = [("ps1",Native.ps)]
+
+  bins =
+    [ ("echo",Native.echo)
+    , ("cat",Native.cat)
+    , ("rev",Native.rev)
+    , ("grep",Native.grep)
+    , ("ls",Native.ls)
+    , ("ps",Native.ps)
+    , ("sham",Sham.sham)
+    , ("xargs",Native.xargs Sham.runCommand)
+    , ("man",Native.man)
+    , ("sum",Native.sum)
+    ]
+
   scripts  =
     [ ("README", readme)
     , ("days"  , days)
@@ -78,7 +92,7 @@ fs0 = FileSystem.create image where
 readme :: [String]
 readme =
   [ "Welcome to *sham*."
-  , "Some available commands include: bins, echo, cat, rev, grep, ls, man, ps, xargs."
+  , "Some available commands include: echo, cat, rev, grep, ls, man, ps, xargs."
   , "Type 'exit' or Ctrl-D to quit."
   ]
 

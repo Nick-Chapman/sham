@@ -18,12 +18,12 @@ import qualified Native (echo,write,withOpen,readAll,read,write)
 import qualified Path (create)
 import qualified Prog (Prog(..))
 
-run :: (String -> Maybe (Prog ())) -> ([String] -> Script) -> Script -> Prog ()
-run lookNative shamParser script = do
+run :: ([String] -> Script) -> Script -> Prog ()
+run shamParser script = do
   Command(com,args) <- Prog.Argv
   pid <- Prog.MyPid
   let bindings = Map.empty
-  let env = Env { pid, com, args, bindings, lookNative, shamParser }
+  let env = Env { pid, com, args, bindings, shamParser }
   runScript env script
 
 data Env = Env
@@ -31,7 +31,6 @@ data Env = Env
   , args :: [String]
   , bindings :: Map Var String
   , pid :: Pid
-  , lookNative :: String -> Maybe (Prog ())
   , shamParser :: [String] -> Script
   }
 
@@ -111,7 +110,6 @@ builtinRead =
     Left EOF -> exit
     Right line -> return line
 
-
 runPipeline :: Env -> WaitMode -> [Step] -> Prog ()
 runPipeline env wm steps = do
   case wm of
@@ -122,7 +120,6 @@ runPipeline env wm steps = do
         [] -> error "runPipeline[]"
         prog1:progs ->
           foldl pipe prog1 progs
-
 
 pipe :: Prog () -> Prog () -> Prog ()
 pipe prog1 prog2 = do
@@ -152,16 +149,13 @@ spawn1 command child parent = do
     Nothing -> Prog.Exec command child
     Just pid -> parent pid
 
-
 runStep :: Env -> WaitMode -> Step -> Prog ()
 runStep env mode = \case
+  SubShell{} -> undefined
   Run w ws rs -> do
     com <- evalWord env w
     args <- mapM (evalWord env) ws
     runAct env (rs,mode) args (decode com)
-
-  SubShell{} -> undefined
-
 
 evalPred :: Env -> Pred -> Prog Bool
 evalPred env = \case
@@ -230,7 +224,7 @@ runAct env (rs,wm) args = \case
       _ -> err2 "source takes at least one argument, but no redirects or (&)"
 
   RunExternal name -> do
-    (command,prog) <- lookupCommand env name args
+    (command,prog) <- lookupCommand name args
     runCommandInProcess env (rs,wm) command prog
 
   Exec -> do
@@ -241,9 +235,8 @@ runAct env (rs,wm) args = \case
         case args of
           [] -> pure ()
           name:args -> do
-            (command,prog) <- lookupCommand env name args
+            (command,prog) <- lookupCommand name args
             Prog.Exec command prog
-
 
 loadShamScript :: Env -> String -> Prog Script
 loadShamScript env path = do
@@ -252,20 +245,17 @@ loadShamScript env path = do
       Native.readAll fd
   pure $ shamParser env lines
 
-
-lookupCommand :: Env -> String -> [String] -> Prog (Command,Prog ())
-lookupCommand env name args =
-  case lookNative env name of  -- TODO: lookNative will be killed
-    Just prog ->
+lookupCommand :: String -> [String] -> Prog (Command,Prog ())
+lookupCommand name args = do
+  tryLoadBinary name >>= \case
+    Just prog -> do
       pure (Command (name,args),prog)
     Nothing -> do
-      tryLoadBinary name >>= \case
-        Just prog ->
-          pure (Command (name,args),prog)
-        Nothing ->
-          case lookNative env "sham" of
-            Nothing -> do err2 "cant find sham interpreter"; exit
-            Just shamProg -> pure (Command ("sham",name:args),shamProg)
+      tryLoadBinary "sham" >>= \case
+        Just prog -> do
+          pure (Command ("sham",name:args),prog)
+        Nothing -> do
+          err2 "cant find sham interpreter"; exit
 
 tryLoadBinary :: String -> Prog (Maybe (Prog ()))
 tryLoadBinary name = do
@@ -279,7 +269,6 @@ tryLoadBinary name = do
       --err2 $ "no such executable: " ++ name
       --exit
       pure Nothing
-
 
 echo :: Env -> [String] -> Context -> Prog ()
 echo env args = \case
@@ -297,7 +286,6 @@ runCommandInProcess env (rs,mode) command prog = do
     Just pid -> case mode of
       Wait -> Prog.Wait pid
       NoWait -> pure ()
-
 
 execRedirect :: Env -> Redirect -> Prog ()
 execRedirect env = \case
