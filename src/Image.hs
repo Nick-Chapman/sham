@@ -45,7 +45,6 @@ fs0 = FileSystem.create image where
           --"if $1=0 ps #debug",
           "if $1=0 exit",
           "echo $1",
-          --TODO: support backgrounded pipelines to avoid process explosion
           "sum $1 -1 | xargs countdown"
           ])
 

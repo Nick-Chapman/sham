@@ -131,8 +131,9 @@ runPipeline env wm = \case
             case incoming of
               Nothing -> pure ()
               Just incoming -> Prog.Call Close incoming
-            let _ = wm -- TODO: support no wait on pipes
-            mapM_ Prog.Wait (childPid:pids)
+            case wm of
+              Wait -> mapM_ Prog.Wait (childPid:pids)
+              NoWait -> pure ()
 
       step2:steps -> do
         PipeEnds{w=pipeW,r=pipeR} <- Prog.Call SysPipe ()
@@ -176,7 +177,7 @@ makeStage _env rs args = \case
     (command,prog) <- lookupCommand "echo" args
     pure (command, prog, rs)
   SourceSham ->
-    undefined
+    undefined -- TODO: do what in a pipeline?
   RunExternal name -> do
     (command,prog) <- lookupCommand name args
     pure (command, prog, rs)
