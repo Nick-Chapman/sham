@@ -10,9 +10,9 @@ import Data.Map (Map)
 import Interaction (Prompt(..))
 import Misc (EOF(..))
 import Misc (PipeEnds(..))
-import Native (err2,exit,stdin)
+import Native (err2,exit,stdin,stdout)
 import Prelude hiding (Word)
-import Prog (FD(..),SysCall(..),BadFileDescriptor(..),LoadBinaryError(..),Pid(..),Prog,Command(..),OpenMode(..))
+import Prog (FD,SysCall(..),BadFileDescriptor(..),LoadBinaryError(..),Pid(..),Prog,Command(..),OpenMode(..))
 import qualified Data.Map.Strict as Map
 import qualified Native (echo,write,withOpen,readAll,read,write)
 import qualified Path (create)
@@ -110,44 +110,83 @@ builtinRead =
     Left EOF -> exit
     Right line -> return line
 
+
 runPipeline :: Env -> WaitMode -> [Step] -> Prog ()
-runPipeline env wm steps = do
-  case wm of
-    NoWait -> err2 "runPipeline,NoWait" -- TODO
-    _ -> do
-      let progs = map (runStep env Wait) steps
-      case progs of
-        [] -> error "runPipeline[]"
-        prog1:progs ->
-          foldl pipe prog1 progs
+runPipeline env wm = \case
+    [] -> undefined
+    step1:steps -> loop Nothing [] step1 steps
+  where
+    loop :: Maybe FD -> [Pid] -> Step -> [Step] -> Prog ()
+    loop incoming pids step1 = \case
+      [] -> do
+        Prog.Fork >>= \case
 
-pipe :: Prog () -> Prog () -> Prog ()
-pipe prog1 prog2 = do
-  PipeEnds{r,w} <- Prog.Call SysPipe ()
-  let com1 = Command ("LEFT",[])
-  let com2 = Command ("RIGHT",[])
-  spawn1 com1 (do -- TODO: use the name of the actual pipe commands!
-               dup2 (FD 1) w
-               Prog.Call Close w
-               Prog.Call Close r
-               prog1
-           ) $ \child1 -> do
-    spawn1 com2 (do
-                 dup2 (FD 0) r
-                 Prog.Call Close w
-                 Prog.Call Close r
-                 prog2
-             ) $ \child2 -> do
-      Prog.Call Close w
-      Prog.Call Close r
-      Prog.Wait child1
-      Prog.Wait child2
+          Nothing -> do
+            case incoming of
+              Nothing -> pure ()
+              Just incoming -> do dup2 stdin incoming; Prog.Call Close incoming
+            runStepAsPipeStage env step1
 
-spawn1 :: Command -> Prog () -> (Pid -> Prog a) -> Prog a
-spawn1 command child parent = do
-  Prog.Fork >>= \case
-    Nothing -> Prog.Exec command child
-    Just pid -> parent pid
+          Just childPid -> do
+            case incoming of
+              Nothing -> pure ()
+              Just incoming -> Prog.Call Close incoming
+            let _ = wm -- TODO: support no wait on pipes
+            mapM_ Prog.Wait (childPid:pids)
+
+      step2:steps -> do
+        PipeEnds{w=pipeW,r=pipeR} <- Prog.Call SysPipe ()
+        Prog.Fork >>= \case
+
+          Nothing -> do
+            case incoming of
+              Nothing -> pure ()
+              Just incoming -> do dup2 stdin incoming; Prog.Call Close incoming
+            Prog.Call Close pipeR
+            dup2 stdout pipeW; Prog.Call Close pipeW
+            runStepAsPipeStage env step1
+
+          Just childPid -> do
+            case incoming of
+              Nothing -> pure ()
+              Just incoming -> Prog.Call Close incoming
+            Prog.Call Close pipeW
+            loop (Just pipeR) (childPid:pids) step2 steps
+
+
+runStepAsPipeStage :: Env -> Step -> Prog ()
+runStepAsPipeStage env  = \case
+  SubShell{} -> undefined env
+  Run w1 ws rs -> do
+    com <- evalWord env w1
+    args <- mapM (evalWord env) ws
+    let act = decode com
+    stage <- makeStage env rs args act
+    let (c1,prog1,rs1) = stage
+    Prog.Exec c1 $ do
+      mapM_ (execRedirect env) rs1
+      prog1
+
+type Stage = (Command, Prog (), [Redirect])
+
+makeStage :: Env -> [Redirect] -> [String] -> Act -> Prog Stage
+makeStage _env rs args = \case
+  Exit -> exit
+  Echo -> do
+    (command,prog) <- lookupCommand "echo" args
+    pure (command, prog, rs)
+  SourceSham ->
+    undefined
+  RunExternal name -> do
+    (command,prog) <- lookupCommand name args
+    pure (command, prog, rs)
+  Exec -> do
+    case args of
+      [] -> exit
+      name:args -> do
+        (command,prog) <- lookupCommand name args
+        pure (command, prog, rs)
+
 
 runStep :: Env -> WaitMode -> Step -> Prog ()
 runStep env mode = \case
@@ -273,7 +312,7 @@ tryLoadBinary name = do
 echo :: Env -> [String] -> Context -> Prog ()
 echo env args = \case
   ([],Wait) ->
-    Native.write (FD 1) (unwords args) --builtin echo
+    Native.write stdout (unwords args) --builtin echo
   context -> do
     runCommandInProcess env context (Command ("/bin/echo",args)) Native.echo
 

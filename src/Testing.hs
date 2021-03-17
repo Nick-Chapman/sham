@@ -47,6 +47,7 @@ instance Show Test where
 
 runTest :: Prog () -> Int -> Test -> IO Bool
 runTest console n t@(Test input expected) = do
+  --print (n,input)
   case runConsole console input of
     Left (Unconsumed lines) -> do
       putStrLn $ "test #" ++ show n ++ " : " ++ show t
