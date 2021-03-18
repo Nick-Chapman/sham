@@ -1,5 +1,5 @@
 -- | 'sham' is a shell-style command interpreter which runs on MeNicks.
-module Sham (shamConsole,runCommand,sham) where
+module Sham (runCommand,sham) where
 
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile,ParseError(..),Ambiguity(..),SyntaxError(..))
 import Interaction (Prompt(..))
@@ -19,7 +19,7 @@ sham = do
   Command(_,args) <- Prog.Argv
   case args of
     -- TODO: to increase level in each sub consoles will require tracking in some kind of env
-    [] -> shamConsole 2
+    [] -> shamConsole 1
     "-c":args -> do
       let script = parseLine (unwords args)
       let _ = Prog.Trace (show script) -- for debug
