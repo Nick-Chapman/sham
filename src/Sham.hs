@@ -1,5 +1,5 @@
 -- | 'sham' is a shell-style command interpreter which runs on MeNicks.
-module Sham (runCommand,sham) where
+module Sham (sham) where
 
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile,ParseError(..),Ambiguity(..),SyntaxError(..))
 import Interaction (Prompt(..))
@@ -41,12 +41,6 @@ shamConsole level = checkNoArgs $ loop 1 where
         let _ = Prog.Trace (show script) -- for debug
         runScript script []
         loop (n+1)
-
-runCommand :: Command -> Prog ()
-runCommand (Command (com,args)) = do
-  -- TODO: reconstructing the command seems hacky
-  let script = Invoke1 (Run (Word com) (map Word args) []) Wait
-  runScript script args
 
 runScript :: Script -> [String] -> Prog ()
 runScript script args = do

@@ -1,7 +1,7 @@
 -- | A 'library' of program fragments. Used by Bins, and Sham/Script.
 module Lib (
   stdin, stdout, stderr,
-  read, write, exit, forkWait, tryLoadBinary,
+  read, write, exit, forkWait, forkNoWait, tryLoadBinary, lookupCommand, execCommand,
   checkNoArgs, getSingleArg, loadFile, withOpen, readAll,
   ) where
 
@@ -41,11 +41,18 @@ err2 line = do
 exit :: Prog a
 exit = Prog.Exit
 
-forkWait :: Command -> Prog () -> Prog ()
-forkWait command prog = do
+forkWait :: Prog () -> Prog ()
+forkWait prog = do
   Prog.Fork >>= \case
-    Nothing -> Prog.Exec command prog
+    Nothing -> prog
     Just pid -> Prog.Wait pid
+
+forkNoWait :: Prog () -> Prog ()
+forkNoWait prog = do
+  Prog.Fork >>= \case
+    Nothing -> prog
+    Just _ -> pure ()
+
 
 tryLoadBinary :: String -> Prog (Maybe (Prog ()))
 tryLoadBinary name = do
@@ -59,6 +66,23 @@ tryLoadBinary name = do
       --err2 $ "no such executable: " ++ name
       --exit
       pure Nothing
+
+lookupCommand :: Command -> Prog (Command,Prog ())
+lookupCommand (Command (name,args)) = do
+  tryLoadBinary name >>= \case
+    Just prog -> do
+      pure (Command (name,args),prog)
+    Nothing -> do
+      tryLoadBinary "sham" >>= \case
+        Just prog -> do
+          pure (Command ("sham",name:args),prog)
+        Nothing -> do
+          write stderr "cant find sham interpreter"; exit
+
+execCommand :: Command -> Prog ()
+execCommand command = do
+  (command,prog) <- lookupCommand command
+  Prog.Exec command prog
 
 checkNoArgs :: Prog () -> Prog ()
 checkNoArgs prog = do

@@ -7,7 +7,7 @@ import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Interaction (Prompt(..))
-import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,getSingleArg,readAll,exit)
+import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,getSingleArg,readAll,exit,execCommand)
 import Misc (EOF(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
@@ -148,11 +148,11 @@ type_ = do
           write stdout (name ++ " : " ++ str)
   mapM_ typeline args
 
-xargs :: (Command -> Prog ()) -> Prog ()
-xargs runCommand = do
+xargs :: Prog ()
+xargs = do
   Command(me,args) <- Prog.Argv
   case args of
     [] -> write stderr (me ++ ": takes at least 1 argument")
     com:args -> do
       lines <- readAll stdin
-      runCommand (Command (com, args ++ lines))
+      execCommand (Command (com, args ++ lines))

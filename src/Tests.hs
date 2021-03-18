@@ -143,7 +143,7 @@ run = Testing.run $ do
   test ["doh 4< days"] ["(stderr) no such path: doh"]
   test ["doh 4< days 2>&4"] [] -- redirecting stderr to unwritable FD looses error
 
-  test ["cat days &", "cat days"] (take 2 days ++ merge (drop 2 days) days) -- rather fragile
+  test ["cat days &", "cat days"] (take 1 days ++ merge (drop 1 days) days) -- rather fragile
   test ["cat days &", "echo FOO"] ("FOO" : days)
 
   test ["cat > x","echo OUT","echo ERR >&2","","x"] ["OUT","(stderr) ERR"]
@@ -164,3 +164,6 @@ run = Testing.run $ do
   test ["exec .me"] ["2"]
   test ["cat .me > a","echo .me >> a","a",".me"] ["5","6","7"]
   test ["cat .me > a","echo exec .me >> a","a",".me"] ["5","5","6"]
+
+  test ["exec 2>e","foo","bar","cat e"] ["no such path: foo", "no such path: bar"]
+  test ["exec >&2", "echo foo"] ["(stderr) foo"]

@@ -9,7 +9,6 @@ import Sham (sham)
 import qualified File (createData,createProg)
 import qualified FileSystem (create)
 import qualified Path (create)
-import qualified Sham (runCommand)
 
 fs0 :: FileSystem
 fs0 = FileSystem.create image where
@@ -26,7 +25,7 @@ fs0 = FileSystem.create image where
     , ("ps",ps)
     , ("lsof",lsof)
     , ("sham",sham)
-    , ("xargs",xargs Sham.runCommand) -- TODO: avoid this parameterization
+    , ("xargs",xargs)
     , ("man",man)
     , ("sum",sum)
     , ("type",type_)
@@ -38,6 +37,8 @@ fs0 = FileSystem.create image where
     , ("help"  , ["# Help the user!","cat README"])
     , ("cp"    , ["# cp SRC DEST: copy a file from SRC to DEST","cat $1 > $2"])
     , ("yes"   , ["# Write an infinite stream of 'y's to stdout", "echo y","exec yes"])
+
+    -- hidden scripts (path begins "."), for testing and experimentation
 
     , (".bomb"  , ["echo $$ >&2", ".bomb | .bomb"])
     , (".me"    , ["echo $$"])
@@ -80,7 +81,6 @@ fs0 = FileSystem.create image where
           ".countdown $1 | .make-head-N >> .tmp",
           ".tmp"
           ])
-
 {-
     , ("wip-head-needs-proc-sub", [
           "# head N: take first N line from stdin",
@@ -91,7 +91,6 @@ fs0 = FileSystem.create image where
           "exec head $(sum $1 -1)" -- TODO: support process substituion
           ])
 -}
-
     ]
 
 readme :: [String]

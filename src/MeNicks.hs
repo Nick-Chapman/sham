@@ -23,7 +23,7 @@ init :: Prog ()
 init = tryLoadBinary "sham" >>= \case
   Nothing -> do write stderr "init : cannot find sham interpreter"; exit
   Just prog -> do
-    forkWait (Command ("sham",[])) prog
+    forkWait (Exec (Command ("sham",[])) prog)
 
 linearize :: Prog a -> (a -> Action) -> Action
 linearize p0 = case p0 of

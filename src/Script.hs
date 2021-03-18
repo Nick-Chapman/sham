@@ -9,7 +9,7 @@ module Script (
 
 import Data.Map (Map)
 import Interaction (Prompt(..))
-import Lib (stdin,stdout,stderr,read,write,exit,withOpen,readAll,tryLoadBinary)
+import Lib (stdin,stdout,stderr,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait)
 import Misc (EOF(..),PipeEnds(..))
 import Prelude hiding (Word,read)
 import Prog (FD,SysCall(..),BadFileDescriptor(..),Pid(..),Prog,Command(..),OpenMode(..))
@@ -160,32 +160,23 @@ runStepAsPipeStage env  = \case
   Run w1 ws rs -> do
     com <- evalWord env w1
     args <- mapM (evalWord env) ws
-    let act = decode com
-    stage <- makeStage env rs args act
-    let (c1,prog1,rs1) = stage
-    Prog.Exec c1 $ do
-      mapM_ (execRedirect env) rs1
-      prog1
+    mapM_ (execRedirect env) rs
+    execStage args (decode com)
 
-type Stage = (Command, Prog (), [Redirect])
-
-makeStage :: Env -> [Redirect] -> [String] -> Act -> Prog Stage
-makeStage _env rs args = \case
+execStage :: [String] -> Act -> Prog ()
+execStage args = \case
   Exit -> exit
-  Echo -> do
-    (command,prog) <- lookupCommand "echo" args
-    pure (command, prog, rs)
+  Echo ->
+    execCommand (Command ("echo",args))
   SourceSham ->
     undefined -- TODO: do what in a pipeline?
   RunExternal name -> do
-    (command,prog) <- lookupCommand name args
-    pure (command, prog, rs)
+    execCommand (Command (name,args))
   Exec -> do
     case args of
       [] -> exit
       name:args -> do
-        (command,prog) <- lookupCommand name args
-        pure (command, prog, rs)
+        execCommand (Command (name,args))
 
 
 runStep :: Env -> WaitMode -> Step -> Prog ()
@@ -252,8 +243,13 @@ runAct env (rs,wm) args = \case
       _ -> write stderr "exit takes no args, redirects, or (&)"
 
   Echo ->
-    -- TODO: check redirects/wait here & switch builtin/external echo
-    echo env args (rs,wm)
+    case (rs,wm) of
+      -- TODO: can we do builtin echo even with redirects?
+      ([],Wait) -> write stdout (unwords args) --builtin echo
+      _ -> do
+        forkMode wm $ do
+          mapM_ (execRedirect env) rs
+          execCommand (Command ("echo",args))
 
   SourceSham -> do
     case (rs,wm,args) of
@@ -263,8 +259,9 @@ runAct env (rs,wm) args = \case
       _ -> write stderr "source takes at least one argument, but no redirects or (&)"
 
   RunExternal name -> do
-    (command,prog) <- lookupCommand name args
-    runCommandInProcess env (rs,wm) command prog
+    forkMode wm $ do
+      mapM_ (execRedirect env) rs
+      execCommand (Command (name,args))
 
   Exec -> do
     case wm of
@@ -272,10 +269,9 @@ runAct env (rs,wm) args = \case
       Wait -> do
         mapM_ (execRedirect env) rs
         case args of
-          [] -> pure ()
-          name:args -> do
-            (command,prog) <- lookupCommand name args
-            Prog.Exec command prog
+          [] -> pure () -- we just do redirects and nothing else
+          name:args ->
+            execCommand (Command (name,args))
 
 loadShamScript :: Env -> String -> Prog Script
 loadShamScript env path = do
@@ -284,40 +280,10 @@ loadShamScript env path = do
       readAll fd
   pure $ shamParser env lines
 
-lookupCommand :: String -> [String] -> Prog (Command,Prog ())
-lookupCommand name args = do
-  tryLoadBinary name >>= \case
-    Just prog -> do
-      pure (Command (name,args),prog)
-    Nothing -> do
-      tryLoadBinary "sham" >>= \case
-        Just prog -> do
-          pure (Command ("sham",name:args),prog)
-        Nothing -> do
-          write stderr "cant find sham interpreter"; exit
-
-echo :: Env -> [String] -> Context -> Prog ()
-echo env args = \case
-  ([],Wait) ->
-    write stdout (unwords args) --builtin echo
-  context -> do
-    runCommandInProcess env context (Command ("/bin/echo",args)) native_echo
-
-native_echo :: Prog () -- TODO: fix this hack
-native_echo = do
-  Command(_,args) <- Prog.Argv
-  write stdout (unwords args)
-
-
-runCommandInProcess :: Env -> Context -> Command -> Prog () -> Prog ()
-runCommandInProcess env (rs,mode) command prog = do
-  Prog.Fork >>= \case
-    Nothing -> do
-      mapM_ (execRedirect env) rs
-      Prog.Exec command prog
-    Just pid -> case mode of
-      Wait -> Prog.Wait pid
-      NoWait -> pure ()
+forkMode :: WaitMode -> Prog () -> Prog ()
+forkMode = \case
+  Wait -> forkWait
+  NoWait -> forkNoWait
 
 execRedirect :: Env -> Redirect -> Prog ()
 execRedirect env = \case
