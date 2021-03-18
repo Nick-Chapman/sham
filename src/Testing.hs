@@ -5,16 +5,15 @@ import Control.Monad (ap,liftM)
 import Data.List (intercalate)
 import Image (fs0)
 import Interaction (Interaction(..),OutMode(..))
-import MeNicks (Prog)
 import Misc (EOF(..))
-import qualified MeNicks (run)
+import qualified MeNicks (start)
 
 test :: [String] -> [String] -> Testing ()
 test is xs = T1 (Test (Lines is) (Lines xs))
 
-run :: Prog () -> Testing () -> IO () -- TODO: remove passing console here
-run console testing = do
-  bools <- sequence [ runTest console i x | (i,x) <- zip [1..] (collect testing) ]
+run :: Testing () -> IO ()
+run testing = do
+  bools <- sequence [ runTest i x | (i,x) <- zip [1..] (collect testing) ]
   let numTests = length bools
   let numPass = length [ () | res <- bools, res ]
   let numFail = numTests - numPass
@@ -46,10 +45,10 @@ instance Show Lines where show (Lines xs) = intercalate "/" xs
 instance Show Test where
   show (Test is xs) = "input: " ++ show is ++ "\n- expect: " ++ show xs
 
-runTest :: Prog () -> Int -> Test -> IO Bool
-runTest console n t@(Test input expected) = do
+runTest :: Int -> Test -> IO Bool
+runTest n t@(Test input expected) = do
   --print (n,input)
-  case runConsole console input of
+  case runConsole input of
     Left (Unconsumed lines) -> do
       putStrLn $ "test #" ++ show n ++ " : " ++ show t
       putStrLn $ "- unconsumed: " ++ show lines
@@ -60,8 +59,8 @@ runTest console n t@(Test input expected) = do
         putStrLn $ "- actual: " ++ show actual
         pure False
 
-runConsole :: Prog () -> Lines -> Either Unconsumed Lines
-runConsole console input = runInteraction (MeNicks.run fs0 console) input
+runConsole :: Lines -> Either Unconsumed Lines
+runConsole input = runInteraction (MeNicks.start fs0) input
 
 runInteraction :: Interaction -> Lines -> Either Unconsumed Lines
 runInteraction i (Lines xs0) = loop xs0 [] i where

@@ -1,14 +1,13 @@
--- | Entry point to the project. Run regression tests, then start a 'sham' console on 'MeNicks'.
+-- | Entry point to the project. Run the regression tests, then start 'MeNicks'.
 module Top (main) where
 
 import Console (runInteraction)
 import Image (fs0)
-import Sham (shamConsole)
-import qualified MeNicks (run)
+import qualified MeNicks (start)
 import qualified Tests (run)
 
 main :: IO ()
 main = do
-  Tests.run (shamConsole 1)
+  Tests.run
   putStrLn "Welcome to *sham*. You can type 'help'."
-  Console.runInteraction (MeNicks.run fs0 (shamConsole 1))
+  Console.runInteraction (MeNicks.start fs0)

@@ -1,7 +1,7 @@
 -- | A 'library' of program fragments. Used by Bins, and Sham/Script.
 module Lib (
   stdin, stdout, stderr,
-  read, write, exit,
+  read, write, exit, forkWait, tryLoadBinary,
   checkNoArgs, getSingleArg, loadFile, withOpen, readAll,
   ) where
 
@@ -9,7 +9,7 @@ import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
-import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,OpenError(..))
+import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,OpenError(..),LoadBinaryError(..))
 import qualified Path (create,toString)
 import qualified Prog (Prog(..))
 
@@ -40,6 +40,25 @@ err2 line = do
 
 exit :: Prog a
 exit = Prog.Exit
+
+forkWait :: Command -> Prog () -> Prog ()
+forkWait command prog = do
+  Prog.Fork >>= \case
+    Nothing -> Prog.Exec command prog
+    Just pid -> Prog.Wait pid
+
+tryLoadBinary :: String -> Prog (Maybe (Prog ()))
+tryLoadBinary name = do
+  Prog.Call LoadBinary (Path.create name) >>= \case
+    Right prog -> do
+      pure (Just prog)
+    Left LBE_CantLoadAsBinary -> do
+      pure Nothing
+    Left LBE_NoSuchPath -> do
+      -- TODO: err2/exit, but tests will need updating
+      --err2 $ "no such executable: " ++ name
+      --exit
+      pure Nothing
 
 checkNoArgs :: Prog () -> Prog ()
 checkNoArgs prog = do

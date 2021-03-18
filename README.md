@@ -45,15 +45,16 @@ _It's not a shell, it's just a sham._
 - scripts: countdown N, head N
 - predefined: lsof (run 'lsof | cat' to see something)
 - ls -a
+- fork initial "sham" from "init"
 
 ### Ideas/Plans
+- general vars (foo=something, $foo); + env for pasing info to commands. use for 'sham' level
+- rm, mv
 - quoting ('')
-- general vars (foo=something, $foo)
 - grouping and sequencing: (...), foo;bar
-- fork initial "sham" from "init"
 - introduce tty, which is connected by 3 pipes
 - scripts: drop N, wc-l
-- rm, mv, grep -v, ls -l
+- grep -v, ls -l
 - restructure: Interaction stays at level of Prog (not SysCall)
 - avoid special handling of Console in SysCall Target
 - aysnc operation via "Pause" in Prog and Interaction. Clocked externally

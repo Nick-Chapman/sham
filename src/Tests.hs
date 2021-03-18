@@ -5,12 +5,11 @@ import Data.List (isInfixOf)
 import Testing (test)
 import qualified FileSystem (ls)
 import qualified Image (fs0,days,readme)
-import qualified MeNicks (Prog)
 import qualified Path (toString,hidden)
 import qualified Testing (run)
 
-run :: MeNicks.Prog () -> IO ()
-run sham = Testing.run sham $ do
+run :: IO ()
+run = Testing.run $ do
   let days = Image.days
   let rw = map reverse days
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
@@ -62,7 +61,7 @@ run sham = Testing.run sham $ do
   test ["echo ps | xargs man"] ["ps : list all running processes"]
   test ["echo ls ps | xargs man"] ["(stderr) man : no manual entry for 'ls ps'"]
 
-  test ["lsof | cat"] ["[2] (lsof) &1 Write:pipe1", "[3] (cat) &0 Read:pipe1"]
+  test ["lsof | cat"] ["[3] (lsof) &1 Write:pipe1", "[4] (cat) &0 Read:pipe1"]
 
   test ["if 2=3 echo foo"] []
   test ["if 2!=3 echo foo"] ["foo"]
@@ -155,14 +154,13 @@ run sham = Testing.run sham $ do
   test ["echo exit > y","cat > x","echo 1","y","echo 2","","x"] ["1","2"]
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
 
-  test ["ps"] ["[1] init","[2] ps"]
   test ["cat days | grep u"] [ d | d <- days, "u" `isInfixOf` d ]
   test ["grep"] ["(stderr) grep: takes a single argument"]
 
-  test ["echo my pid is $$"] ["my pid is 1"]
-
-  test ["exec ps"] ["[1] ps"]
-  test [".me"] ["2"]
-  test ["exec .me"] ["1"]
-  test ["cat .me > a","echo .me >> a","a",".me"] ["4","5","6"]
-  test ["cat .me > a","echo exec .me >> a","a",".me"] ["4","4","5"]
+  test ["ps"] ["[1] init","[2] sham","[3] ps"]
+  test ["exec ps"] ["[1] init","[2] ps"]
+  test ["echo my pid is $$"] ["my pid is 2"]
+  test [".me"] ["3"]
+  test ["exec .me"] ["2"]
+  test ["cat .me > a","echo .me >> a","a",".me"] ["5","6","7"]
+  test ["cat .me > a","echo exec .me >> a","a",".me"] ["5","5","6"]

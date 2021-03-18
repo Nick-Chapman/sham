@@ -9,10 +9,10 @@ module Script (
 
 import Data.Map (Map)
 import Interaction (Prompt(..))
-import Lib (stdin,stdout,stderr,read,write,exit,withOpen,readAll)
+import Lib (stdin,stdout,stderr,read,write,exit,withOpen,readAll,tryLoadBinary)
 import Misc (EOF(..),PipeEnds(..))
 import Prelude hiding (Word,read)
-import Prog (FD,SysCall(..),BadFileDescriptor(..),LoadBinaryError(..),Pid(..),Prog,Command(..),OpenMode(..))
+import Prog (FD,SysCall(..),BadFileDescriptor(..),Pid(..),Prog,Command(..),OpenMode(..))
 import qualified Data.Map.Strict as Map
 import qualified Path (create)
 import qualified Prog (Prog(..))
@@ -295,19 +295,6 @@ lookupCommand name args = do
           pure (Command ("sham",name:args),prog)
         Nothing -> do
           write stderr "cant find sham interpreter"; exit
-
-tryLoadBinary :: String -> Prog (Maybe (Prog ()))
-tryLoadBinary name = do
-  Prog.Call LoadBinary (Path.create name) >>= \case
-    Right prog -> do
-      pure (Just prog)
-    Left LBE_CantLoadAsBinary -> do
-      pure Nothing
-    Left LBE_NoSuchPath -> do
-      -- TODO: err2/exit, but tests will need updating
-      --err2 $ "no such executable: " ++ name
-      --exit
-      pure Nothing
 
 echo :: Env -> [String] -> Context -> Prog ()
 echo env args = \case

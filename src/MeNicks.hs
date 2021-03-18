@@ -1,23 +1,29 @@
--- | The 'MeNicks' operating system. Runs a program (to an interaction) given an initial file-system.
-module MeNicks (Prog, run) where
+-- | The 'MeNicks' operating system. Run 'init', which forks a 'sham' interpreter.
+module MeNicks (start) where
 
 import Data.Map (Map)
 import FileSystem (FileSystem)
 import Interaction (Interaction(..))
+import Lib (forkWait,tryLoadBinary,write,stderr,exit)
 import Misc (Block(..))
 import OpenFiles (OpenFiles)
-import Prog (OF)
+import Prelude hiding (init)
+import Prog (Prog(..),Pid(..),Command(..),SysCall,FD,OF)
 import SysCall (Env,env0,dupEnv,closeEnv,runSys,openFiles)
 import qualified Data.Map.Strict as Map
 import qualified OpenFiles (init)
 
-import Prog (Prog(..),Pid(..),Command(..),SysCall,FD)
-
-run :: FileSystem -> Prog () -> Interaction
-run fs prog = do
-  let action = linearize prog (\() -> A_Halt)
+start :: FileSystem -> Interaction
+start fs = do
+  let initProc = Proc (Command ("init",[])) env0 (linearize init (\() -> A_Halt))
   let (state,pid) = newPid (initState fs)
-  resume pid (Proc (Command ("init",[])) env0 action) state
+  resume pid initProc state
+
+init :: Prog ()
+init = tryLoadBinary "sham" >>= \case
+  Nothing -> do write stderr "init : cannot find sham interpreter"; exit
+  Just prog -> do
+    forkWait (Command ("sham",[])) prog
 
 linearize :: Prog a -> (a -> Action) -> Action
 linearize p0 = case p0 of
