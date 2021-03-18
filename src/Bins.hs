@@ -7,14 +7,14 @@ import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Interaction (Prompt(..))
-import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,getSingleArg,readAll)
+import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,getSingleArg,readAll,exit)
 import Misc (EOF(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
 import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,FileKind(..),BinaryMeta(..))
 import Text.Read (readMaybe)
 import qualified Data.Map.Strict as Map
-import qualified Path (create,toString)
+import qualified Path (create,toString,hidden)
 import qualified Prelude
 import qualified Prog (Prog(..))
 
@@ -36,9 +36,9 @@ man = do
      , ("cat"  , "write named files (or stdin in no files given) to stdout")
      , ("rev"  , "copy stdin to stdout, reversing each line")
      , ("grep" , "copy lines which match the given pattern to stdout ")
-     , ("ls"   , "list all files on the filesystem")
+     , ("ls"   , "list non-hidden files; add '-a' flag to also see hidden files")
      , ("ps"   , "list all running processes")
-     , ("lsof" , "list open files in running processesx")
+     , ("lsof" , "list open files in running processes")
      , ("sum"  , "write sum of the given numeric arguments to stdout")
      , ("type" , "determine the type of named files: binary or data")
      , ("xargs", "concatenate lines from stdin, and pass as arguments to the given command")
@@ -95,9 +95,14 @@ grep = do
   loop
 
 ls :: Prog ()
-ls = checkNoArgs $ do
+ls = do
+  Command(me,args) <- Prog.Argv
+  seeHidden <- case args of
+    [] -> pure False
+    ["-a"] -> pure True
+    _ -> do write stderr (me ++ ": takes no arguments, or a single '-a'"); exit
   paths <- Prog.Call Paths ()
-  mapM_ (write stdout . Path.toString) (sort paths)
+  mapM_ (write stdout . Path.toString) $ sort [ p | p <- paths , seeHidden || not (Path.hidden p) ]
 
 ps :: Prog ()
 ps = checkNoArgs $ do

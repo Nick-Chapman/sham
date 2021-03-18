@@ -35,50 +35,50 @@ fs0 = FileSystem.create image where
   scripts  =
     [ ("README", readme)
     , ("days"  , days)
-    , ("help"  , ["cat README"])
-    , ("yes"   , ["echo yes","exec yes"])
-    , ("bomb"  , ["echo $$ >&2", "bomb | bomb"])
-    , ("me"    , ["echo $$"])
+    , ("help"  , ["# Help the user!","cat README"])
     , ("cp"    , ["# cp SRC DEST: copy a file from SRC to DEST","cat $1 > $2"])
+    , ("yes"   , ["# Write an infinite stream of 'y's to stdout", "echo y","exec yes"])
 
-    , ("countdown", [
+    , (".bomb"  , ["echo $$ >&2", ".bomb | .bomb"])
+    , (".me"    , ["echo $$"])
+    , (".countdown", [
           "# countdown N: generate decrementing sequence of numbers starting at N",
           "# if N is negative, the sequence will never stop",
-          "if $# != 1 echo countdown: takes one argument >&2",
+          "if $# != 1 echo $0 : takes one argument >&2",
           "if $# != 1 exit",
           --"if $1=0 ps #debug",
           "if $1=0 exit",
           "echo $1",
-          "sum $1 -1 | xargs countdown"
+          "sum $1 -1 | xargs .countdown"
           ])
 
-    , ("like-cat", [
+    , (".like-cat", [
           "# like-cat: this script should have the same behavior as cat",
           "read x",
           "echo $x",
           "like-cat"
           ])
 
-    , ("head-1", [
+    , (".head-1", [
           "# head-1: copy the first line on stdin to stdout",
           "read x",
           "echo $x"
           ])
 
-    , ("make-head-N", [
+    , (".make-head-N", [
           "# make-head: output a head-script for N determined by size of input",
           "read ignored",
-          "echo head-1",
-          "make-head-N"])
+          "echo .head-1",
+          ".make-head-N"])
 
-    , ("head", [
+    , (".head", [
           "# head N: take first N line from stdin",
           "# if N is negative, this script will hang",
-          "if $# != 1 echo head: takes one numeric argument >&2",
+          "if $# != 1 echo $0 : takes one numeric argument >&2",
           "if $# != 1 exit",
-          "echo > tmp", -- TODO: fix ">>" so this is not necessary
-          "countdown $1 | make-head-N >> tmp",
-          "tmp"
+          "echo > .tmp", -- TODO: fix ">>" so this is not necessary
+          ".countdown $1 | .make-head-N >> .tmp",
+          ".tmp"
           ])
 
 {-

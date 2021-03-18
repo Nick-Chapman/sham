@@ -44,6 +44,7 @@ _It's not a shell, it's just a sham._
 - predefined command: sum N N ... N
 - scripts: countdown N, head N
 - predefined: lsof (run 'lsof | cat' to see something)
+- ls -a
 
 ### Ideas/Plans
 - quoting ('')

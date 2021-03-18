@@ -6,7 +6,7 @@ import Testing (test)
 import qualified FileSystem (ls)
 import qualified Image (fs0,days,readme)
 import qualified MeNicks (Prog)
-import qualified Path (toString)
+import qualified Path (toString,hidden)
 import qualified Testing (run)
 
 run :: MeNicks.Prog () -> IO ()
@@ -14,10 +14,7 @@ run sham = Testing.run sham $ do
   let days = Image.days
   let rw = map reverse days
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
-  let paths0 = map Path.toString (FileSystem.ls Image.fs0)
-
-  -- TODO: make this test less fragile
-  --test ["bins"] ["bins","cat","echo","grep","ls","man","ps","rev","sham","sum", "xargs"]
+  let paths0 = [ Path.toString p | p <- FileSystem.ls Image.fs0, not (Path.hidden p) ]
 
   test ["echo foo"] ["foo"]
   test ["sham echo foo"] ["(stderr) cant open for reading: echo"]
@@ -75,20 +72,20 @@ run sham = Testing.run sham $ do
   test ["sum 100 -1 0 200"] ["299"]
   test ["sum 100 -1 0 x200"] ["(stderr) sum: unable to convert 'x200' to a number","99"]
 
-  test ["cat days | head 1"] ["Monday"]
-  test ["cat days | grep u | head 1"] ["Tuesday"]
-  test ["yes | head 1", "echo woo hoo"] ["yes","woo hoo"]
-  test ["yes | head 2", "echo woo hoo"] ["yes","yes","woo hoo"]
-  test ["yes | head 1", "yes | head 1"] ["yes","yes"]
+  test ["cat days | .head 1"] ["Monday"]
+  test ["cat days | grep u | .head 1"] ["Tuesday"]
+  test ["yes | .head 1", "echo woo hoo"] ["y","woo hoo"]
+  test ["yes | .head 2", "echo woo hoo"] ["y","y","woo hoo"]
+  test ["yes | .head 1", "yes | .head 1"] ["y","y"]
 
-  test ["countdown 0"] []
-  test ["countdown 1"] ["1"]
-  test ["countdown 3"] ["3","2","1"]
-  test ["countdown -1 | head-1"] ["-1"]
+  test [".countdown 0"] []
+  test [".countdown 1"] ["1"]
+  test [".countdown 3"] ["3","2","1"]
+  test [".countdown -1 | .head-1"] ["-1"]
 
-  test ["cat days | head 3"] (take 3 days)
-  test ["head 3 < days"] (take 3 days)
-  test ["countdown -1 | head 3"] ["-1","-2","-3"]
+  test ["cat days | .head 3"] (take 3 days)
+  test [".head 3 < days"] (take 3 days)
+  test [".countdown -1 | .head 3"] ["-1","-2","-3"]
 
   test ["help &"] Image.readme
   test ["doh"] ["(stderr) no such path: doh"]
@@ -125,7 +122,7 @@ run sham = Testing.run sham $ do
 
   test ["rev nope"] ["(stderr) rev: takes no arguments"]
   test ["rev nope < days"] ["(stderr) rev: takes no arguments"]
-  test ["ls nope"] ["(stderr) ls: takes no arguments"]
+  test ["ls nope"] ["(stderr) ls: takes no arguments, or a single '-a'"]
   test ["ps nope"] ["(stderr) ps: takes no arguments"]
 
   test ["echo doh > x","echo echo foo >> x","x"] ["(stderr) no such path: doh","foo"]
@@ -165,7 +162,7 @@ run sham = Testing.run sham $ do
   test ["echo my pid is $$"] ["my pid is 1"]
 
   test ["exec ps"] ["[1] ps"]
-  test ["me"] ["2"]
-  test ["exec me"] ["1"]
-  test ["cat me > a","echo me >> a","a","me"] ["4","5","6"]
-  test ["cat me > a","echo exec me >> a","a","me"] ["4","4","5"]
+  test [".me"] ["2"]
+  test ["exec .me"] ["1"]
+  test ["cat .me > a","echo .me >> a","a",".me"] ["4","5","6"]
+  test ["cat .me > a","echo exec .me >> a","a",".me"] ["4","4","5"]
