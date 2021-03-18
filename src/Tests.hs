@@ -60,8 +60,8 @@ run sham = Testing.run sham $ do
   test ["echo foo | xargs ps"] ["(stderr) ps: takes no arguments"]
 
   test ["man foo"] ["(stderr) man : no manual entry for 'foo'"]
-  test ["man ps"] ["ps : list all running process"]
-  test ["echo ps | xargs man"] ["ps : list all running process"]
+  test ["man ps"] ["ps : list all running processes"]
+  test ["echo ps | xargs man"] ["ps : list all running processes"]
   test ["echo ls ps | xargs man"] ["(stderr) man : no manual entry for 'ls ps'"]
 
   test ["lsof | cat"] ["[2] (lsof) &1 Write:pipe1", "[3] (cat) &0 Read:pipe1"]

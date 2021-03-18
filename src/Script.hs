@@ -8,13 +8,11 @@ module Script (
 
 import Data.Map (Map)
 import Interaction (Prompt(..))
-import Misc (EOF(..))
-import Misc (PipeEnds(..))
-import Native (err2,exit,stdin,stdout)
-import Prelude hiding (Word)
+import Lib (stdin,stdout,stderr,read,write,exit,withOpen,readAll)
+import Misc (EOF(..),PipeEnds(..))
+import Prelude hiding (Word,read)
 import Prog (FD,SysCall(..),BadFileDescriptor(..),LoadBinaryError(..),Pid(..),Prog,Command(..),OpenMode(..))
 import qualified Data.Map.Strict as Map
-import qualified Native (echo,write,withOpen,readAll,read,write)
 import qualified Path (create)
 import qualified Prog (Prog(..))
 
@@ -81,7 +79,7 @@ runScript env0 script0 = loop env0 script0 (\_ -> pure ()) where
 
   loop :: Env -> Script -> (Env -> Prog ()) -> Prog ()
   loop env = \case
-    ShamError s -> \_k -> do err2 s
+    ShamError s -> \_k -> do write stderr s
     Seq s1 s2 -> \k -> loop env s1 (\env -> loop env s2 k)
 
     If pred s1 s2 -> \k -> do
@@ -106,7 +104,7 @@ runScript env0 script0 = loop env0 script0 (\_ -> pure ()) where
 
 builtinRead :: Prog String
 builtinRead =
-  Native.read NoPrompt stdin >>= \case
+  read NoPrompt stdin >>= \case
     Left EOF -> exit
     Right line -> return line
 
@@ -216,13 +214,13 @@ evalWord Env{pid,com,args,bindings} = \case
   DollarN n ->
     if n > length args
     then do
-      err2 ("$" ++ show n ++ " unbound")
+      write stderr ("$" ++ show n ++ " unbound")
       pure ""
     else pure $ (com:args)!!n
   DollarName x ->
     case Map.lookup x bindings of
       Nothing -> do
-        err2 ("$" ++ show x ++ " unbound")
+        write stderr ("$" ++ show x ++ " unbound")
         pure ""
       Just v ->
         pure v
@@ -250,7 +248,7 @@ runAct env (rs,wm) args = \case
   Exit ->
     case (rs,wm,args) of
       ([],Wait,[]) -> Prog.Exit
-      _ -> err2 "exit takes no args, redirects, or (&)"
+      _ -> write stderr "exit takes no args, redirects, or (&)"
 
   Echo ->
     -- TODO: check redirects/wait here & switch builtin/external echo
@@ -261,7 +259,7 @@ runAct env (rs,wm) args = \case
       ([],Wait,com:args) -> do
         script <- loadShamScript env com
         runScript env { args } script
-      _ -> err2 "source takes at least one argument, but no redirects or (&)"
+      _ -> write stderr "source takes at least one argument, but no redirects or (&)"
 
   RunExternal name -> do
     (command,prog) <- lookupCommand name args
@@ -269,7 +267,7 @@ runAct env (rs,wm) args = \case
 
   Exec -> do
     case wm of
-      NoWait -> err2 "exec may not be run (&)"
+      NoWait -> write stderr "exec may not be run (&)"
       Wait -> do
         mapM_ (execRedirect env) rs
         case args of
@@ -281,8 +279,8 @@ runAct env (rs,wm) args = \case
 loadShamScript :: Env -> String -> Prog Script
 loadShamScript env path = do
   lines <- do
-    Native.withOpen (Path.create path) OpenForReading $ \fd -> do
-      Native.readAll fd
+    withOpen (Path.create path) OpenForReading $ \fd -> do
+      readAll fd
   pure $ shamParser env lines
 
 lookupCommand :: String -> [String] -> Prog (Command,Prog ())
@@ -295,7 +293,7 @@ lookupCommand name args = do
         Just prog -> do
           pure (Command ("sham",name:args),prog)
         Nothing -> do
-          err2 "cant find sham interpreter"; exit
+          write stderr "cant find sham interpreter"; exit
 
 tryLoadBinary :: String -> Prog (Maybe (Prog ()))
 tryLoadBinary name = do
@@ -313,9 +311,15 @@ tryLoadBinary name = do
 echo :: Env -> [String] -> Context -> Prog ()
 echo env args = \case
   ([],Wait) ->
-    Native.write stdout (unwords args) --builtin echo
+    write stdout (unwords args) --builtin echo
   context -> do
-    runCommandInProcess env context (Command ("/bin/echo",args)) Native.echo
+    runCommandInProcess env context (Command ("/bin/echo",args)) native_echo
+
+native_echo :: Prog () -- TODO: fix this hack
+native_echo = do
+  Command(_,args) <- Prog.Argv
+  write stdout (unwords args)
+
 
 runCommandInProcess :: Env -> Context -> Command -> Prog () -> Prog ()
 runCommandInProcess env (rs,mode) command prog = do
@@ -331,7 +335,7 @@ execRedirect :: Env -> Redirect -> Prog ()
 execRedirect env = \case
   Redirect mode dest (FromPath path) -> do
     path <- evalWord env path
-    Native.withOpen (Path.create path) mode $ \src -> do
+    withOpen (Path.create path) mode $ \src -> do
       dup2 dest src
   Redirect _mode dest (FromFD src) -> do -- do we care what the mode is?
     dup2 dest src
@@ -340,6 +344,6 @@ dup2 :: FD -> FD -> Prog ()
 dup2 d s = do
   Prog.Call Dup2 (d,s) >>= \case
     Left BadFileDescriptor -> do
-      err2 $ "bad file descriptor: " ++ show s
+      write stderr $ "bad file descriptor: " ++ show s
       exit
     Right () -> pure ()

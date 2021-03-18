@@ -3,6 +3,7 @@ module Sham (shamConsole,runCommand,sham) where
 
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile,ParseError(..),Ambiguity(..),SyntaxError(..))
 import Interaction (Prompt(..))
+import Lib (loadFile,checkNoArgs,read)
 import Misc (EOF(..))
 import Prelude hiding (Word,read,fail)
 import Prog (Prog(Trace),FD(..),Command(..),OpenMode(..),WriteOpenMode(..))
@@ -10,7 +11,6 @@ import Script (Script(..),Step(..),WaitMode(..),Redirect(..),RedirectSource(..),
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
-import qualified Native (loadFile,checkNoArgs,read)
 import qualified Prog (Prog(Argv,MyPid))
 import qualified Script (runScript,Env(..))
 
@@ -25,16 +25,16 @@ sham = do
       let _ = Prog.Trace (show script) -- for debug
       runScript script []
     path:args -> do
-      lines <- Native.loadFile path
+      lines <- loadFile path
       let script = parseLines lines
       runScript script args
 
 shamConsole :: Int -> Prog ()
-shamConsole level = Native.checkNoArgs $ loop 1 where
+shamConsole level = checkNoArgs $ loop 1 where
   loop :: Int -> Prog ()
   loop n = do
     let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
-    Native.read (Prompt prompt) (FD 0) >>= \case
+    read (Prompt prompt) (FD 0) >>= \case
       Left EOF -> pure ()
       Right line -> do
         let script = parseLine line

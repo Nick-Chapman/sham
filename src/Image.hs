@@ -1,12 +1,14 @@
 module Image (fs0,readme,days) where
 
+import Bins (echo,cat,rev,grep,ls,ps,lsof,xargs,man,sum,type_)
 import FileSystem (FileSystem)
+import Prelude hiding (sum)
 import Prog (BinaryMeta(..))
+import Sham (sham)
 import qualified File (createData,createProg)
 import qualified FileSystem (create)
-import qualified Native
 import qualified Path (create)
-import qualified Sham (runCommand,sham)
+import qualified Sham (runCommand)
 
 fs0 :: FileSystem
 fs0 = FileSystem.create image where
@@ -15,18 +17,18 @@ fs0 = FileSystem.create image where
     [ (Path.create p, File.createProg prog (BinaryMeta p)) | (p,prog) <- bins ]
 
   bins =
-    [ ("echo",Native.echo)
-    , ("cat",Native.cat)
-    , ("rev",Native.rev)
-    , ("grep",Native.grep)
-    , ("ls",Native.ls)
-    , ("ps",Native.ps)
-    , ("lsof",Native.lsof)
-    , ("sham",Sham.sham)
-    , ("xargs",Native.xargs Sham.runCommand)
-    , ("man",Native.man)
-    , ("sum",Native.sum)
-    , ("type",Native.type_)
+    [ ("echo",echo)
+    , ("cat",cat)
+    , ("rev",rev)
+    , ("grep",grep)
+    , ("ls",ls)
+    , ("ps",ps)
+    , ("lsof",lsof)
+    , ("sham",sham)
+    , ("xargs",xargs Sham.runCommand) -- TODO: avoid this parameterization
+    , ("man",man)
+    , ("sum",sum)
+    , ("type",type_)
     ]
 
   scripts  =
