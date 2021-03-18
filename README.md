@@ -4,6 +4,10 @@
 
 To build, test and run, type `stack run`.
 
+No real files will be harmed during the execution of `sham`.
+
+_It's not a shell, it's just a sham._
+
 ### Goal is to better understand:
 
 - IO redirection
@@ -24,32 +28,33 @@ To build, test and run, type `stack run`.
 - pipefs
 
 #### `sham`:
-- console/command execution; builtins: exit, source (.)
-- predefined commands: sham bins cat echo grep head ls man ps rev xargs
-- script files
+- sham: console / script file interpreter
+- predefined commands: cat echo grep ls man ps rev xargs
+- builtin: echo, exit, exec, source (.)
 - redirection to/from files/descriptors: < input >> foo 2>&1
 - pipes (|)
 - backgrounding (&)
 - my pid ($$)
-- builtin "echo" (runs in process). critical to making "yes | head" work! (give absence of exit codes)
 - command line arguments: $0 $1 $2 etc
-- predefined scripts: help, yes, bomb, yes, cp
+- sham, sham -c, sham SCRIPT
+- scripts: help yes bomb cp
 - comments (#)
+- syntax: read VAR
+- syntax: if PRED COMMAND   (PRED: WORD = WORD | WORD != WORD)
+- predefined command: sum N N ... N
+- scripts: countdown N, head N
 
 ### Ideas/Plans
-- fork initial "sham" from "init"
-- predefs commands for arithmetic: sum, ifeq
-- read (syntax or command?)
-- scripts: head N, drop N, countdown N, wc-l
 - lsof
-- rm
-- quoting (''), sham-vars (foo=something, $foo)
+- quoting ('')
+- general vars (foo=something, $foo)
 - grouping and sequencing: (...), foo;bar
+- fork initial "sham" from "init"
 - introduce tty, which is connected by 3 pipes
+- scripts: drop N, wc-l
+- rm, mv, grep -v, ls -l
 - restructure: Interaction stays at level of Prog (not SysCall)
 - avoid special handling of Console in SysCall Target
-- grep -v
-- ls -l
 - aysnc operation via "Pause" in Prog and Interaction. Clocked externally
 - predefined: mktmp, kill, sleep
 - exit codes

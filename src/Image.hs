@@ -93,7 +93,7 @@ fs0 = FileSystem.create image where
 readme :: [String]
 readme =
   [ "Welcome to *sham*."
-  , "Some available commands include: echo, cat, rev, grep, ls, man, ps, xargs."
+  , "To discover available commands, run: 'ls | xargs type | grep Bin'"
   , "Type 'exit' or Ctrl-D to quit."
   ]
 
