@@ -64,6 +64,8 @@ run sham = Testing.run sham $ do
   test ["echo ps | xargs man"] ["ps : list all running process"]
   test ["echo ls ps | xargs man"] ["(stderr) man : no manual entry for 'ls ps'"]
 
+  test ["lsof | cat"] ["[2] (lsof) &1 Write:pipe1", "[3] (cat) &0 Read:pipe1"]
+
   test ["if 2=3 echo foo"] []
   test ["if 2!=3 echo foo"] ["foo"]
   test ["if 4=4 echo foo"] ["foo"]
