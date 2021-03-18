@@ -1,14 +1,14 @@
 module SysCall (
   SysCall,runSys,
-  Env,env0,dupEnv,closeEnv,
+  Env,env0,dupEnv,closeEnv,openFiles,
   ) where
 
 import Data.List (intercalate)
 import Data.Map (Map)
 import Interaction (Interaction(..),OutMode(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
-import OpenFiles (OpenFiles)
-import Prog (SysCall(..),FD(..),BadFileDescriptor(..))
+import OpenFiles (OpenFiles,whatIsKey)
+import Prog (SysCall(..),FD(..),BadFileDescriptor(..),FD,OF)
 import qualified Data.Map.Strict as Map
 import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write,devnull,loadBinary,fileKind)
 
@@ -150,6 +150,10 @@ instance Show Target where
     Console Normal -> "Tx"
     Console StdErr -> "Te"
     File k -> show k
+
+openFiles :: OpenFiles -> Env -> [(FD,OF)]
+openFiles os (Env m) =
+  [ (fd,oF) | (fd,File key) <- Map.toList m, let oF = OpenFiles.whatIsKey os key ]
 
 env0 :: Env
 env0 = Env $ Map.fromList

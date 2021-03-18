@@ -43,9 +43,9 @@ _It's not a shell, it's just a sham._
 - syntax: if PRED COMMAND   (PRED: WORD = WORD | WORD != WORD)
 - predefined command: sum N N ... N
 - scripts: countdown N, head N
+- predefined: lsof (run 'lsof | cat' to see something)
 
 ### Ideas/Plans
-- lsof
 - quoting ('')
 - general vars (foo=something, $foo)
 - grouping and sequencing: (...), foo;bar

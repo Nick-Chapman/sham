@@ -1,5 +1,5 @@
 module Native (
-  echo, cat, rev, grep, ls, ps, bins, xargs, man, sum, type_,
+  echo, cat, rev, grep, ls, ps, lsof, xargs, man, sum, type_,
   loadFile, withOpen, readAll, read, write, err2, checkNoArgs, exit,
   stdin, stdout,
   ) where
@@ -94,9 +94,12 @@ ps = checkNoArgs $ do
   sequence_
     [ write stdout (show pid ++ " " ++ show com)  | (pid,com) <- sortOn fst xs ]
 
-bins :: [String] -> Prog ()
-bins names = checkNoArgs $ do
-  mapM_ (write stdout) $ names
+lsof :: Prog ()
+lsof = checkNoArgs $ do
+  xs <- Prog.Lsof
+  sequence_
+    [ write stdout (show pid ++ " (" ++ show command ++ ") " ++ show fd ++ " " ++ show entry)
+    | (pid,command,fd,entry) <- xs ]
 
 xargs :: (Command -> Prog ()) -> Prog ()
 xargs runCommand = do

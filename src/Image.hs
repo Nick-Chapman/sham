@@ -21,6 +21,7 @@ fs0 = FileSystem.create image where
     , ("grep",Native.grep)
     , ("ls",Native.ls)
     , ("ps",Native.ps)
+    , ("lsof",Native.lsof)
     , ("sham",Sham.sham)
     , ("xargs",Native.xargs Sham.runCommand)
     , ("man",Native.man)

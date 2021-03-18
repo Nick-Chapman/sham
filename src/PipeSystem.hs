@@ -11,6 +11,7 @@ import Data.List (intercalate)
 import Data.Map (Map)
 import Misc (Block(..),EOF(..),EPIPE(..))
 import Pipe (Pipe)
+import Prog (PipeKey)
 import qualified Data.Map.Strict as Map
 import qualified Pipe
 
@@ -20,6 +21,8 @@ writePipe :: PipeSystem -> Key -> String -> Either Block (Either EPIPE PipeSyste
 readPipe :: PipeSystem -> Key -> Either Block (Either EOF String,PipeSystem)
 closeForReading :: PipeSystem -> Key -> PipeSystem
 closeForWriting :: PipeSystem -> Key -> PipeSystem
+
+type Key = PipeKey
 
 data PipeSystem = State
   { m :: Map Key (Pipe,Mode)
@@ -36,9 +39,6 @@ instance Show Mode where
 instance Show PipeSystem where
   show State{m} =
     intercalate "," [ show k ++ show m ++ show p | (k,(p,m)) <- Map.toList m ]
-
-newtype Key = Key Int deriving (Eq,Ord,Num)
-instance Show Key where show (Key n) = "pipe"++show n
 
 empty = State { m = Map.empty, next = 1 }
 

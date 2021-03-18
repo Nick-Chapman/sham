@@ -2,7 +2,8 @@ module Prog (
   Prog(..), SysCall(..), FileKind(..),BinaryMeta(..),
   OpenMode(..), WriteOpenMode(..),
   BadFileDescriptor(..), OpenError(..), LoadBinaryError(..), NoSuchPath(..),
-  Command(..), FD(..), Pid(..)
+  Command(..), FD(..), Pid(..),
+  PipeKey, OF(..),
   ) where
 
 import Control.Monad (ap,liftM)
@@ -34,6 +35,7 @@ data Prog a where
   Argv :: Prog Command
   MyPid :: Prog Pid
   Procs :: Prog [(Pid,Command)]
+  Lsof :: Prog [(Pid,Command,FD,OF)]
   Call :: (Show a) => SysCall a b -> a -> Prog b
 
 instance Functor Prog where fmap = liftM
@@ -87,3 +89,21 @@ instance Show (SysCall a b) where -- TODO: automate?
     Paths -> "Paths"
     SysPipe -> "Pipe"
     Unused -> "Unused"
+
+newtype PipeKey = PipeKey Int deriving (Eq,Ord,Num)
+instance Show PipeKey where show (PipeKey n) = "pipe"++show n
+
+data OF -- opened file
+  = PipeRead PipeKey
+  | PipeWrite PipeKey
+  | FileAppend Path -- nothing done when opened
+  | FileContents [String] -- full contents read when opened
+  | DevNull
+
+instance Show OF where
+  show = \case
+    PipeRead pk -> "Read:"++show pk
+    PipeWrite pk -> "Write:"++show pk
+    FileAppend path -> "Append:"++show path
+    FileContents xs -> "Contents[size=#"++show (length xs)++"]"
+    DevNull -> "/dev/null"

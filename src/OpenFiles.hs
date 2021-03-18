@@ -1,6 +1,6 @@
 module OpenFiles (
   init, OpenFiles, Key,
-  devnull, open, pipe, dup, close, read, write, ls, fileKind, loadBinary,
+  devnull, open, pipe, dup, close, read, write, ls, fileKind, loadBinary, whatIsKey,
   ) where
 
 import Data.List (intercalate)
@@ -10,12 +10,11 @@ import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnd
 import Path (Path)
 import PipeSystem (PipeSystem)
 import Prelude hiding (init,read)
-import Prog (Prog,OpenMode(..),WriteOpenMode(..),OpenError(..),LoadBinaryError(..),NoSuchPath(..),FileKind)
+import Prog (Prog,OpenMode(..),WriteOpenMode(..),OpenError(..),LoadBinaryError(..),NoSuchPath(..),FileKind,OF(..))
 import qualified Data.Map.Strict as Map
 import qualified File
 import qualified FileSystem
 import qualified PipeSystem
-
 
 data OpenFiles = OpenFiles
   { fs :: FileSystem
@@ -37,26 +36,13 @@ instance Show FileTable where
   show Tab{unTab=m} =
     intercalate ", " [ show k ++ "=" ++ show e | (k,e) <- Map.toList m ]
 
+type What = OF
+
 data Entry = Entry { rc :: Int, what :: What }
 
 instance Show Entry where
   show Entry{rc,what} =
     show what ++ "(" ++ show rc ++ ")"
-
-data What
-  = PipeRead PipeSystem.Key
-  | PipeWrite PipeSystem.Key
-  | FileAppend Path -- nothing done when opened
-  | FileContents [String] -- full contents read when opened
-  | DevNull
-
-instance Show What where
-  show = \case
-    PipeRead pk -> "Read:"++show pk
-    PipeWrite pk -> "Write:"++show pk
-    FileAppend path -> "Append:"++show path
-    FileContents xs -> "Contents[size=#"++show (length xs)++"]"
-    DevNull -> "/dev/null"
 
 init :: FileSystem -> OpenFiles
 init fs = OpenFiles
@@ -188,6 +174,10 @@ write state@OpenFiles{table,pipeSystem,fs} key line = do
           let fs' = FileSystem.link fs path file'
           Right (Right (Right state { fs = fs' }))
 
+whatIsKey :: OpenFiles -> Key -> OF
+whatIsKey OpenFiles{table} key = do
+  let Entry{what} = look "whatIsKey" key (unTab table)
+  what
 
 ls :: OpenFiles -> [Path]
 ls OpenFiles{fs} = FileSystem.ls fs

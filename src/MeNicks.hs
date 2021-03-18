@@ -5,11 +5,12 @@ import FileSystem (FileSystem)
 import Interaction (Interaction(..))
 import Misc (Block(..))
 import OpenFiles (OpenFiles)
-import SysCall (Env,env0,dupEnv,closeEnv,runSys)
+import Prog (OF)
+import SysCall (Env,env0,dupEnv,closeEnv,runSys,openFiles)
 import qualified Data.Map.Strict as Map
 import qualified OpenFiles (init)
 
-import Prog (Prog(..),Pid(..),Command(..),SysCall)
+import Prog (Prog(..),Pid(..),Command(..),SysCall,FD)
 
 run :: FileSystem -> Prog () -> Interaction
 run fs prog = do
@@ -29,6 +30,7 @@ linearize p0 = case p0 of
   Argv -> A_Argv
   MyPid -> A_MyPid
   Procs -> A_Procs
+  Lsof -> A_Lsof
   Call sys arg -> A_Call sys arg
 
 data Action where
@@ -40,6 +42,7 @@ data Action where
   A_Argv :: (Command -> Action) -> Action
   A_MyPid :: (Pid -> Action) -> Action
   A_Procs :: ([(Pid,Command)] -> Action) -> Action
+  A_Lsof :: ([(Pid,Command,FD,OF)] -> Action) -> Action
   A_Call :: (Show a) => SysCall a b -> a -> (b -> Action) -> Action
 
 resume :: Pid -> Proc -> State -> Interaction
@@ -82,6 +85,10 @@ resume me proc0@(Proc{command=command0,env,action=action0}) state@State{os} =
 
   A_Procs f -> do
     let res = (me,command0) : allProcs state
+    yield me proc0 { action = f res } state
+
+  A_Lsof f -> do
+    let res = lsof (me,proc0) state
     yield me proc0 { action = f res } state
 
   A_Call sys arg f -> do
@@ -134,6 +141,13 @@ instance Show State where
 allProcs :: State -> [(Pid,Command)]
 allProcs State{waiting,suspended} =
   [ (pid,command) | (pid,Proc{command}) <-  Map.toList waiting ++ Map.toList suspended ]
+
+lsof :: (Pid,Proc) -> State -> [(Pid,Command,FD,OF)]
+lsof (me,proc0) State{os,waiting,suspended} =
+  [ (pid,command,fd,oF)
+  | (pid,Proc{command,env}) <- (me,proc0) : (Map.toList waiting ++ Map.toList suspended)
+  , (fd,oF) <- openFiles os env
+  ]
 
 initState :: FileSystem -> State
 initState fs = State
