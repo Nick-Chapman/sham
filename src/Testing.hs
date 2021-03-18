@@ -1,3 +1,4 @@
+-- | Small testing framework for writng 'sham' regression tests.
 module Testing (test,run) where
 
 import Control.Monad (ap,liftM)
@@ -11,7 +12,7 @@ import qualified MeNicks (run)
 test :: [String] -> [String] -> Testing ()
 test is xs = T1 (Test (Lines is) (Lines xs))
 
-run :: Prog () -> Testing () -> IO ()
+run :: Prog () -> Testing () -> IO () -- TODO: remove passing console here
 run console testing = do
   bools <- sequence [ runTest console i x | (i,x) <- zip [1..] (collect testing) ]
   let numTests = length bools

@@ -1,3 +1,4 @@
+-- | System-wide table of 'open-files' which may be shared between different processes.
 module OpenFiles (
   init, OpenFiles, Key,
   devnull, open, pipe, dup, close, read, write, ls, fileKind, loadBinary, whatIsKey,

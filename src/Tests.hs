@@ -1,3 +1,4 @@
+-- | Regression tests for 'sham' console interactions.
 module Tests (run) where
 
 import Data.List (isInfixOf)

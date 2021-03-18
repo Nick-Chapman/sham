@@ -1,3 +1,4 @@
+-- | Entry point to the project. Run regression tests, then start a 'sham' console on 'MeNicks'.
 module Top (main) where
 
 import Console (runInteraction)

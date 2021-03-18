@@ -1,3 +1,4 @@
+-- | A 'program' which can be executed by MeNicks.
 module Prog (
   Prog(..), SysCall(..), FileKind(..),BinaryMeta(..),
   OpenMode(..), WriteOpenMode(..),

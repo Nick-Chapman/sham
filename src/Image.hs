@@ -1,3 +1,4 @@
+-- | The initial file-system image, containing predefined 'binary' and 'data' files.
 module Image (fs0,readme,days) where
 
 import Bins (echo,cat,rev,grep,ls,ps,lsof,xargs,man,sum,type_)

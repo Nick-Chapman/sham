@@ -1,3 +1,4 @@
+-- | An 'interaction' is the result of running a program on MeNicks.
 module Interaction (Interaction(..),Prompt(..),OutMode(..)) where
 
 import Misc (EOF(..))

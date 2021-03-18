@@ -1,3 +1,4 @@
+-- | Console for interacting with MeNicks. Supports history.
 module Console (runInteraction) where
 
 import Control.Monad (when)

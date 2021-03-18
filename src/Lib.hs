@@ -1,4 +1,4 @@
--- | Library of program fragments. (Used by Bins, and Sham/Script)
+-- | A 'library' of program fragments. Used by Bins, and Sham/Script.
 module Lib (
   stdin, stdout, stderr,
   read, write, exit,

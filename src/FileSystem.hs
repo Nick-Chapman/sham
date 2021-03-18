@@ -1,3 +1,4 @@
+-- | Simple flat file-system. Mapping 'path' to 'file' (contents).
 module FileSystem (
   create, FileSystem,
   ls,

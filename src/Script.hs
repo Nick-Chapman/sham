@@ -1,3 +1,4 @@
+-- | The AST of a 'sham' script, which can be interpreted as a program.
 module Script (
   Script(..), WaitMode(..),
   Step(..), Redirect(..), RedirectSource(..),

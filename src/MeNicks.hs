@@ -1,3 +1,4 @@
+-- | The 'MeNicks' operating system. Runs a program (to an interaction) given an initial file-system.
 module MeNicks (Prog, run) where
 
 import Data.Map (Map)

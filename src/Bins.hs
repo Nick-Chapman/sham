@@ -1,3 +1,4 @@
+-- | Predefined 'binary' programs, which will be available on the file-system.
 module Bins (
   man, echo, cat, rev, grep, ls, ps, lsof, sum, type_, xargs,
   ) where

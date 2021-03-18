@@ -1,3 +1,4 @@
+-- | 'pipefs' is the ephemeral file-system mapping pipe-keys to pipes.
 module PipeSystem (
   PipeSystem,
   empty,

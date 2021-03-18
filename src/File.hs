@@ -1,3 +1,4 @@
+-- | The contents of a 'file' which lives on the file-system. Two kinds: data or binary.
 module File (
   File,
   createProg, accessProg,

@@ -1,3 +1,4 @@
+-- | Interpret a 'system-call' of a MeNicks program, with respect to the process-env & open-files.
 module SysCall (
   SysCall,runSys,
   Env,env0,dupEnv,closeEnv,openFiles,

@@ -1,4 +1,4 @@
-
+-- | 'sham' is a shell-style command interpreter which runs on MeNicks.
 module Sham (shamConsole,runCommand,sham) where
 
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile,ParseError(..),Ambiguity(..),SyntaxError(..))
