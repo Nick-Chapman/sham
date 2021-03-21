@@ -78,14 +78,14 @@ lang token = script0 where
 
   script0 = do
     ws
-    res <- alts [ do res <- command; ws; pure res
+    res <- alts [ do res <- script; ws; pure res
                 , do eps; pure Null ]
     alts [eps,lineComment]
     pure res
 
   lineComment = do symbol '#'; skipWhile (skip token)
 
-  command = alts [ pipeline, conditional, readIntoVar ]
+  script = alts [ pipeline, conditional, readIntoVar ]
 
   conditional = do
     keyword "if"
@@ -123,7 +123,20 @@ lang token = script0 where
     alts [ do eps; pure Wait,
            do ws; symbol '&'; pure NoWait ]
 
-  step = do
+  step = alts [run,subshell]
+
+  subshell = do
+    symbol '('
+    script <- sequence
+    symbol ')'
+    rs <- redirects
+    pure $ SubShell script rs
+
+  sequence = do
+    (x1,xs) <- parseListSep script (do ws; symbol ';'; ws)
+    pure $ foldl Seq x1 xs
+
+  run = do
     (com,args) <- parseListSep word ws1
     case com of Word "read" -> fail; _ -> pure ()
     rs <- redirects

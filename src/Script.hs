@@ -156,7 +156,8 @@ runPipeline env wm = \case
 
 runStepAsPipeStage :: Env -> Step -> Prog ()
 runStepAsPipeStage env  = \case
-  SubShell{} -> undefined env
+  SubShell script rs ->
+    error "broken" $ subshell env (runScript env script) (rs,Wait)
   Run w1 ws rs -> do
     com <- evalWord env w1
     args <- mapM (evalWord env) ws
@@ -178,14 +179,24 @@ execStage args = \case
       name:args -> do
         execCommand (Command (name,args))
 
-
 runStep :: Env -> WaitMode -> Step -> Prog ()
 runStep env mode = \case
-  SubShell{} -> undefined
+  SubShell script rs ->
+    subshell env (runScript env script) (rs,mode)
   Run w ws rs -> do
     com <- evalWord env w
     args <- mapM (evalWord env) ws
     runAct env (rs,mode) args (decode com)
+
+subshell :: Env -> Prog () -> ([Redirect], WaitMode) -> Prog ()
+subshell env prog = \case
+  -- we can skip the subshell if there are no redircts and we must wait
+  ([],Wait) -> prog
+  (rs,wm) -> do -- otherwise we must fork
+    forkMode wm $ do
+      mapM_ (execRedirect env) rs
+      prog
+      exit
 
 evalPred :: Env -> Pred -> Prog Bool
 evalPred env = \case

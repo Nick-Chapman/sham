@@ -2,7 +2,10 @@
 module Lib (
   stdin, stdout, stderr,
   read, write, exit, forkWait, forkNoWait, tryLoadBinary, lookupCommand, execCommand,
-  checkNoArgs, getSingleArg, loadFile, withOpen, readAll,
+  checkNoArgs, getSingleArg,
+  loadFile,
+  withOpen,
+  readAll,
   ) where
 
 import Interaction (Prompt(..))

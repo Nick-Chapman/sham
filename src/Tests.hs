@@ -167,3 +167,12 @@ run = Testing.run $ do
 
   test ["exec 2>e","foo","bar","cat e"] ["no such path: foo", "no such path: bar"]
   test ["exec >&2", "echo foo"] ["(stderr) foo"]
+
+  test ["(echo foo; echo bar)"] ["foo","bar"]
+  test ["(ls;ps)"] (paths0 ++ ["[1] init","[2] sham","[4] ps"])
+  test ["(ls;ps) >x","cat x"] (paths0 ++ ["[1] init","[2] sham","[3] sham","[5] ps"])
+  --test ["(echo foo; echo bar) | rev"] ["oof","rab"] -- WORKS, but subshell in pipes is disabled
+  --test ["(ls;cat days) | grep es"] ["yes","Tuesday","Wednesday"]
+
+  test ["ls | grep es","lsof"] ["yes"]
+  --test ["(ls;ls) | grep es","lsof"] ["yes","yes"] -- fails coz grep still attached
