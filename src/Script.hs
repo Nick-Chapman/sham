@@ -2,6 +2,7 @@
 module Script (
   Script(..), WaitMode(..),
   Step(..), Redirect(..), RedirectSource(..),
+  Invocation(..),
   Pred(..),Word(..),Var(..),
   run,
   runScript, Env(..)
@@ -52,8 +53,12 @@ data WaitMode = Wait | NoWait
   deriving Show
 
 data Step
-  = Run Word [Word] [Redirect]
-  | SubShell Script [Redirect]
+  = Run Invocation [Redirect]
+  | XSubShell Script [Redirect]
+  deriving Show
+
+data Invocation
+  = Invocation Word [Word]
   deriving Show
 
 data Word
@@ -75,8 +80,12 @@ data Redirect = Redirect OpenMode FD RedirectSource
 data RedirectSource = FromPath Word | FromFD FD
   deriving Show
 
+
 runScript :: Env -> Script -> Prog ()
-runScript env0 script0 = loop env0 script0 (\_ -> pure ()) where
+runScript = runScriptM (X [])
+
+runScriptM :: Mode -> Env -> Script -> Prog ()
+runScriptM _mode env0 script0 = loop env0 script0 (\_ -> pure ()) where
 
   loop :: Env -> Script -> (Env -> Prog ()) -> Prog ()
   loop env = \case
@@ -95,12 +104,13 @@ runScript env0 script0 = loop env0 script0 (\_ -> pure ()) where
     Null -> \k -> do
       k env
 
-    Invoke1 step mode -> \k -> do
-      runStep env mode step
+    Invoke1 step wm -> \k -> do
+      _runStep env wm step
+      -- _doStep (addWait mode wm) env step
       k env
 
-    Pipeline steps mode -> \k -> do
-      runPipeline env mode steps
+    Pipeline steps wm -> \k -> do
+      runPipeline env wm steps
       k env
 
 builtinRead :: Prog String
@@ -112,7 +122,7 @@ builtinRead =
 
 runPipeline :: Env -> WaitMode -> [Step] -> Prog ()
 runPipeline env wm = \case
-    [] -> undefined
+    [] -> error "runPipeline[]"
     step1:steps -> loop Nothing [] step1 steps
   where
     loop :: Maybe FD -> [Pid] -> Step -> [Step] -> Prog ()
@@ -124,7 +134,7 @@ runPipeline env wm = \case
             case incoming of
               Nothing -> pure ()
               Just incoming -> do dup2 stdin incoming; Prog.Call Close incoming
-            runStepAsPipeStage env step1
+            execStep env step1
 
           Just childPid -> do
             case incoming of
@@ -144,7 +154,7 @@ runPipeline env wm = \case
               Just incoming -> do dup2 stdin incoming; Prog.Call Close incoming
             Prog.Call Close pipeR
             dup2 stdout pipeW; Prog.Call Close pipeW
-            runStepAsPipeStage env step1
+            execStep env step1
 
           Just childPid -> do
             case incoming of
@@ -154,49 +164,148 @@ runPipeline env wm = \case
             loop (Just pipeR) (childPid:pids) step2 steps
 
 
-runStepAsPipeStage :: Env -> Step -> Prog ()
-runStepAsPipeStage env  = \case
-  SubShell script rs ->
-    error "broken" $ subshell env (runScript env script) (rs,Wait)
-  Run w1 ws rs -> do
-    com <- evalWord env w1
-    args <- mapM (evalWord env) ws
-    mapM_ (execRedirect env) rs
-    execStage args (decode com)
+decode :: String -> Act
+decode = \case
+  "exit" -> Exit
+  "echo" -> Echo
+  "exec" -> Exec
+  "." -> SourceSham
+  name -> RunExternal name
 
-execStage :: [String] -> Act -> Prog ()
-execStage args = \case
-  Exit -> exit
-  Echo ->
-    execCommand (Command ("echo",args))
-  SourceSham ->
-    undefined -- TODO: do what in a pipeline?
-  RunExternal name -> do
-    execCommand (Command (name,args))
-  Exec -> do
-    case args of
-      [] -> exit
-      name:args -> do
-        execCommand (Command (name,args))
+data Act
+  = Exit
+  | Echo -- TODO: rename BuiltinEcho
+  | SourceSham
+  | RunExternal String
+  | Exec
 
-runStep :: Env -> WaitMode -> Step -> Prog ()
-runStep env mode = \case
-  SubShell script rs ->
-    subshell env (runScript env script) (rs,mode)
-  Run w ws rs -> do
+
+-- "exec" means we run this thing, and dont continue afterwards!
+-- "run" means we run this thing, and continue
+
+execStep :: Env -> Step -> Prog ()
+execStep env  = \case
+  XSubShell script rs ->
+    --error "broken" $
+    --maybeSubshell env (runScript env script) (rs,Wait)
+    undefined script rs
+  Run invocation rs -> do
+    doInvocation (X rs) env invocation
+
+_runStep :: Env -> WaitMode -> Step -> Prog ()
+_runStep env wm = \case
+  XSubShell script rs -> do
+    let mode = undefined
+    maybeSubshell env (runScriptM mode env script) (rs,wm)
+  Run invocation rs -> do
+    doInvocation (R rs wm) env invocation
+
+_doStep :: Mode -> Env -> Step -> Prog ()
+_doStep mode env = \case
+  XSubShell script rs -> do
+    --maybeSubshell env (runScriptM mode env script) (rs,wm)
+    forkWait (runScriptM (addRs mode rs) env script)
+  Run invocation rs -> do
+    --doInvocation (R rs wm) env invocation
+    -- TODO: add rs into mode!
+    doInvocation (addRs mode rs) env invocation
+
+addRs :: Mode -> [Redirect] -> Mode
+addRs mode rs2 = case mode of
+  X rs -> X (rs ++ rs2)
+  R rs wm -> R (rs ++ rs2) wm
+
+_addWait :: Mode -> WaitMode -> Mode
+_addWait mode wm = case mode of
+  X rs -> R rs wm
+  R rs _ -> R rs wm
+
+doInvocation :: Mode -> Env -> Invocation -> Prog ()
+doInvocation mode env = \case
+  Invocation w ws -> do
     com <- evalWord env w
     args <- mapM (evalWord env) ws
-    runAct env (rs,mode) args (decode com)
+    doStage mode env args (decode com)
 
-subshell :: Env -> Prog () -> ([Redirect], WaitMode) -> Prog ()
-subshell env prog = \case
-  -- we can skip the subshell if there are no redircts and we must wait
+data Mode = X [Redirect] | R [Redirect] WaitMode
+
+doStage :: Mode -> Env -> [String] -> Act -> Prog ()
+doStage mode env args = \case
+  Exit ->
+    case args of
+      [] -> exit
+      _ -> write stderr "exit takes no args"
+  Echo ->
+    case mode of
+      X rs -> redirecting env rs (execEcho args)
+      R rs wm  -> maybeSubshell env (runEcho args) (rs,wm)
+
+  SourceSham ->
+    case args of
+      com:args -> do
+        script <- loadShamScript env com
+        runScript env { args } script -- TODO: mode?
+      _ ->
+        write stderr "source takes at least one argument"
+
+  RunExternal name -> do
+    case mode of
+      X rs ->
+        redirecting env rs $ execCommand (Command (name,args))
+      R rs wm ->
+        subshell env (rs,wm) (execCommand (Command (name,args)))
+
+  Exec -> do
+    (case mode of X rs -> redirecting env rs; R rs _ -> redirecting env rs)
+      $ case args of
+          [] -> pure ()
+          name:args ->
+            execCommand (Command (name,args))
+
+
+maybeSubshell :: Env -> Prog () -> ([Redirect],WaitMode) -> Prog ()
+maybeSubshell env prog = \case
+  -- we must skip the subshell if there are no redircts and we wait
   ([],Wait) -> prog
   (rs,wm) -> do -- otherwise we must fork
-    forkMode wm $ do
-      mapM_ (execRedirect env) rs
-      prog
-      exit
+    subshell env (rs,wm) prog
+
+subshell :: Env -> ([Redirect],WaitMode) -> Prog () -> Prog ()
+subshell env (rs,wm) prog = do
+  forkMode wm $ do
+    redirecting env rs (do prog; exit)
+
+
+forkMode :: WaitMode -> Prog () -> Prog ()
+forkMode = \case
+  Wait -> forkWait
+  NoWait -> forkNoWait
+
+redirecting :: Env -> [Redirect] -> Prog () -> Prog ()
+redirecting env rs prog = do
+  mapM_ (execRedirect env) rs
+  prog
+
+
+runEcho :: [String] -> Prog ()
+runEcho args =
+  write stdout (unwords args) --builtin echo
+
+execEcho :: [String] -> Prog ()
+execEcho args = do
+  runEcho args
+  exit
+
+
+
+
+loadShamScript :: Env -> String -> Prog Script
+loadShamScript env path = do
+  lines <- do
+    withOpen (Path.create path) OpenForReading $ \fd -> do
+      readAll fd
+  pure $ shamParser env lines
+
 
 evalPred :: Env -> Pred -> Prog Bool
 evalPred env = \case
@@ -228,81 +337,13 @@ evalWord Env{pid,com,args,bindings} = \case
       Just v ->
         pure v
 
-decode :: String -> Act
-decode = \case
-  "exit" -> Exit
-  "echo" -> Echo
-  "exec" -> Exec
-  "." -> SourceSham
-  name -> RunExternal name
-
-data Act
-  = Exit
-  | Echo -- TODO: rename BuiltinEcho
-  | SourceSham
-  | RunExternal String
-  | Exec
-
-type Context = ([Redirect], WaitMode)
-
-runAct :: Env -> Context -> [String] -> Act -> Prog ()
-runAct env (rs,wm) args = \case
-
-  Exit ->
-    case (rs,wm,args) of
-      ([],Wait,[]) -> Prog.Exit
-      _ -> write stderr "exit takes no args, redirects, or (&)"
-
-  Echo ->
-    case (rs,wm) of
-      -- TODO: can we do builtin echo even with redirects?
-      ([],Wait) -> write stdout (unwords args) --builtin echo
-      _ -> do
-        forkMode wm $ do
-          mapM_ (execRedirect env) rs
-          execCommand (Command ("echo",args))
-
-  SourceSham -> do
-    case (rs,wm,args) of
-      ([],Wait,com:args) -> do
-        script <- loadShamScript env com
-        runScript env { args } script
-      _ -> write stderr "source takes at least one argument, but no redirects or (&)"
-
-  RunExternal name -> do
-    forkMode wm $ do
-      mapM_ (execRedirect env) rs
-      execCommand (Command (name,args))
-
-  Exec -> do
-    case wm of
-      NoWait -> write stderr "exec may not be run (&)"
-      Wait -> do
-        mapM_ (execRedirect env) rs
-        case args of
-          [] -> pure () -- we just do redirects and nothing else
-          name:args ->
-            execCommand (Command (name,args))
-
-loadShamScript :: Env -> String -> Prog Script
-loadShamScript env path = do
-  lines <- do
-    withOpen (Path.create path) OpenForReading $ \fd -> do
-      readAll fd
-  pure $ shamParser env lines
-
-forkMode :: WaitMode -> Prog () -> Prog ()
-forkMode = \case
-  Wait -> forkWait
-  NoWait -> forkNoWait
-
 execRedirect :: Env -> Redirect -> Prog ()
 execRedirect env = \case
-  Redirect mode dest (FromPath path) -> do
+  Redirect om dest (FromPath path) -> do
     path <- evalWord env path
-    withOpen (Path.create path) mode $ \src -> do
+    withOpen (Path.create path) om $ \src -> do
       dup2 dest src
-  Redirect _mode dest (FromFD src) -> do -- do we care what the mode is?
+  Redirect _om dest (FromFD src) -> do -- do we care what the open-mode is?
     dup2 dest src
 
 dup2 :: FD -> FD -> Prog ()

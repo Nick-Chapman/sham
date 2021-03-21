@@ -7,7 +7,7 @@ import Lib (loadFile,checkNoArgs,read)
 import Misc (EOF(..))
 import Prelude hiding (Word,read,fail)
 import Prog (Prog(Trace),FD(..),Command(..),OpenMode(..),WriteOpenMode(..))
-import Script (Script(..),Step(..),WaitMode(..),Redirect(..),RedirectSource(..),Pred(..),Word(..),Var(..))
+import Script (Script(..),Step(..),Invocation(..),WaitMode(..),Redirect(..),RedirectSource(..),Pred(..),Word(..),Var(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
@@ -130,17 +130,28 @@ lang token = script0 where
     script <- sequence
     symbol ')'
     rs <- redirects
-    pure $ SubShell script rs
+    pure $ XSubShell script rs
 
   sequence = do
     (x1,xs) <- parseListSep script (do ws; symbol ';'; ws)
     pure $ foldl Seq x1 xs
 
-  run = do
+  {-run = do
     (com,args) <- parseListSep word ws1
     case com of Word "read" -> fail; _ -> pure ()
     rs <- redirects
-    pure $ Run com args rs
+    pure $ Run (Invocation com args) rs
+-}
+  run = do
+    thing <- invocation
+    rs <- redirects
+    pure $ Run thing rs
+
+  invocation = do
+    (com,args) <- parseListSep word ws1
+    case com of Word "read" -> fail; _ -> pure ()
+    pure $ Invocation com args
+
 
   redirects = alts
     -- TODO: Goal: allow just "ws" to separate args from redirects.
