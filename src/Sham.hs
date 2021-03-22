@@ -22,7 +22,7 @@ sham = do
     [] -> shamConsole 1
     "-c":args -> do
       let script = parseLine (unwords args)
-      let _ = Prog.Trace (show script) -- for debug
+      let _ = Prog.Trace (show ("A",script)) -- for debug
       runScript script []
     path:args -> do
       lines <- loadFile path
@@ -38,13 +38,14 @@ shamConsole level = checkNoArgs $ loop 1 where
       Left EOF -> pure ()
       Right line -> do
         let script = parseLine line
-        let _ = Prog.Trace (show script) -- for debug
+        let _ = Prog.Trace (show ("B",script)) -- for debug
         runScript script []
         loop (n+1)
 
 runScript :: Script -> [String] -> Prog ()
 runScript script args = do
   pid <- Prog.MyPid
+  --Command(com,_) <- Prog.Argv
   let env = Script.Env
         { pid
         , com = "sham"

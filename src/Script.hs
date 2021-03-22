@@ -4,7 +4,7 @@ module Script (
   Step(..), Redirect(..), RedirectSource(..),
   Invocation(..),
   Pred(..),Word(..),Var(..),
-  run,
+  --run,
   runScript, Env(..)
   ) where
 
@@ -18,13 +18,13 @@ import qualified Data.Map.Strict as Map
 import qualified Path (create)
 import qualified Prog (Prog(..))
 
-run :: ([String] -> Script) -> Script -> Prog ()
-run shamParser script = do
+{-_run :: ([String] -> Script) -> Script -> Prog ()
+_run shamParser script = do
   Command(com,args) <- Prog.Argv
   pid <- Prog.MyPid
   let bindings = Map.empty
   let env = Env { pid, com, args, bindings, shamParser }
-  runScript env script
+  runScript env script-}
 
 data Env = Env
   { com :: String
@@ -81,8 +81,14 @@ data RedirectSource = FromPath Word | FromFD FD
   deriving Show
 
 
+
 runScript :: Env -> Script -> Prog ()
-runScript = runScriptM (X [])
+runScript env script =
+  if old then runScriptM (X []) env script else do
+    let s = conv script
+    Prog.Trace (show s)
+    runScrip env s
+  where old = False
 
 runScriptM :: Mode -> Env -> Script -> Prog ()
 runScriptM _mode env0 script0 = loop env0 script0 (\_ -> pure ()) where
@@ -353,3 +359,191 @@ dup2 d s = do
       write stderr $ "bad file descriptor: " ++ show s
       exit
     Right () -> pure ()
+
+
+
+----------------------------------------------------------------------
+-- new
+
+
+pipeline :: [Prog()] -> Prog ()
+pipeline = \case
+    [] -> error "runPipeline[]"
+    prog1:progs -> loop Nothing [] prog1 progs
+  where
+    loop :: Maybe FD -> [Pid] -> Prog () -> [Prog ()] -> Prog ()
+    loop incoming pids prog1 = \case
+      [] -> do
+        Prog.Fork >>= \case
+
+          Nothing -> do
+            case incoming of
+              Nothing -> pure ()
+              Just incoming -> do dup2 stdin incoming; Prog.Call Close incoming
+            prog1
+
+          Just childPid -> do
+            case incoming of
+              Nothing -> pure ()
+              Just incoming -> Prog.Call Close incoming
+            mapM_ Prog.Wait (childPid:pids)
+
+      prog2:progs -> do
+        PipeEnds{w=pipeW,r=pipeR} <- Prog.Call SysPipe ()
+        Prog.Fork >>= \case
+
+          Nothing -> do
+            case incoming of
+              Nothing -> pure ()
+              Just incoming -> do dup2 stdin incoming; Prog.Call Close incoming
+            Prog.Call Close pipeR
+            dup2 stdout pipeW; Prog.Call Close pipeW
+            prog1
+
+          Just childPid -> do
+            case incoming of
+              Nothing -> pure ()
+              Just incoming -> Prog.Call Close incoming
+            Prog.Call Close pipeW
+            loop (Just pipeR) (childPid:pids) prog2 progs
+
+conv :: Script -> Scrip
+conv = fromScript where
+
+  fromScript :: Script -> Scrip
+  fromScript = \case
+    ShamError s -> QShamError s
+    Null -> QNull
+    Seq s1 s2 -> QSeq (fromScript s1) (fromScript s2)
+    If pred s1 s2 -> QIf pred (fromScript s1) (fromScript s2)
+    ReadIntoVar x -> QReadIntoVar x
+    Invoke1 step Wait -> fromStep step
+    Invoke1 step NoWait -> QBackGrounding (fromStep step)
+
+    Pipeline steps Wait -> QPipeline (map fromStep steps)
+    Pipeline steps NoWait -> QBackGrounding (QPipeline (map fromStep steps))
+
+  fromStep :: Step -> Scrip
+  fromStep = \case
+    XSubShell script rs -> QRedirecting (fromScript script) rs
+
+    Run (Invocation (Word "exec") []) rs ->
+      QExec (QRedirecting QNull rs)
+
+    Run (Invocation (Word "exec") (w:ws)) rs ->
+      QExec (QRedirecting (fromInvocation (Invocation w ws)) rs)
+
+
+    Run invocation rs -> QRedirecting (fromInvocation invocation) rs
+
+  fromInvocation :: Invocation -> Scrip
+  fromInvocation = \case
+    -- sort this out at parse time!
+    Invocation (Word ".") (w:ws) -> QSource w ws
+    Invocation (Word ".") [] -> QShamError "source takes at least one argument"
+    Invocation (Word "echo") ws -> QEcho ws
+    Invocation (Word "exit") [] -> QExit
+    Invocation (Word "exit") _ -> QShamError "exit takes no args"
+    --Invocation (Word "exec") [] -> QExec QNull
+    --Invocation (Word "exec") (w:ws) -> QExec (QInvoke w ws)
+    Invocation w ws -> QInvoke w ws
+
+
+
+data Scrip -- no "t" for now
+  = QNull
+  | QSeq Scrip Scrip
+  | QIf Pred Scrip Scrip
+  | QShamError String
+  | QEcho [Word]
+  | QReadIntoVar Var
+  | QExit
+  | QExec Scrip
+  | QInvoke Word [Word]
+  | QSource Word [Word]
+  | QPipeline [Scrip]
+  | QBackGrounding Scrip
+  | QRedirecting Scrip [Redirect] -- TODO: have just 1 redirect!
+  deriving Show
+
+
+-- done means we are in an Exec context and so can 'take-over' the process
+data K = Done | Cont (Env -> Prog ())
+
+runK :: Env -> K -> Prog ()
+runK env = \case
+  Done -> exit -- not pure () !!
+  Cont k -> k env
+
+
+runScrip :: Env -> Scrip -> Prog ()
+runScrip env0 scrip0 = loop env0 scrip0 (Cont $ \_ -> pure ()) where
+
+  loop :: Env -> Scrip -> K -> Prog ()
+  loop env = \case
+    QNull -> \k -> runK env k
+
+    QSeq s1 s2 -> \k -> do
+      loop env s1 $ Cont $ \env -> loop env s2 k
+
+    QSource w ws -> \k -> do
+      com <- evalWord env w
+      args <- mapM (evalWord env) ws
+      script <- loadShamScript env com
+      runScript env { args } script
+      runK env k
+
+    QIf pred s1 s2 -> \k -> do
+      b <- evalPred env pred
+      loop env (if b then s1 else s2) k
+
+    QShamError mes -> \_ignored_k -> do
+      write stderr mes
+
+    QReadIntoVar x -> \k -> do
+      line <- builtinRead
+      let Env{bindings} = env
+      runK env { bindings = Map.insert x line bindings } k
+
+    QEcho ws -> \k -> do
+      args <- mapM (evalWord env) ws
+      runEcho args
+      runK env k
+
+    QExit -> \_ignored_k -> do
+      exit
+
+    QExec s -> \_ignored_k -> do
+      loop env s Done
+
+    QInvoke w ws -> \k -> do
+      com <- evalWord env w
+      args <- mapM (evalWord env) ws
+      case k of
+        Done -> execCommand (Command (com,args))
+        Cont k -> do
+          forkWait $
+            execCommand (Command (com,args))
+          k env
+
+    QRedirecting s [] -> \k -> loop env s k
+
+    QRedirecting s rs -> \k -> do
+      case k of
+        Done -> do
+          mapM_ (execRedirect env) rs
+          loop env s Done
+        Cont k -> do
+          forkWait $ do
+            mapM_ (execRedirect env) rs
+            loop env s Done
+          k env
+
+    QPipeline scrips -> \k -> do
+      pipeline (map (\s -> loop env s Done) scrips)
+      runK env k
+
+    QBackGrounding s -> \k -> do
+      forkNoWait $ do
+        loop env s Done
+      runK env k
