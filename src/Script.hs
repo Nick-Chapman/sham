@@ -229,7 +229,7 @@ evalWord Env{pid,com,args,bindings} = \case
     if n > length args
     then do
       write stderr ("$" ++ show n ++ " unbound")
-      pure ""
+      pure "" -- TODO: prefer to exit, but mustn't kill sham console
     else pure $ (com:args)!!n
   DollarName x ->
     case Map.lookup x bindings of
