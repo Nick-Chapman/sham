@@ -1,7 +1,7 @@
 -- | A 'library' of program fragments. Used by Bins, and Sham/Script.
 module Lib (
   stdin, stdout, stderr,
-  read, write, exit, forkWait, forkNoWait, tryLoadBinary, lookupCommand, execCommand,
+  read, write, exit, forkWait, forkNoWait, tryLoadBinary, execCommand,
   checkNoArgs, getSingleArg,
   loadFile,
   withOpen,
@@ -70,22 +70,19 @@ tryLoadBinary name = do
       --exit
       pure Nothing
 
-lookupCommand :: Command -> Prog (Command,Prog ())
-lookupCommand (Command (name,args)) = do
+execCommand :: Command -> Prog ()
+execCommand command@(Command (name,args))  = do
+  --Prog.Trace (show ("execCommand",command))
   tryLoadBinary name >>= \case
     Just prog -> do
-      pure (Command (name,args),prog)
+      Prog.Exec command prog
     Nothing -> do
-      tryLoadBinary "sham" >>= \case
+      let com = "sham"
+      tryLoadBinary com >>= \case
         Just prog -> do
-          pure (Command ("sham",name:args),prog)
+          Prog.Exec (Command (com,name:args)) prog
         Nothing -> do
           write stderr "cant find sham interpreter"; exit
-
-execCommand :: Command -> Prog ()
-execCommand command = do
-  (command,prog) <- lookupCommand command
-  Prog.Exec command prog
 
 checkNoArgs :: Prog () -> Prog ()
 checkNoArgs prog = do

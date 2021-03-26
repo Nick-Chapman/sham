@@ -77,6 +77,7 @@ run = Testing.run $ do
   test ["yes | .head 2", "echo woo hoo"] ["y","y","woo hoo"]
   test ["yes | .head 1", "yes | .head 1"] ["y","y"]
 
+  test [".countdown"] ["(stderr) .countdown : takes one argument"]
   test [".countdown 0"] []
   test [".countdown 1"] ["1"]
   test [".countdown 3"] ["3","2","1"]

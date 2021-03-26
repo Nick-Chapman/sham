@@ -3,60 +3,60 @@ module Sham (sham) where
 
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile,ParseError(..),Ambiguity(..),SyntaxError(..))
 import Interaction (Prompt(..))
-import Lib (loadFile,checkNoArgs,read)
+import Lib (loadFile,read)
 import Misc (EOF(..))
 import Prelude hiding (Word,read,fail)
-import Prog (Prog(Trace),FD(..),Command(..),OpenMode(..),WriteOpenMode(..))
+import Prog (Prog,FD(..),Command(..),OpenMode(..),WriteOpenMode(..))
 import Script (Script(..),Step(..),Invocation(..),WaitMode(..),Redirect(..),RedirectSource(..),Pred(..),Word(..),Var(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
-import qualified Prog (Prog(Argv,MyPid))
+import qualified Prog --(Prog(Argv,MyPid))
 import qualified Script (runScript,Env(..))
 
 sham :: Prog ()
 sham = do
-  Command(_,args) <- Prog.Argv
+  Command(_sham,args) <- Prog.Argv
   case args of
-    -- TODO: to increase level in each sub consoles will require tracking in some kind of env
-    [] -> shamConsole 1
-    "-c":args -> do
-      let script = parseLine (unwords args)
-      let _ = Prog.Trace (show ("A",script)) -- for debug
-      runScript script []
+
+    "-c":rest -> do
+      let script = parseLine (unwords rest)
+      pid <- Prog.MyPid
+      let com = "sham"
+      let args = []
+      let bindings = Map.empty
+      let env = Script.Env { pid, com, args, bindings, shamParser}
+      Script.runScript env script
+
     path:args -> do
       lines <- loadFile path
-      let script = parseLines lines
-      runScript script args
+      let script = shamParser lines
+      pid <- Prog.MyPid
+      let com = path
+      let bindings = Map.empty
+      let env = Script.Env { pid, com, args, bindings, shamParser}
+      Script.runScript env script
 
-shamConsole :: Int -> Prog ()
-shamConsole level = checkNoArgs $ loop 1 where
-  loop :: Int -> Prog ()
-  loop n = do
-    let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
-    read (Prompt prompt) (FD 0) >>= \case
-      Left EOF -> pure ()
-      Right line -> do
-        let script = parseLine line
-        let _ = Prog.Trace (show ("B",script)) -- for debug
-        runScript script []
-        loop (n+1)
+    [] -> loop 1 where
+      loop :: Int -> Prog ()
+      loop n = do
+        let level :: Int = 1 -- TODO: get from env
+        let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
+        read (Prompt prompt) (FD 0) >>= \case
+          Left EOF -> pure ()
+          Right line -> do
+            let script = parseLine line
+            pid <- Prog.MyPid
+            let com = "sham"
+            let args = []
+            let bindings = Map.empty
+            let env = Script.Env { pid, com, args, bindings, shamParser}
+            Script.runScript env script
+            loop (n+1)
 
-runScript :: Script -> [String] -> Prog ()
-runScript script args = do
-  pid <- Prog.MyPid
-  --Command(com,_) <- Prog.Argv
-  let env = Script.Env
-        { pid
-        , com = "sham"
-        , args
-        , bindings = Map.empty
-        , shamParser = parseLines
-        }
-  Script.runScript env script
 
-parseLines :: [String] -> Script
-parseLines lines = foldl Seq Null (map parseLine lines)
+shamParser :: [String] -> Script
+shamParser lines = foldl Seq Null (map parseLine lines)
 
 parseLine :: String -> Script
 parseLine str = do
