@@ -52,6 +52,7 @@ data SysCall a b where
   Read :: Prompt -> SysCall FD (Either NotReadable (Either EOF String))
   Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
   Paths :: SysCall () [Path]
+  Mv :: SysCall (Path,Path) (Either NoSuchPath ())
   SysPipe :: SysCall () (PipeEnds FD)
   Unused :: SysCall () FD -- TODO: for used for by with redirectsa
 
@@ -88,6 +89,7 @@ instance Show (SysCall a b) where -- TODO: automate?
     Read _ -> "Read"
     Write -> "Write"
     Paths -> "Paths"
+    Mv -> "Mv"
     SysPipe -> "Pipe"
     Unused -> "Unused"
 

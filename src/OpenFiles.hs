@@ -1,7 +1,7 @@
 -- | System-wide table of 'open-files' which may be shared between different processes.
 module OpenFiles (
   init, OpenFiles, Key,
-  devnull, open, pipe, dup, close, read, write, ls, fileKind, loadBinary, whatIsKey,
+  devnull, open, pipe, dup, close, read, write, ls, mv, fileKind, loadBinary, whatIsKey,
   ) where
 
 import Data.List (intercalate)
@@ -182,6 +182,12 @@ whatIsKey OpenFiles{table} key = do
 
 ls :: OpenFiles -> [Path]
 ls OpenFiles{fs} = FileSystem.ls fs
+
+mv :: OpenFiles -> Path -> Path -> Either NoSuchPath OpenFiles
+mv state@OpenFiles{fs} src dest =
+  case FileSystem.mv fs src dest of
+    Left NoSuchPath -> Left NoSuchPath
+    Right fs -> Right $ state { fs }
 
 fileKind :: OpenFiles -> Path -> Either NoSuchPath FileKind
 fileKind OpenFiles{fs} path =

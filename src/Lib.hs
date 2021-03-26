@@ -2,7 +2,7 @@
 module Lib (
   stdin, stdout, stderr,
   read, write, exit, forkWait, forkNoWait, tryLoadBinary, execCommand,
-  checkNoArgs, checkAtLeastOneArg, getSingleArg,
+  checkNoArgs, checkAtLeastOneArg, getSingleArg, getTwoArgs,
   loadFile,
   withOpen,
   readAll,
@@ -104,6 +104,13 @@ getSingleArg f = do
   case args of
     [arg] -> f arg
     _ -> write stderr (com ++ ": takes a single argument")
+
+getTwoArgs :: (String -> String -> Prog ()) -> Prog ()
+getTwoArgs f = do
+  Command(com,args) <- Prog.Argv
+  case args of
+    [arg1,arg2] -> f arg1 arg2
+    _ -> write stderr (com ++ ": takes two arguments")
 
 loadFile :: String -> Prog [String]
 loadFile path = do

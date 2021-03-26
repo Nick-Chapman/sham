@@ -9,9 +9,9 @@ import Data.Map (Map)
 import Interaction (Interaction(..),OutMode(..))
 import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import OpenFiles (OpenFiles,whatIsKey)
-import Prog (SysCall(..),FD(..),BadFileDescriptor(..),FD,OF)
+import Prog (SysCall(..),FD(..),BadFileDescriptor(..),FD,OF,NoSuchPath(..))
 import qualified Data.Map.Strict as Map
-import qualified OpenFiles (ls,open,pipe,Key,close,dup,read,write,devnull,loadBinary,fileKind)
+import qualified OpenFiles
 
 runSys :: SysCall a b ->
   OpenFiles -> Env -> a ->
@@ -134,6 +134,13 @@ runSys sys s env arg = case sys of
     Right $ \k -> do
       let paths = OpenFiles.ls s
       k s env paths
+
+  Mv{} -> do
+    let (src,dest) = arg
+    Right $ \k -> do
+      case OpenFiles.mv s src dest of
+        Left NoSuchPath -> k s env (Left NoSuchPath)
+        Right s -> k s env (Right ())
 
 -- TODO: split out Env into new module
 newtype Env = Env { unEnv :: Map FD Target } -- per process state, currently just FD map

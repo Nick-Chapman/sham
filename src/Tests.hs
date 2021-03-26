@@ -67,6 +67,9 @@ run = Testing.run $ do
 
   test ["lsof | cat"] ["[3] (lsof) &1 Write:pipe1", "[4] (cat) &0 Read:pipe1"]
 
+  test ["mv"] ["(stderr) mv: takes two arguments"]
+  test ["mv ps xx","type xx"] ["xx : Binary *ps*"]
+
   test ["if 2=3 echo foo"] []
   test ["if 2!=3 echo foo"] ["foo"]
   test ["if 4=4 echo foo"] ["foo"]

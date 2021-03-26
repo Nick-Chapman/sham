@@ -1,17 +1,17 @@
 -- | Predefined 'binary' programs, which will be available on the file-system.
 module Bins (
-  man, echo, cat, rev, grep, ls, ps, lsof, sum, type_, xargs,
+  man, echo, cat, rev, grep, ls, mv, ps, lsof, sum, type_, xargs,
   ) where
 
 import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Interaction (Prompt(..))
-import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,checkAtLeastOneArg,getSingleArg,readAll,exit,execCommand)
+import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,checkAtLeastOneArg,getSingleArg,getTwoArgs,readAll,exit,execCommand)
 import Misc (EOF(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
-import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,FileKind(..),BinaryMeta(..))
+import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,FileKind(..),BinaryMeta(..),NoSuchPath(..))
 import Text.Read (readMaybe)
 import qualified Data.Map.Strict as Map
 import qualified Path (create,toString,hidden)
@@ -103,6 +103,12 @@ ls = do
     _ -> do write stderr (me ++ ": takes no arguments, or a single '-a'"); exit
   paths <- Prog.Call Paths ()
   mapM_ (write stdout . Path.toString) $ sort [ p | p <- paths , seeHidden || not (Path.hidden p) ]
+
+mv :: Prog ()
+mv = getTwoArgs $ \src dest -> do
+  Prog.Call Mv (Path.create src, Path.create dest) >>= \case
+    Left NoSuchPath ->  write stderr $ "no such path: " ++ src
+    Right () -> pure ()
 
 ps :: Prog ()
 ps = checkNoArgs $ do
