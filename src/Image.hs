@@ -35,7 +35,13 @@ fs0 = FileSystem.create image where
     [ ("README", readme)
     , ("days"  , days)
     , ("help"  , ["# Help the user!","cat README"])
-    , ("cp"    , ["# cp SRC DEST: copy a file from SRC to DEST","cat $1 > $2"])
+    , ("cp"    , [
+          "# cp SRC DEST: copy a file from SRC to DEST",
+          "if $# != 2 echo $0 : takes two arguments >&2",
+          "if $# != 2 exit",
+          "cat $1 > $2"
+          ])
+
     , ("yes"   , ["# Write an infinite stream of 'y's to stdout", "echo y","exec yes"])
 
     -- hidden scripts (path begins "."), for testing and experimentation

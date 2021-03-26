@@ -96,8 +96,8 @@ run = Testing.run $ do
   test ["echo $1 qaz"] ["(stderr) $1 unbound"," qaz"]
 
   test ["cp README xx", "cat xx"] Image.readme
-  test ["cp"] ["(stderr) $2 unbound","(stderr) $1 unbound","(stderr) no such path: "]
-  test ["cp foo"] ["(stderr) $2 unbound", "(stderr) no such path: foo"]
+  test ["cp"] ["(stderr) cp : takes two arguments"]
+  test ["cp foo"] ["(stderr) cp : takes two arguments"]
   test ["cp foo bar"] ["(stderr) no such path: foo"]
 
   test [] []
