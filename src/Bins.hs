@@ -31,11 +31,11 @@ man = do
   where
     docsMap :: Map String String
     docsMap = Map.fromList
-     [ ("man"  , "list the manual entries for the given commands")
+     [ ("man"  , "show manual entries for given commands")
      , ("echo" , "write given arguments to stdout")
-     , ("cat"  , "write named files (or stdin in no files given) to stdout")
+     , ("cat"  , "write named files (or stdin in no files named) to stdout")
      , ("rev"  , "copy stdin to stdout, reversing each line")
-     , ("grep" , "copy lines which match the given pattern to stdout ")
+     , ("grep" , "copy stdin lines which match the given pattern to stdout ")
      , ("ls"   , "list non-hidden files; add '-a' flag to also see hidden files")
      , ("ps"   , "list all running processes")
      , ("lsof" , "list open files in running processes")
