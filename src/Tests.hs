@@ -56,6 +56,10 @@ run = Testing.run $ do
 
   test ["echo foo | xargs ps"] ["(stderr) ps: takes no arguments"]
 
+  test ["type"] ["(stderr) type: takes at least one argument"]
+  test ["type ls help"] ["ls : Binary *ls*","help : Data/Script"]
+
+  test ["man"] ["(stderr) man: takes at least one argument"]
   test ["man foo"] ["(stderr) man : no manual entry for 'foo'"]
   test ["man ps"] ["ps : list all running processes"]
   test ["echo ps | xargs man"] ["ps : list all running processes"]

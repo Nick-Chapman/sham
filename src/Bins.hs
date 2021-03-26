@@ -7,7 +7,7 @@ import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Interaction (Prompt(..))
-import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,getSingleArg,readAll,exit,execCommand)
+import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,checkAtLeastOneArg,getSingleArg,readAll,exit,execCommand)
 import Misc (EOF(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
@@ -19,7 +19,7 @@ import qualified Prelude
 import qualified Prog (Prog(..))
 
 man :: Prog ()
-man = do
+man = checkAtLeastOneArg $ do
   Command(me,args) <- Prog.Argv
   let
     manline :: String -> Prog ()
@@ -133,7 +133,7 @@ sum = do
   write stdout (show res)
 
 type_ :: Prog ()
-type_ = do
+type_ = checkAtLeastOneArg $ do
   Command(_,args) <- Prog.Argv
   let
     typeline :: String -> Prog ()
@@ -149,10 +149,10 @@ type_ = do
   mapM_ typeline args
 
 xargs :: Prog ()
-xargs = do
-  Command(me,args) <- Prog.Argv
+xargs = checkAtLeastOneArg $ do
+  Command(_,args) <- Prog.Argv
   case args of
-    [] -> write stderr (me ++ ": takes at least 1 argument")
+    [] -> error "impossible"
     com:args -> do
       lines <- readAll stdin
       execCommand (Command (com, args ++ lines))

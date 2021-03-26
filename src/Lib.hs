@@ -2,7 +2,7 @@
 module Lib (
   stdin, stdout, stderr,
   read, write, exit, forkWait, forkNoWait, tryLoadBinary, execCommand,
-  checkNoArgs, getSingleArg,
+  checkNoArgs, checkAtLeastOneArg, getSingleArg,
   loadFile,
   withOpen,
   readAll,
@@ -90,6 +90,13 @@ checkNoArgs prog = do
   case args of
     [] -> prog
     _ -> write stderr (com ++ ": takes no arguments")
+
+checkAtLeastOneArg :: Prog () -> Prog ()
+checkAtLeastOneArg prog = do
+  Command(com,args) <- Prog.Argv
+  case args of
+    [] -> write stderr (com ++ ": takes at least one argument")
+    _ -> prog
 
 getSingleArg :: (String -> Prog ()) -> Prog ()
 getSingleArg f = do
