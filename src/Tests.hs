@@ -31,7 +31,12 @@ run = Testing.run $ do
   test ["echo README | xargs cat"] Image.readme
   test ["cat README | xargs echo"] [ unwords Image.readme ]
 
-  test ["README"] ["(stderr) unexpected '*' at position 12"]
+  test ["*"] ["(stderr) unexpected '*' at position 1"]
+  test ["*","echo ok"] ["(stderr) unexpected '*' at position 1","ok"]
+  test ["README"] [
+    "(stderr) unexpected '*' at position 12",
+    "(stderr) unexpected ',' at position 31",
+    "(stderr) unexpected ''' at position 6"]
 
   test ["ls"] paths0
   test ["sham ls"] ["(stderr) cant open for reading: ls"]
@@ -185,3 +190,9 @@ run = Testing.run $ do
   -- TODO: rewrite of bash interpreter has broken these...
   --test ["exec 2>e","foo","bar","cat e"] ["no such path: foo", "no such path: bar"]
   --test ["exec >&2", "echo foo"] ["(stderr) foo"]
+
+
+  test ["foo=123","env"] ["foo=123"]
+  test ["foo=123","echo $foo"] ["123"]
+  test ["foo=123","bar=456","echo $foo $bar"] ["123 456"]
+  test ["foo=ls","$foo"] paths0

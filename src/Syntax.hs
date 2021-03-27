@@ -16,6 +16,7 @@ data Script -- TODO: loose Q prefix?
   | QIf Pred Script Script
   | QShamError String
   | QEcho [Word]
+  | QSetVar Var Word
   | QReadIntoVar Var
   | QExit
   | QExec Script
@@ -24,6 +25,7 @@ data Script -- TODO: loose Q prefix?
   | QPipeline [Script]
   | QBackGrounding Script
   | QRedirecting Script [Redirect] -- TODO: have just 1 redirect!
+  | QEnv
   deriving Show
 
 data Pred
@@ -79,7 +81,7 @@ lang token = script0 where
 
   lineComment = do symbol '#'; skipWhile (skip token)
 
-  script = alts [ pipeline, conditional, readIntoVar ]
+  script = alts [ pipeline, conditional, readIntoVar, setVar ]
 
   conditional = do
     keyword "if"
@@ -106,6 +108,12 @@ lang token = script0 where
     ws1; x <- varname
     pure $ QReadIntoVar x
 
+  setVar = do
+    x <- varname
+    keyword "=" -- no surrounding whitespace
+    w <- word
+    pure (QSetVar x w)
+
   pipeline = do
     (x,xs) <- parseListSep step (do ws; symbol '|'; ws)
     m <- mode
@@ -117,7 +125,11 @@ lang token = script0 where
     alts [ do eps; pure id,
            do ws; symbol '&'; pure QBackGrounding ]
 
-  step = alts [run,exec,subshell]
+  step = alts [env,run,exec,subshell]
+
+  env = do
+    keyword "env"
+    pure QEnv
 
   subshell = do
     symbol '('
@@ -145,6 +157,7 @@ lang token = script0 where
     (com,args) <- parseListSep word ws1
     case com of Word "read" -> fail; _ -> pure ()
     case com of Word "exec" -> fail; _ -> pure ()
+    case com of Word "env" -> fail; _ -> pure ()
     pure $ makeInvoke (com:args)
 
   makeInvoke :: [Word] -> Script -- TODO: avoid this matching; just have alt parsers

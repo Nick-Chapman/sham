@@ -15,42 +15,39 @@ import qualified Prog (Prog(Argv,MyPid,Fork,Call,Wait))
 sham :: Prog ()
 sham = do
   Command(_sham,args) <- Prog.Argv
+  env <- initEnv
   case args of
 
     "-c":rest -> do
       let script :: Script = parseLine (unwords rest)
-      pid <- Prog.MyPid
-      let com = "sham"
-      let args = []
-      let bindings = Map.empty
-      let env = Env { pid, com, args, bindings }
-      runScript env script
+      runScriptK env script $ \_env -> pure ()
 
     path:args -> do
       lines <- loadFile path
       let script = parseLines lines
-      pid <- Prog.MyPid
-      let com = path
-      let bindings = Map.empty
-      let env = Env { pid, com, args, bindings }
-      runScript env script
+      env <- pure $ env { com = path, args }
+      runScriptK env script $ \_env -> pure ()
 
-    [] -> loop 1 where
-      loop :: Int -> Prog ()
-      loop n = do
-        let level :: Int = 1 -- TODO: get from env
-        let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
-        read (Prompt prompt) (FD 0) >>= \case
-          Left EOF -> pure ()
-          Right line -> do
-            let script :: Script = parseLine line
-            pid <- Prog.MyPid
-            let com = "sham"
-            let args = []
-            let bindings = Map.empty
-            let env = Env { pid, com, args, bindings }
-            runScript env script
-            loop (n+1)
+    [] -> loop env 1
+
+
+initEnv :: Prog Env
+initEnv = do
+  pid <- Prog.MyPid
+  let com = "sham"
+  let args = []
+  let bindings = Map.empty
+  pure $ Env { pid, com, args, bindings }
+
+loop :: Env -> Int -> Prog ()
+loop env n = do
+  let level :: Int = 1 -- TODO: get from env
+  let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
+  read (Prompt prompt) (FD 0) >>= \case
+    Left EOF -> pure ()
+    Right line -> do
+      let script = parseLine line
+      runScriptK env script $ \env -> loop env (n+1)
 
 
 parseLines :: [String] -> Script
@@ -72,11 +69,16 @@ runK env = \case
   Done -> exit -- not pure () !!
   Cont k -> k env
 
-runScript :: Env -> Script -> Prog ()
-runScript env0 scrip0 = loop env0 scrip0 (Cont $ \_ -> pure ()) where
+
+--runScript :: Env -> Script -> Prog ()
+--runScript env0 scrip0 = runScriptK env0 scrip0 (\_env -> pure ())
+
+runScriptK :: Env -> Script -> (Env -> Prog ()) -> Prog ()
+runScriptK env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
 
   loop :: Env -> Script -> K -> Prog ()
   loop env = \case
+
     QNull -> \k -> runK env k
 
     QSeq s1 s2 -> \k -> do
@@ -86,15 +88,23 @@ runScript env0 scrip0 = loop env0 scrip0 (Cont $ \_ -> pure ()) where
       com <- evalWord env w
       args <- mapM (evalWord env) ws
       script <- loadShamScript com
-      runScript env { args } script
-      runK env k
+      --runScript env { args } script -- TODO: use runScriptK
+      --runK env k
+      runScriptK env { args } script $ \env -> runK env k
+
 
     QIf pred s1 s2 -> \k -> do
       b <- evalPred env pred
       loop env (if b then s1 else s2) k
 
-    QShamError mes -> \_ignored_k -> do
+    QShamError mes -> \k -> do
       write stderr mes
+      runK env k
+
+    QSetVar x w -> \k -> do
+      v <- evalWord env w
+      let Env{bindings} = env
+      runK env { bindings = Map.insert x v bindings } k
 
     QReadIntoVar x -> \k -> do
       line <- builtinRead
@@ -104,6 +114,10 @@ runScript env0 scrip0 = loop env0 scrip0 (Cont $ \_ -> pure ()) where
     QEcho ws -> \k -> do
       args <- mapM (evalWord env) ws
       builtinEcho args
+      runK env k
+
+    QEnv -> \k -> do
+      builtinEnv env
       runK env k
 
     QExit -> \_ignored_k -> do
@@ -178,6 +192,10 @@ evalWord Env{pid,com,args,bindings} = \case
 builtinEcho :: [String] -> Prog ()
 builtinEcho args =
   write stdout (unwords args)
+
+builtinEnv :: Env -> Prog ()
+builtinEnv Env{bindings} =
+  sequence_ [ write stdout (k ++ "=" ++ v) | (Var k,v) <- Map.toList bindings ]
 
 builtinRead :: Prog String
 builtinRead =
