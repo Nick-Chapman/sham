@@ -1,7 +1,7 @@
 -- | Interpret a 'system-call' of a MeNicks program, with respect to the process-env & open-files.
 module SysCall (
   SysCall,runSys,
-  Env,env0,dupEnv,closeEnv,openFiles,
+  FdEnv,env0,dupEnv,closeEnv,openFiles,
   ) where
 
 import Data.List (intercalate)
@@ -14,8 +14,8 @@ import qualified Data.Map.Strict as Map
 import qualified OpenFiles
 
 runSys :: SysCall a b ->
-  OpenFiles -> Env -> a ->
-  Either Block ((OpenFiles -> Env -> b -> Interaction) -> Interaction)
+  OpenFiles -> FdEnv -> a ->
+  Either Block ((OpenFiles -> FdEnv -> b -> Interaction) -> Interaction)
 
 runSys sys s env arg = case sys of
 
@@ -31,7 +31,7 @@ runSys sys s env arg = case sys of
 
   Unused -> do
     let fd = smallestUnused env
-    env <- pure $ Env (Map.insert fd (File OpenFiles.devnull) (unEnv env))
+    env <- pure $ FdEnv (Map.insert fd (File OpenFiles.devnull) (unFdEnv env))
     let env' = env
     Right $ \k -> k s env' fd
 
@@ -39,9 +39,9 @@ runSys sys s env arg = case sys of
     case OpenFiles.pipe s of
       (PipeEnds{r=keyR,w=keyW},s) -> do
         let fdR = smallestUnused env
-        env <- pure $ Env (Map.insert fdR (File keyR) (unEnv env))
+        env <- pure $ FdEnv (Map.insert fdR (File keyR) (unFdEnv env))
         let fdW = smallestUnused env
-        env <- pure $ Env (Map.insert fdW (File keyW) (unEnv env))
+        env <- pure $ FdEnv (Map.insert fdW (File keyW) (unFdEnv env))
         let pe = PipeEnds { r = fdR, w = fdW }
         Right $ \k -> k s env pe
 
@@ -54,18 +54,18 @@ runSys sys s env arg = case sys of
       Right (key,s) -> do
         Right $ \k -> do
           let fd = smallestUnused env
-          let env' = Env (Map.insert fd (File key) (unEnv env))
+          let env' = FdEnv (Map.insert fd (File key) (unFdEnv env))
           k s env' (Right fd)
 
   Close -> do
     let fd = arg
     Right $ \k -> do
-      case (case look "Sys.Close" fd (unEnv env) of
+      case (case look "Sys.Close" fd (unFdEnv env) of
               File key -> OpenFiles.close s key
               Console{} -> (False,s))
         of (_closing,s) -> do
              --(if closing then (I_Trace "**CLOSED**") else id) $ do
-             k s (Env (Map.delete fd (unEnv env))) ()
+             k s (FdEnv (Map.delete fd (unFdEnv env))) ()
 
   Dup2 -> do
     let (fdDest,fdSrc) = arg
@@ -73,25 +73,25 @@ runSys sys s env arg = case sys of
       if fdDest == fdSrc then k s env (Right ()) else do
       let
         (_closing,s') = --TODO: does this always get forced?
-          case Map.lookup fdDest (unEnv env) of
+          case Map.lookup fdDest (unFdEnv env) of
             Nothing -> (False,s)
             Just oldTarget ->
               case oldTarget of
                 File key -> OpenFiles.close s key
                 Console{} -> (False,s)
       --(if closing then (I_Trace "**CLOSED (by dup2)**") else id) $ do
-      case Map.lookup fdSrc (unEnv env) of
+      case Map.lookup fdSrc (unFdEnv env) of
         Nothing -> k s' env (Left BadFileDescriptor)
         Just target -> do
           let s'' = case target of
                 File key -> OpenFiles.dup s' key
                 Console{}-> s'
-          let env' = Env (Map.insert fdDest target (unEnv env))
+          let env' = FdEnv (Map.insert fdDest target (unFdEnv env))
           k s'' env' (Right ())
 
   Read prompt -> do
     let fd = arg
-    case look "Sys.Read" fd (unEnv env) of
+    case look "Sys.Read" fd (unFdEnv env) of
       File key -> do
         case OpenFiles.read s key of
           Left NotReadable -> do
@@ -112,7 +112,7 @@ runSys sys s env arg = case sys of
 
   Write -> do
     let (fd,line) = arg
-    case look "Sys.Write" fd (unEnv env) of
+    case look "Sys.Write" fd (unFdEnv env) of
       File key -> do
         case OpenFiles.write s key line of
           Left NotWritable -> do
@@ -142,15 +142,15 @@ runSys sys s env arg = case sys of
         Left NoSuchPath -> k s env (Left NoSuchPath)
         Right s -> k s env (Right ())
 
--- TODO: split out Env into new module
-newtype Env = Env { unEnv :: Map FD Target } -- per process state, currently just FD map
+-- TODO: split out FdEnv into new module
+newtype FdEnv = FdEnv { unFdEnv :: Map FD Target } -- per process state, currently just FD map
 
 data Target
   = Console OutMode -- TODO: plan to deprecate this, and handle console via tty/pipes
   | File OpenFiles.Key
 
-instance Show Env where
-  show Env{unEnv=m} =
+instance Show FdEnv where
+  show FdEnv{unFdEnv=m} =
     intercalate ", " [ show k ++ "=" ++ show e | (k,e) <- Map.toList m ]
 
 instance Show Target where
@@ -159,20 +159,20 @@ instance Show Target where
     Console StdErr -> "Te"
     File k -> show k
 
-openFiles :: OpenFiles -> Env -> [(FD,OF)]
-openFiles os (Env m) =
+openFiles :: OpenFiles -> FdEnv -> [(FD,OF)]
+openFiles os (FdEnv m) =
   [ (fd,oF) | (fd,File key) <- Map.toList m, let oF = OpenFiles.whatIsKey os key ]
 
-env0 :: Env
-env0 = Env $ Map.fromList
+env0 :: FdEnv
+env0 = FdEnv $ Map.fromList
   [ (FD n, Console m) | (n,m) <- [(0,Normal),(1,Normal),(2,StdErr)] ]
 
-dupEnv :: Env -> OpenFiles -> OpenFiles
-dupEnv (Env m) s =
+dupEnv :: FdEnv -> OpenFiles -> OpenFiles
+dupEnv (FdEnv m) s =
   foldr dupTarget s [ t | (_,t) <- Map.toList m ]
 
-closeEnv :: Env -> OpenFiles -> OpenFiles
-closeEnv (Env m) s =
+closeEnv :: FdEnv -> OpenFiles -> OpenFiles
+closeEnv (FdEnv m) s =
   foldr closeTarget s [ t | (_,t) <- Map.toList m ]
 
 -- TOOD: use {dup,close}Target in code above, for better sharing
@@ -188,8 +188,8 @@ closeTarget tar s =
     File key -> snd (OpenFiles.close s key)
     Console{}-> s
 
-smallestUnused :: Env -> FD
-smallestUnused (Env m) = head [ fd | fd <- [FD 0..], fd `notElem` used ]
+smallestUnused :: FdEnv -> FD
+smallestUnused (FdEnv m) = head [ fd | fd <- [FD 0..], fd `notElem` used ]
   where used = Map.keys m
 
 -- TODO: dont error if file-descriptor cannot be found. user can cause this

@@ -1,64 +1,60 @@
 -- | 'sham' is a shell-style command interpreter which runs on MeNicks.
 module Sham (sham) where
 
-import Data.Map (Map)
+import Environment (Environment)
 import Interaction (Prompt(..))
 import Lib (loadFile,stdin,stdout,stderr,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait)
 import Misc (EOF(..),PipeEnds(..))
 import Prelude hiding (Word,read)
 import Prog (Prog,FD(..),Command(..),OpenMode(..),SysCall(..),BadFileDescriptor(..),Pid(..))
 import Syntax (parseLine,Script(..),Word(..),Pred(..),Redirect(..),RedirectSource(..),Var(..))
-import qualified Data.Map.Strict as Map
+import qualified Environment
 import qualified Path (create)
-import qualified Prog (Prog(Argv,MyPid,Fork,Call,Wait))
+import qualified Prog (Prog(Argv,MyPid,MyEnvironment,Fork,Call,Wait))
 
 sham :: Prog ()
 sham = do
   Command(_sham,args) <- Prog.Argv
   env <- initEnv
   case args of
-
     "-c":rest -> do
       let script :: Script = parseLine (unwords rest)
-      runScriptK env script $ \_env -> pure ()
-
+      runScript env script $ \_env -> pure ()
     path:args -> do
       lines <- loadFile path
       let script = parseLines lines
-      env <- pure $ env { com = path, args }
-      runScriptK env script $ \_env -> pure ()
-
-    [] -> loop env 1
-
+      runScript env { argv = path:args } script $ \_env -> pure ()
+    [] ->
+      loop env 1
 
 initEnv :: Prog Env
 initEnv = do
   pid <- Prog.MyPid
-  let com = "sham"
-  let args = []
-  let bindings = Map.empty
-  pure $ Env { pid, com, args, bindings }
+  environment <- Prog.MyEnvironment
+  let prefix =
+        case Environment.get environment (Var "prefix") of
+          Nothing -> "sham"
+          Just x -> x ++ "/sham"
+  let environment' = Environment.set environment (Var "prefix") prefix
+  pure $ Env { pid, argv = ["sham"], environment = environment' }
 
 loop :: Env -> Int -> Prog ()
-loop env n = do
-  let level :: Int = 1 -- TODO: get from env
-  let prompt = "sham[" ++ show level ++ "." ++ show n ++ "]$ "
+loop env@Env{environment} n = do
+  let prefix = maybe "" id (Environment.get environment (Var "prefix"))
+  let prompt = prefix ++ "[" ++ show n ++ "]$ "
   read (Prompt prompt) (FD 0) >>= \case
     Left EOF -> pure ()
     Right line -> do
       let script = parseLine line
-      runScriptK env script $ \env -> loop env (n+1)
-
+      runScript env script $ \env -> loop env (n+1)
 
 parseLines :: [String] -> Script
 parseLines lines = foldl QSeq QNull (map parseLine lines)
 
-
 data Env = Env
-  { com :: String
-  , args :: [String]
-  , bindings :: Map Var String
-  , pid :: Pid
+  { pid :: Pid
+  , argv :: [String]
+  , environment :: Environment
   }
 
 -- done means we are in an Exec context and so can 'take-over' the process
@@ -69,12 +65,8 @@ runK env = \case
   Done -> exit -- not pure () !!
   Cont k -> k env
 
-
---runScript :: Env -> Script -> Prog ()
---runScript env0 scrip0 = runScriptK env0 scrip0 (\_env -> pure ())
-
-runScriptK :: Env -> Script -> (Env -> Prog ()) -> Prog ()
-runScriptK env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
+runScript :: Env -> Script -> (Env -> Prog ()) -> Prog ()
+runScript env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
 
   loop :: Env -> Script -> K -> Prog ()
   loop env = \case
@@ -88,10 +80,7 @@ runScriptK env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
       com <- evalWord env w
       args <- mapM (evalWord env) ws
       script <- loadShamScript com
-      --runScript env { args } script -- TODO: use runScriptK
-      --runK env k
-      runScriptK env { args } script $ \env -> runK env k
-
+      runScript env { argv = (com:args) } script $ \env -> runK env k
 
     QIf pred s1 s2 -> \k -> do
       b <- evalPred env pred
@@ -103,13 +92,13 @@ runScriptK env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
 
     QSetVar x w -> \k -> do
       v <- evalWord env w
-      let Env{bindings} = env
-      runK env { bindings = Map.insert x v bindings } k
+      let Env{environment} = env
+      runK env { environment = Environment.set environment x v } k
 
     QReadIntoVar x -> \k -> do
       line <- builtinRead
-      let Env{bindings} = env
-      runK env { bindings = Map.insert x line bindings } k
+      let Env{environment} = env
+      runK env { environment = Environment.set environment x line } k
 
     QEcho ws -> \k -> do
       args <- mapM (evalWord env) ws
@@ -127,13 +116,14 @@ runScriptK env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
       loop env s Done
 
     QInvoke w ws -> \k -> do
+      let Env{environment} = env
       com <- evalWord env w
       args <- mapM (evalWord env) ws
       case k of
-        Done -> execCommand (Command (com,args))
+        Done -> execCommand environment (Command (com,args))
         Cont k -> do
           forkWait $
-            execCommand (Command (com,args))
+            execCommand environment (Command (com,args))
           k env
 
     QRedirecting s [] -> \k -> loop env s k
@@ -158,7 +148,6 @@ runScriptK env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
         loop env s Done
       runK env k
 
-
 evalPred :: Env -> Pred -> Prog Bool
 evalPred env = \case
   Eq w1 w2 -> do
@@ -171,18 +160,18 @@ evalPred env = \case
     pure (x1 /= x2)
 
 evalWord :: Env -> Word -> Prog String
-evalWord Env{pid,com,args,bindings} = \case
+evalWord Env{pid,argv,environment} = \case
   Word s -> pure s
   DollarDollar -> let (Pid n) = pid in pure $ show n
-  DollarHash -> pure $ show (length args)
+  DollarHash -> pure $ show (length argv - 1) --TODO: -1 ???
   DollarN n ->
-    if n > length args
+    if n >= length argv
     then do
       write stderr ("$" ++ show n ++ " unbound")
       pure "" -- TODO: prefer to exit, but mustn't kill sham console
-    else pure $ (com:args)!!n
+    else pure $ argv!!n
   DollarName x ->
-    case Map.lookup x bindings of
+    case Environment.get environment x of
       Nothing -> do
         write stderr ("$" ++ show x ++ " unbound")
         pure ""
@@ -194,8 +183,10 @@ builtinEcho args =
   write stdout (unwords args)
 
 builtinEnv :: Env -> Prog ()
-builtinEnv Env{bindings} =
-  sequence_ [ write stdout (k ++ "=" ++ v) | (Var k,v) <- Map.toList bindings ]
+builtinEnv Env{environment} =
+  sequence_ [ write stdout (k ++ "=" ++ v)
+            | (Var k,v) <- Environment.bindings environment
+            ]
 
 builtinRead :: Prog String
 builtinRead =

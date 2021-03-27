@@ -5,6 +5,7 @@ module Syntax (
   ) where
 
 import EarleyM (Gram,fail,alts,getToken,many,skipWhile,ParseError(..),Ambiguity(..),SyntaxError(..))
+import Environment (Var(..))
 import Prelude hiding (Word,read,fail)
 import Prog (FD(..),OpenMode(..),WriteOpenMode(..))
 import qualified Data.Char as Char
@@ -40,11 +41,6 @@ data Word
   | DollarDollar
   | DollarName Var
   deriving Show
-
-newtype Var = Var String
-  deriving (Eq,Ord)
-
-instance Show Var where show (Var s) = s
 
 data Redirect = Redirect OpenMode FD RedirectSource
   deriving Show

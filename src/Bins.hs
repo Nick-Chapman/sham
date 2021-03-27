@@ -157,8 +157,9 @@ type_ = checkAtLeastOneArg $ do
 xargs :: Prog ()
 xargs = checkAtLeastOneArg $ do
   Command(_,args) <- Prog.Argv
+  environment <- Prog.MyEnvironment
   case args of
     [] -> error "impossible"
     com:args -> do
       lines <- readAll stdin
-      execCommand (Command (com, args ++ lines))
+      execCommand environment (Command (com, args ++ lines))

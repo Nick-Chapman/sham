@@ -8,6 +8,7 @@ module Prog (
   ) where
 
 import Control.Monad (ap,liftM)
+import Environment (Environment)
 import Interaction (Prompt)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import Path (Path)
@@ -31,10 +32,11 @@ data Prog a where
   Exit :: Prog a
   Trace :: String -> Prog ()
   Fork :: Prog (Maybe Pid)
-  Exec :: Command -> Prog a -> Prog b
+  Exec :: Environment -> Command -> Prog a -> Prog b
   Wait :: Pid -> Prog ()
   Argv :: Prog Command
   MyPid :: Prog Pid
+  MyEnvironment :: Prog Environment
   Procs :: Prog [(Pid,Command)]
   Lsof :: Prog [(Pid,Command,FD,OF)]
   Call :: (Show a) => SysCall a b -> a -> Prog b

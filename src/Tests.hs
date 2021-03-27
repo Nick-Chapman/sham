@@ -192,7 +192,7 @@ run = Testing.run $ do
   --test ["exec >&2", "echo foo"] ["(stderr) foo"]
 
 
-  test ["foo=123","env"] ["foo=123"]
+  test ["env"] ["Version=MeNicks-0.1","prefix=sham"]
   test ["foo=123","echo $foo"] ["123"]
   test ["foo=123","bar=456","echo $foo $bar"] ["123 456"]
   test ["foo=ls","$foo"] paths0

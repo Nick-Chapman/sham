@@ -8,6 +8,7 @@ module Lib (
   readAll,
   ) where
 
+import Environment (Environment)
 import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
@@ -70,17 +71,17 @@ tryLoadBinary name = do
       --exit
       pure Nothing
 
-execCommand :: Command -> Prog ()
-execCommand command@(Command (name,args))  = do
+execCommand :: Environment -> Command -> Prog ()
+execCommand environment command@(Command (name,args))  = do
   --Prog.Trace (show ("execCommand",command))
   tryLoadBinary name >>= \case
     Just prog -> do
-      Prog.Exec command prog
+      Prog.Exec environment command prog
     Nothing -> do
       let com = "sham"
       tryLoadBinary com >>= \case
         Just prog -> do
-          Prog.Exec (Command (com,name:args)) prog
+          Prog.Exec environment (Command (com,name:args)) prog
         Nothing -> do
           write stderr "cant find sham interpreter"; exit
 
