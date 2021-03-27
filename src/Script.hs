@@ -1,10 +1,8 @@
 -- | The AST of a 'sham' script, which can be interpreted as a program.
 module Script (
-  Script(..), WaitMode(..),
-  Step(..), Redirect(..), RedirectSource(..),
-  Invocation(..),
+  Env(..), runScript,
+  Script(..), Redirect(..), RedirectSource(..),
   Pred(..),Word(..),Var(..),
-  runScript, Env(..)
   ) where
 
 import Data.Map (Map)
@@ -25,31 +23,25 @@ data Env = Env
   , shamParser :: [String] -> Script
   }
 
-data Script
-  = Null
-  | ShamError String
-  | Seq Script Script
-  | If Pred Script Script
-  | ReadIntoVar Var
-  | Invoke1 Step WaitMode
-  | Pipeline [Step] WaitMode
+data Script -- TODO: loose Q prefix?
+  = QNull
+  | QSeq Script Script
+  | QIf Pred Script Script
+  | QShamError String
+  | QEcho [Word]
+  | QReadIntoVar Var
+  | QExit
+  | QExec Script
+  | QInvoke Word [Word]
+  | QSource Word [Word]
+  | QPipeline [Script]
+  | QBackGrounding Script
+  | QRedirecting Script [Redirect] -- TODO: have just 1 redirect!
   deriving Show
 
 data Pred
   = Eq Word Word
   | NotEq Word Word
-  deriving Show
-
-data WaitMode = Wait | NoWait
-  deriving Show
-
-data Step
-  = Run Invocation [Redirect]
-  | XSubShell Script [Redirect]
-  deriving Show
-
-data Invocation
-  = Invocation Word [Word]
   deriving Show
 
 data Word
@@ -71,63 +63,6 @@ data Redirect = Redirect OpenMode FD RedirectSource
 data RedirectSource = FromPath Word | FromFD FD
   deriving Show
 
-runScript :: Env -> Script -> Prog ()
-runScript env script = do
-  let s = conv script
-  --Prog.Trace (show s)
-  runScrip env s
-
-conv :: Script -> Scrip
-conv = fromScript where
-  fromScript :: Script -> Scrip
-  fromScript = \case
-    ShamError s -> QShamError s
-    Null -> QNull
-    Seq s1 s2 -> QSeq (fromScript s1) (fromScript s2)
-    If pred s1 s2 -> QIf pred (fromScript s1) (fromScript s2)
-    ReadIntoVar x -> QReadIntoVar x
-    Invoke1 step Wait -> fromStep step
-    Invoke1 step NoWait -> QBackGrounding (fromStep step)
-    Pipeline steps Wait -> QPipeline (map fromStep steps)
-    Pipeline steps NoWait -> QBackGrounding (QPipeline (map fromStep steps))
-
-  fromStep :: Step -> Scrip
-  fromStep = \case
-    XSubShell script rs -> QRedirecting (fromScript script) rs
-    Run (Invocation (Word "exec") []) rs ->
-      QExec (QRedirecting QNull rs)
-    Run (Invocation (Word "exec") (w:ws)) rs ->
-      QExec (QRedirecting (fromInvocation (Invocation w ws)) rs)
-    Run invocation rs -> QRedirecting (fromInvocation invocation) rs
-
-  fromInvocation :: Invocation -> Scrip
-  fromInvocation = \case
-    -- sort this out at parse time!
-    Invocation (Word ".") (w:ws) -> QSource w ws
-    Invocation (Word ".") [] -> QShamError "source takes at least one argument"
-    Invocation (Word "echo") ws -> QEcho ws
-    Invocation (Word "exit") [] -> QExit
-    Invocation (Word "exit") _ -> QShamError "exit takes no args"
-    --Invocation (Word "exec") [] -> QExec QNull
-    --Invocation (Word "exec") (w:ws) -> QExec (QInvoke w ws)
-    Invocation w ws -> QInvoke w ws
-
-data Scrip -- no "t" for now. TODO: regain "t" and loose Q prefix when conv step is avoided
-  = QNull
-  | QSeq Scrip Scrip
-  | QIf Pred Scrip Scrip
-  | QShamError String
-  | QEcho [Word]
-  | QReadIntoVar Var
-  | QExit
-  | QExec Scrip
-  | QInvoke Word [Word]
-  | QSource Word [Word]
-  | QPipeline [Scrip]
-  | QBackGrounding Scrip
-  | QRedirecting Scrip [Redirect] -- TODO: have just 1 redirect!
-  deriving Show
-
 -- done means we are in an Exec context and so can 'take-over' the process
 data K = Done | Cont (Env -> Prog ())
 
@@ -136,10 +71,10 @@ runK env = \case
   Done -> exit -- not pure () !!
   Cont k -> k env
 
-runScrip :: Env -> Scrip -> Prog ()
-runScrip env0 scrip0 = loop env0 scrip0 (Cont $ \_ -> pure ()) where
+runScript :: Env -> Script -> Prog ()
+runScript env0 scrip0 = loop env0 scrip0 (Cont $ \_ -> pure ()) where
 
-  loop :: Env -> Scrip -> K -> Prog ()
+  loop :: Env -> Script -> K -> Prog ()
   loop env = \case
     QNull -> \k -> runK env k
 

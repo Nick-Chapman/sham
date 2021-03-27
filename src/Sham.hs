@@ -7,12 +7,13 @@ import Lib (loadFile,read)
 import Misc (EOF(..))
 import Prelude hiding (Word,read,fail)
 import Prog (Prog,FD(..),Command(..),OpenMode(..),WriteOpenMode(..))
-import Script (Script(..),Step(..),Invocation(..),WaitMode(..),Redirect(..),RedirectSource(..),Pred(..),Word(..),Var(..))
 import qualified Data.Char as Char
 import qualified Data.Map.Strict as Map
 import qualified EarleyM as EM (parse,Parsing(..))
-import qualified Prog --(Prog(Argv,MyPid))
-import qualified Script (runScript,Env(..))
+import qualified Prog
+
+import qualified Script (Env(..), runScript)
+import Script (Script(..),Word(..),Pred(..),Redirect(..),RedirectSource(..),Var(..))
 
 sham :: Prog ()
 sham = do
@@ -20,7 +21,7 @@ sham = do
   case args of
 
     "-c":rest -> do
-      let script = parseLine (unwords rest)
+      let script :: Script = parseLine (unwords rest)
       pid <- Prog.MyPid
       let com = "sham"
       let args = []
@@ -45,7 +46,7 @@ sham = do
         read (Prompt prompt) (FD 0) >>= \case
           Left EOF -> pure ()
           Right line -> do
-            let script = parseLine line
+            let script :: Script = parseLine line
             pid <- Prog.MyPid
             let com = "sham"
             let args = []
@@ -56,13 +57,13 @@ sham = do
 
 
 shamParser :: [String] -> Script
-shamParser lines = foldl Seq Null (map parseLine lines)
+shamParser lines = foldl QSeq QNull (map parseLine lines)
 
 parseLine :: String -> Script
 parseLine str = do
   case EM.parse (lang <$> getToken) str of
     EM.Parsing{EM.outcome} -> case outcome of
-      Left pe -> ShamError $ prettyParseError str pe
+      Left pe -> QShamError $ prettyParseError str pe
       Right script -> script
 
 -- TODO: when parsing a script it would be nice to see the line number for a parse error
@@ -80,7 +81,7 @@ lang token = script0 where
   script0 = do
     ws
     res <- alts [ do res <- script; ws; pure res
-                , do eps; pure Null ]
+                , do eps; pure QNull ]
     alts [eps,lineComment]
     pure res
 
@@ -92,7 +93,7 @@ lang token = script0 where
     keyword "if"
     ws1; p <- pred
     ws1; s <- step
-    pure $ If p (Invoke1 s Wait) Null
+    pure $ QIf p s QNull
 
   pred = alts [equal,notEqual]
 
@@ -111,48 +112,58 @@ lang token = script0 where
   readIntoVar = do
     keyword "read"
     ws1; x <- varname
-    pure $ ReadIntoVar x
+    pure $ QReadIntoVar x
 
   pipeline = do
     (x,xs) <- parseListSep step (do ws; symbol '|'; ws)
     m <- mode
     case xs of
-      [] -> pure $ Invoke1 x m
-      _ -> pure $ Pipeline (x:xs) m
+      [] -> pure (m x)
+      _ -> pure $ m $ QPipeline (x:xs)
 
-  mode =
-    alts [ do eps; pure Wait,
-           do ws; symbol '&'; pure NoWait ]
+  mode :: Gram (Script -> Script) =
+    alts [ do eps; pure id,
+           do ws; symbol '&'; pure QBackGrounding ]
 
-  step = alts [run,subshell]
+  step = alts [run,exec,subshell]
 
   subshell = do
     symbol '('
     script <- sequence
     symbol ')'
     rs <- redirects
-    pure $ XSubShell script rs
+    pure $ (case rs of [] -> script; _-> QRedirecting script rs)
 
   sequence = do
     (x1,xs) <- parseListSep script (do ws; symbol ';'; ws)
-    pure $ foldl Seq x1 xs
+    pure $ foldl QSeq x1 xs
 
-  {-run = do
-    (com,args) <- parseListSep word ws1
-    case com of Word "read" -> fail; _ -> pure ()
-    rs <- redirects
-    pure $ Run (Invocation com args) rs
--}
   run = do
     thing <- invocation
     rs <- redirects
-    pure $ Run thing rs
+    pure $ (case rs of [] -> thing; _ -> QRedirecting thing rs)
+
+  exec = do
+    keyword "exec"
+    ws1; thing <- invocation
+    rs <- redirects
+    pure $ QExec (case rs of [] -> thing; _ -> QRedirecting thing rs)
 
   invocation = do
     (com,args) <- parseListSep word ws1
     case com of Word "read" -> fail; _ -> pure ()
-    pure $ Invocation com args
+    case com of Word "exec" -> fail; _ -> pure ()
+    pure $ makeInvoke (com:args)
 
+  makeInvoke :: [Word] -> Script -- TODO: avoid this matching; just have alt parsers
+  makeInvoke = \case
+    [] -> undefined
+    (Word ".":w:ws) -> QSource w ws
+    [Word "."] -> QShamError "source takes at least one argument"
+    Word "echo":ws -> QEcho ws
+    [Word "exit"] -> QExit
+    (Word "exit":_) -> QShamError "exit takes no args"
+    w:ws -> QInvoke w ws
 
   redirects = alts
     -- TODO: Goal: allow just "ws" to separate args from redirects.
