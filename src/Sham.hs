@@ -23,7 +23,7 @@ sham = do
       let com = "sham"
       let args = []
       let bindings = Map.empty
-      let env = Env { pid, com, args, bindings, shamParser = parseLines}
+      let env = Env { pid, com, args, bindings }
       runScript env script
 
     path:args -> do
@@ -32,7 +32,7 @@ sham = do
       pid <- Prog.MyPid
       let com = path
       let bindings = Map.empty
-      let env = Env { pid, com, args, bindings, shamParser = parseLines}
+      let env = Env { pid, com, args, bindings }
       runScript env script
 
     [] -> loop 1 where
@@ -48,7 +48,7 @@ sham = do
             let com = "sham"
             let args = []
             let bindings = Map.empty
-            let env = Env { pid, com, args, bindings, shamParser = parseLines}
+            let env = Env { pid, com, args, bindings }
             runScript env script
             loop (n+1)
 
@@ -62,7 +62,6 @@ data Env = Env
   , args :: [String]
   , bindings :: Map Var String
   , pid :: Pid
-  , shamParser :: [String] -> Script
   }
 
 -- done means we are in an Exec context and so can 'take-over' the process
@@ -86,7 +85,7 @@ runScript env0 scrip0 = loop env0 scrip0 (Cont $ \_ -> pure ()) where
     QSource w ws -> \k -> do
       com <- evalWord env w
       args <- mapM (evalWord env) ws
-      script <- loadShamScript env com
+      script <- loadShamScript com
       runScript env { args } script
       runK env k
 
@@ -186,12 +185,12 @@ builtinRead =
     Left EOF -> exit
     Right line -> return line
 
-loadShamScript :: Env -> String -> Prog Script
-loadShamScript env path = do
+loadShamScript :: String -> Prog Script
+loadShamScript path = do
   lines <- do
     withOpen (Path.create path) OpenForReading $ \fd -> do
       readAll fd
-  pure $ shamParser env lines
+  pure $ parseLines lines
 
 execRedirect :: Env -> Redirect -> Prog ()
 execRedirect env = \case
