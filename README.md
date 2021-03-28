@@ -46,12 +46,15 @@ _It's not a shell, it's just a sham._
 - predefined: lsof (run 'lsof | cat' to see something)
 - ls -a
 - fork initial "sham" from "init"
+- grouping and sequencing: (...), foo;bar
+- mv
+- general vars (foo=something, $foo); + env for pasing info to commands. use for 'sham' level
 
 ### Ideas/Plans
-- general vars (foo=something, $foo); + env for pasing info to commands. use for 'sham' level
-- rm, mv
+- man: add entry for "mv" & sham builtins: "env", "read", etc
+- man with no args shows all keys
+- rm
 - quoting ('')
-- grouping and sequencing: (...), foo;bar
 - introduce tty, which is connected by 3 pipes
 - scripts: drop N, wc-l
 - grep -v, ls -l
