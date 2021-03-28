@@ -6,6 +6,8 @@ module Lib (
   loadFile,
   withOpen,
   readAll,
+  dup2,
+  execSameEnv,
   ) where
 
 import Environment (Environment)
@@ -13,7 +15,7 @@ import Interaction (Prompt(..))
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
-import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,OpenError(..),LoadBinaryError(..))
+import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,OpenError(..),LoadBinaryError(..),BadFileDescriptor(..))
 import qualified Path (create,toString)
 import qualified Prog (Prog(..))
 
@@ -139,3 +141,16 @@ readAll fd = loop []
       read NoPrompt fd >>= \case
       Left EOF -> pure (reverse acc)
       Right line -> loop (line:acc)
+
+execSameEnv :: Command -> Prog () -> Prog ()
+execSameEnv command prog = do
+  e <- Prog.MyEnvironment
+  Prog.Exec e command prog
+
+dup2 :: FD -> FD -> Prog ()
+dup2 d s = do
+  Prog.Call Dup2 (d,s) >>= \case
+    Left BadFileDescriptor -> do
+      write stderr $ "bad file descriptor: " ++ show s
+      exit
+    Right () -> pure ()

@@ -3,10 +3,10 @@ module Sham (sham) where
 
 import Environment (Environment)
 import Interaction (Prompt(..))
-import Lib (loadFile,stdin,stdout,stderr,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait)
+import Lib (loadFile,stdin,stdout,stderr,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait,dup2)
 import Misc (EOF(..),PipeEnds(..))
 import Prelude hiding (Word,read)
-import Prog (Prog,FD(..),Command(..),OpenMode(..),SysCall(..),BadFileDescriptor(..),Pid(..))
+import Prog (Prog,FD(..),Command(..),OpenMode(..),SysCall(..),Pid(..))
 import Syntax (parseLine,Script(..),Word(..),Pred(..),Redirect(..),RedirectSource(..),Var(..))
 import qualified Environment
 import qualified Path (create)
@@ -246,13 +246,3 @@ pipeline = \case
               Just incoming -> Prog.Call Close incoming
             Prog.Call Close pipeW
             loop (Just pipeR) (childPid:pids) prog2 progs
-
-dup2 :: FD -> FD -> Prog ()
-dup2 d s = do
-  Prog.Call Dup2 (d,s) >>= \case
-    Left BadFileDescriptor -> do
-      write stderr $ "bad file descriptor: " ++ show s
-      exit
-    Right () -> pure ()
-
-

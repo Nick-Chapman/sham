@@ -126,7 +126,12 @@ runSys sys s env arg = case sys of
           Right (Right (Right s)) -> do
             Right $ \k ->
               k s env (Right (Right ()))
-      Console outMode -> do
+
+      -- TODO: Kill the old Console stuff very sson
+      Console outMode@Normal -> undefined $ do -- this one is not used. hurrah!
+        Right $ \k ->
+          I_Write outMode line (k s env (Right (Right ())))
+      Console outMode@StdErr -> do -- still using this one
         Right $ \k ->
           I_Write outMode line (k s env (Right (Right ())))
 

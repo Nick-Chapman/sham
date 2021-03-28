@@ -9,7 +9,7 @@ module Prog (
 
 import Control.Monad (ap,liftM)
 import Environment (Environment)
-import Interaction (Prompt)
+import Interaction (Prompt,OutMode)
 import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import Path (Path)
 
@@ -30,10 +30,12 @@ data Prog a where
   Ret :: a -> Prog a
   Bind :: Prog a -> (a -> Prog b) -> Prog b
   Exit :: Prog a
+  WriteConsole :: OutMode -> String -> Prog ()
   Trace :: String -> Prog ()
   Fork :: Prog (Maybe Pid)
   Exec :: Environment -> Command -> Prog a -> Prog b
   Wait :: Pid -> Prog ()
+  Alive :: Pid -> Prog Bool
   Argv :: Prog Command
   MyPid :: Prog Pid
   MyEnvironment :: Prog Environment

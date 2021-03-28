@@ -4,46 +4,44 @@ module MeNicks (start) where
 import Data.Map (Map)
 import Environment (Environment)
 import FileSystem (FileSystem)
-import Interaction (Interaction(..))
-import Lib (forkWait,tryLoadBinary,write,stderr,exit)
+import Interaction (Interaction(..),OutMode(..))
 import Misc (Block(..))
 import OpenFiles (OpenFiles)
 import Prelude hiding (init)
-import Prog (Prog(..),Pid(..),Command(..),SysCall,FD,OF)
+import Prog (Prog(..),Pid(..),Command(..),SysCall(..),FD,OF)
 import SysCall (FdEnv,env0,dupEnv,closeEnv,runSys,openFiles)
 import qualified Data.Map.Strict as Map
 import qualified Environment (empty,set,Var(..))
 import qualified OpenFiles (init)
+import qualified Init (init)
 
 start :: FileSystem -> Interaction
 start fs = do
+  let oF = OpenFiles.init fs
   let initProc = Proc
         { command = Command ("init",[])
         , environment = environment0
         , fde = env0
-        , action = linearize init (\() -> A_Halt)
+        , action = linearize Init.init (\() -> A_Halt)
         }
-  let (state,pid) = newPid (initState fs)
+  let (state,pid) = newPid (initState oF)
   resume pid initProc state
 
 environment0 :: Environment
-environment0 = Environment.set Environment.empty (Environment.Var "Version") "MeNicks-0.1"
-
-init :: Prog ()
-init = tryLoadBinary "sham" >>= \case
-  Nothing -> do write stderr "init : cannot find sham interpreter"; exit
-  Just prog -> do
-    forkWait (Exec environment0 (Command ("sham",[])) prog)
+environment0 =
+  Environment.set Environment.empty (Environment.Var "Version") "MeNicks-0.1"
 
 linearize :: Prog a -> (a -> Action) -> Action
 linearize p0 = case p0 of
   Ret a -> \k -> k a
   Bind p f -> \k ->linearize p $ \a -> linearize (f a) k
   Exit -> \_ignoredK -> A_Halt
+  WriteConsole mode message -> \k -> A_WriteConsole mode message (k ())
   Trace message -> \k -> A_Trace message (k ())
   Fork -> A_Fork
   Exec e command prog -> \_ignoredK -> A_Exec e command (linearize prog $ \_ -> A_Halt)
   Wait pid -> \k -> A_Wait pid (k ())
+  Alive pid -> A_Alive pid
   Argv -> A_Argv
   MyPid -> A_MyPid
   MyEnvironment -> A_MyEnvironment
@@ -53,10 +51,12 @@ linearize p0 = case p0 of
 
 data Action where
   A_Halt :: Action
+  A_WriteConsole :: OutMode -> String -> Action -> Action
   A_Trace :: String -> Action -> Action
   A_Fork :: (Maybe Pid -> Action) -> Action
   A_Exec :: Environment -> Command -> Action -> Action
   A_Wait :: Pid -> Action -> Action
+  A_Alive :: Pid -> (Bool -> Action) -> Action
   A_Argv :: (Command -> Action) -> Action
   A_MyPid :: (Pid -> Action) -> Action
   A_MyEnvironment :: (Environment -> Action) -> Action
@@ -78,7 +78,10 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
         resume other proc2 state'
 
   A_Trace message action ->
-    I_Trace message (resume me proc0 { fde, action } state)
+    I_Trace message (yield me proc0 { fde, action } state)
+
+  A_WriteConsole mode message action ->
+    I_Write mode message (yield me proc0 { fde, action } state)
 
   A_Fork f -> do
     let state' = state { os = dupEnv fde os }
@@ -97,6 +100,10 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
     then block me proc0 state
      -- TODO: resume instead of yield (less rr)
     else yield me proc0 { action } state
+
+  A_Alive pid f -> do
+    let answer = running pid state
+    yield me proc0 { action = f answer } state
 
   A_MyPid f -> do yield me proc0 { action = f me } state
 
@@ -162,6 +169,14 @@ data State = State
   , suspended :: Map Pid Proc
   }
 
+initState :: OpenFiles -> State
+initState os = State
+  { os
+  , nextPid = 1
+  , waiting = Map.empty
+  , suspended = Map.empty
+  }
+
 instance Show State where
   show State{os} = show os
 
@@ -175,14 +190,6 @@ lsof (me,proc0) State{os,waiting,suspended} =
   | (pid,Proc{command,fde}) <- (me,proc0) : (Map.toList waiting ++ Map.toList suspended)
   , (fd,oF) <- openFiles os fde
   ]
-
-initState :: FileSystem -> State
-initState fs = State
-  { os = OpenFiles.init fs
-  , nextPid = 1
-  , waiting = Map.empty
-  , suspended = Map.empty
-  }
 
 running :: Pid -> State -> Bool
 running pid State{waiting,suspended} =
