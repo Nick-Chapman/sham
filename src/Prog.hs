@@ -62,6 +62,7 @@ data SysCall a b where
   Mv :: SysCall (Path,Path) (Either NoSuchPath ())
   SysPipe :: SysCall () (PipeEnds FD)
   Unused :: SysCall () FD -- TODO: for used for by with redirectsa
+  Fds :: SysCall () [FD]
 
 data E_Read
   = ER_BadFileDescriptor
@@ -113,6 +114,7 @@ instance Show (SysCall a b) where -- TODO: automate?
     Mv -> "Mv"
     SysPipe -> "Pipe"
     Unused -> "Unused"
+    Fds -> "Fds"
 
 newtype PipeKey = PipeKey Int deriving (Eq,Ord,Num)
 instance Show PipeKey where show (PipeKey n) = "pipe"++show n

@@ -35,6 +35,10 @@ runSys sys s env arg = case sys of
     let env' = env
     Right $ \k -> k s env' fd
 
+  Fds -> do
+    let fd = allFds env
+    Right $ \k -> k s env fd
+
   SysPipe -> do
     case OpenFiles.pipe s of
       (PipeEnds{r=keyR,w=keyW},s) -> do
@@ -128,7 +132,7 @@ runSys sys s env arg = case sys of
 
           Console outMode -> undefined $ do -- TODO: kill
             Right $ \k ->
-              I_Write outMode line (k s env (Right (Right ())))
+              I_Write outMode line (k s env (Right ()))
 
   Paths{} -> do
     Right $ \k -> do
@@ -167,9 +171,10 @@ env0 :: FdEnv
 env0 = FdEnv $ Map.fromList
   [ (FD n, Console m)
   | (n,m) <-
-    [ (0,Normal)
-    , (1,Normal)
-    , (2,StdErr)
+    [
+      (0,Normal)
+--    , (1,Normal)
+--    , (2,StdErr)
     ]
   ]
 
@@ -197,3 +202,6 @@ closeTarget tar s =
 smallestUnused :: FdEnv -> FD
 smallestUnused (FdEnv m) = head [ fd | fd <- [FD 0..], fd `notElem` used ]
   where used = Map.keys m
+
+allFds :: FdEnv -> [FD]
+allFds (FdEnv m) = Map.keys m

@@ -1,6 +1,6 @@
 -- | A 'library' of program fragments. Used by Bins, and Sham/Script.
 module Lib (
-  stdin, stdout, stderr,
+  stdin, stdout, stderr, shift2, closeAllBut,
   close, read, write, dup2, exit, forkWait, forkNoWait, tryLoadBinary, execCommand,
   checkNoArgs, checkAtLeastOneArg, getSingleArg, getTwoArgs,
   loadFile, withOpen, readAll, execSameEnv,
@@ -18,6 +18,18 @@ stdin,stdout,stderr :: FD
 stdin = 0
 stdout = 1
 stderr = 2
+
+-- | Shift open file from src to dest file-descriptor, by calling dup2 and close
+-- | take special case when src & dest are the same!
+shift2 :: FD -> FD -> Prog ()
+shift2 dest src = do
+  if (src == dest) then pure () else do
+    dup2 dest src; close src
+
+closeAllBut :: [FD] -> Prog ()
+closeAllBut preserve = do
+  open <- Call Fds ()
+  sequence_ [ close fd | fd <- open, not (fd `elem` preserve) ]
 
 read :: Prompt -> FD -> Prog (Either EOF String)
 read prompt fd =

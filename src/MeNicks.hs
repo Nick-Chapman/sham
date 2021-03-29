@@ -15,7 +15,6 @@ import qualified Environment (empty,set,Var(..))
 import qualified Init (init)
 import qualified OpenFiles (init)
 
--- TODO: allow traceMeNicks tobe turned on/off interactively at the console
 traceMeNicks :: Bool
 traceMeNicks = False
 
