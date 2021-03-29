@@ -12,8 +12,8 @@ import Prog (Prog(..),Pid(..),Command(..),SysCall(..),FD,OF)
 import SysCall (FdEnv,env0,dupEnv,closeEnv,runSys,openFiles)
 import qualified Data.Map.Strict as Map
 import qualified Environment (empty,set,Var(..))
-import qualified OpenFiles (init)
 import qualified Init (init)
+import qualified OpenFiles (init)
 
 start :: FileSystem -> Interaction
 start fs = do
@@ -62,7 +62,7 @@ data Action where
   A_MyEnvironment :: (Environment -> Action) -> Action
   A_Procs :: ([(Pid,Command)] -> Action) -> Action
   A_Lsof :: ([(Pid,Command,FD,OF)] -> Action) -> Action
-  A_Call :: (Show a) => SysCall a b -> a -> (b -> Action) -> Action
+  A_Call :: (Show a, Show b) => SysCall a b -> a -> (b -> Action) -> Action
 
 resume :: Pid -> Proc -> State -> Interaction
 resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@State{os} =
@@ -121,7 +121,7 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
     yield me proc0 { action = f res } state
 
   A_Call sys arg f -> do
-    trace (me,proc0) (show sys ++ show arg ++"...") $ do
+    --trace (me,proc0) (show sys ++ show arg ++"...") $ do
     case runSys sys os fde arg of
       Left Block ->
         trace (me,proc0) (show sys ++ show arg ++" BLOCKED") $ do
@@ -129,7 +129,7 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
       Right proceed -> do
         proceed $ \os fde res -> do
           -- TODO: Cant show res because of LoadBinary syscall
-          --trace (me,proc0) (show sys ++ show arg ++" --> " ++ show res) $ do
+          trace (me,proc0) (show sys ++ show arg ++" --> " ++ show res) $ do
           --trace me ("fde: " ++ show fde) $ do
           let state' = state { os }
           --I_Trace (show state') $ do

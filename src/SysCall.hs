@@ -7,9 +7,9 @@ module SysCall (
 import Data.List (intercalate)
 import Data.Map (Map)
 import Interaction (Interaction(..),OutMode(..))
-import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
+import Misc (Block(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import OpenFiles (OpenFiles,whatIsKey)
-import Prog (SysCall(..),FD(..),BadFileDescriptor(..),FD,OF,NoSuchPath(..))
+import Prog
 import qualified Data.Map.Strict as Map
 import qualified OpenFiles
 
@@ -59,27 +59,23 @@ runSys sys s env arg = case sys of
 
   Close -> do
     let fd = arg
-    Right $ \k -> do
-      case (case look "Sys.Close" fd (unFdEnv env) of
-              File key -> OpenFiles.close s key
-              Console{} -> (False,s))
-        of (_closing,s) -> do
-             --(if closing then (I_Trace "**CLOSED**") else id) $ do
-             k s (FdEnv (Map.delete fd (unFdEnv env))) ()
+    case Map.lookup fd (unFdEnv env) of
+      Nothing -> Right $ \k -> k s env (Left BadFileDescriptor)
+      Just thing -> do
+        Right $ \k -> do
+          case closeTarget thing s
+            of s -> do
+                 k s (FdEnv (Map.delete fd (unFdEnv env))) (Right ())
 
   Dup2 -> do
     let (fdDest,fdSrc) = arg
     Right $ \k -> do
       if fdDest == fdSrc then k s env (Right ()) else do
       let
-        (_closing,s') = --TODO: does this always get forced?
+        s' =
           case Map.lookup fdDest (unFdEnv env) of
-            Nothing -> (False,s)
-            Just oldTarget ->
-              case oldTarget of
-                File key -> OpenFiles.close s key
-                Console{} -> (False,s)
-      --(if closing then (I_Trace "**CLOSED (by dup2)**") else id) $ do
+            Nothing -> s
+            Just oldTarget -> closeTarget oldTarget s
       case Map.lookup fdSrc (unFdEnv env) of
         Nothing -> k s' env (Left BadFileDescriptor)
         Just target -> do
@@ -91,45 +87,48 @@ runSys sys s env arg = case sys of
 
   Read prompt -> do
     let fd = arg
-    case look "Sys.Read" fd (unFdEnv env) of
-      File key -> do
-        case OpenFiles.read s key of
-          Left NotReadable -> do
-            Right $ \k ->
-              k s env (Left NotReadable)
-          Right (Left Block) ->
-            Left Block
-          Right (Right (dat,s)) -> do
-            Right $ \k ->
-              k s env (Right dat)
-      Console{} -> do
-        Right $ \k -> do
-          I_Read prompt $ \case -- TODO: share alts
-            Left EOF ->
-              k s env (Right (Left EOF))
-            Right line ->
-              k s env (Right (Right line))
+    case Map.lookup fd (unFdEnv env) of
+      Nothing -> Right $ \k -> k s env (Left ER_BadFileDescriptor)
+      Just thing -> do
+        case thing of
+          File key -> do
+            case OpenFiles.read s key of
+              Left NotReadable -> do
+                Right $ \k ->
+                  k s env (Left ER_NotReadable)
+              Right (Left Block) ->
+                Left Block
+              Right (Right (dat,s)) -> do
+                Right $ \k ->
+                  k s env (Right dat)
+          Console{} -> do
+            Right $ \k -> do
+              I_Read prompt $ \lineOrEOF -> do
+                k s env (Right lineOrEOF)
 
   Write -> do
     let (fd,line) = arg
-    case look "Sys.Write" fd (unFdEnv env) of
-      File key -> do
-        case OpenFiles.write s key line of
-          Left NotWritable -> do
-            Right $ \k ->
-              k s env (Left NotWritable)
-          Right (Left Block) -> do
-            Left Block
-          Right (Right (Left EPIPE)) -> do
-            Right $ \k ->
-              k s env (Right (Left EPIPE))
-          Right (Right (Right s)) -> do
-            Right $ \k ->
-              k s env (Right (Right ()))
+    case Map.lookup fd (unFdEnv env) of
+      Nothing -> Right $ \k -> k s env (Left EW_BadFileDescriptor)
+      Just thing -> do
+        case thing of
+          File key -> do
+            case OpenFiles.write s key line of
+              Left NotWritable -> do
+                Right $ \k ->
+                  k s env (Left EW_NotWritable)
+              Right (Left Block) -> do
+                Left Block
+              Right (Right (Left EPIPE)) -> do
+                Right $ \k ->
+                  k s env (Left EW_PIPE)
+              Right (Right (Right s)) -> do
+                Right $ \k ->
+                  k s env (Right ())
 
-      Console outMode -> undefined $ do -- TODO: kill old Console stuff; not used for output
-        Right $ \k ->
-          I_Write outMode line (k s env (Right (Right ())))
+          Console outMode -> undefined $ do -- TODO: kill
+            Right $ \k ->
+              I_Write outMode line (k s env (Right (Right ())))
 
   Paths{} -> do
     Right $ \k -> do
@@ -166,7 +165,13 @@ openFiles os (FdEnv m) =
 
 env0 :: FdEnv
 env0 = FdEnv $ Map.fromList
-  [ (FD n, Console m) | (n,m) <- [(0,Normal),(1,Normal),(2,StdErr)] ]
+  [ (FD n, Console m)
+  | (n,m) <-
+    [ (0,Normal)
+    , (1,Normal)
+    , (2,StdErr)
+    ]
+  ]
 
 dupEnv :: FdEnv -> OpenFiles -> OpenFiles
 dupEnv (FdEnv m) s =
@@ -192,7 +197,3 @@ closeTarget tar s =
 smallestUnused :: FdEnv -> FD
 smallestUnused (FdEnv m) = head [ fd | fd <- [FD 0..], fd `notElem` used ]
   where used = Map.keys m
-
--- TODO: dont error if file-descriptor cannot be found. user can cause this
-look :: (Show k, Ord k) => String -> k -> Map k b -> b
-look tag k env = maybe (error (show ("look/error",tag,k))) id (Map.lookup k env)

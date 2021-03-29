@@ -3,7 +3,7 @@ module Sham (sham) where
 
 import Environment (Environment)
 import Interaction (Prompt(..))
-import Lib (loadFile,stdin,stdout,stderr,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait,dup2)
+import Lib (loadFile,stdin,stdout,stderr,close,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait,dup2)
 import Misc (EOF(..),PipeEnds(..))
 import Prelude hiding (Word,read)
 import Prog (Prog,FD(..),Command(..),OpenMode(..),SysCall(..),Pid(..))
@@ -222,12 +222,12 @@ pipeline = \case
           Nothing -> do
             case incoming of
               Nothing -> pure ()
-              Just incoming -> do dup2 stdin incoming; Prog.Call Close incoming
+              Just incoming -> do dup2 stdin incoming; close incoming
             prog1
           Just childPid -> do
             case incoming of
               Nothing -> pure ()
-              Just incoming -> Prog.Call Close incoming
+              Just incoming -> close incoming
             mapM_ Prog.Wait (childPid:pids)
 
       prog2:progs -> do
@@ -236,13 +236,13 @@ pipeline = \case
           Nothing -> do
             case incoming of
               Nothing -> pure ()
-              Just incoming -> do dup2 stdin incoming; Prog.Call Close incoming
-            Prog.Call Close pipeR
-            dup2 stdout pipeW; Prog.Call Close pipeW
+              Just incoming -> do dup2 stdin incoming; close incoming
+            close pipeR
+            dup2 stdout pipeW; close pipeW -- TODO: dup2/close --> shift2 (here & elsewhere)
             prog1
           Just childPid -> do
             case incoming of
               Nothing -> pure ()
-              Just incoming -> Prog.Call Close incoming
-            Prog.Call Close pipeW
+              Just incoming -> close incoming
+            close pipeW
             loop (Just pipeR) (childPid:pids) prog2 progs

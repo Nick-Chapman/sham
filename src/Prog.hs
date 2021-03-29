@@ -5,12 +5,13 @@ module Prog (
   BadFileDescriptor(..), OpenError(..), LoadBinaryError(..), NoSuchPath(..),
   Command(..), FD(..), Pid(..),
   PipeKey, OF(..),
+  E_Write(..), E_Read(..)
   ) where
 
 import Control.Monad (ap,liftM)
 import Environment (Environment)
 import Interaction (Prompt,OutMode)
-import Misc (EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
+import Misc (EOF(..),PipeEnds(..))
 import Path (Path)
 
 newtype Pid = Pid Int deriving (Eq,Ord,Num)
@@ -41,7 +42,9 @@ data Prog a where
   MyEnvironment :: Prog Environment
   Procs :: Prog [(Pid,Command)]
   Lsof :: Prog [(Pid,Command,FD,OF)]
-  Call :: (Show a) => SysCall a b -> a -> Prog b
+  Call :: (Show a, Show b) => SysCall a b -> a -> Prog b
+
+instance Show (Prog a) where show _ = "<PROG>"
 
 instance Functor Prog where fmap = liftM
 instance Applicative Prog where pure = return; (<*>) = ap
@@ -51,20 +54,34 @@ data SysCall a b where
   LoadBinary :: SysCall Path (Either LoadBinaryError (Prog ()))
   Kind :: SysCall Path (Either NoSuchPath FileKind)
   Open :: SysCall (Path,OpenMode) (Either OpenError FD)
-  Close :: SysCall FD ()
+  Close :: SysCall FD (Either BadFileDescriptor ())
   Dup2 :: SysCall (FD,FD) (Either BadFileDescriptor ())
-  Read :: Prompt -> SysCall FD (Either NotReadable (Either EOF String))
-  Write :: SysCall (FD,String) (Either NotWritable (Either EPIPE ()))
+  Read :: Prompt -> SysCall FD (Either E_Read (Either EOF String))
+  Write :: SysCall (FD,String) (Either E_Write ())
   Paths :: SysCall () [Path]
   Mv :: SysCall (Path,Path) (Either NoSuchPath ())
   SysPipe :: SysCall () (PipeEnds FD)
   Unused :: SysCall () FD -- TODO: for used for by with redirectsa
 
-data NoSuchPath = NoSuchPath deriving Show
+data E_Read
+  = ER_BadFileDescriptor
+  | ER_NotReadable
+  deriving Show
+
+data E_Write
+  = EW_BadFileDescriptor
+  | EW_NotWritable
+  | EW_PIPE
+  deriving Show
+
+data NoSuchPath = NoSuchPath
+  deriving Show
 
 data BinaryMeta = BinaryMeta String
+  deriving Show
 
 data FileKind = K_Data | K_Binary BinaryMeta
+  deriving Show
 
 data OpenMode
   = OpenForReading -- creating if doesn't exist
