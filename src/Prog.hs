@@ -61,7 +61,6 @@ data SysCall a b where
   Paths :: SysCall () [Path]
   Mv :: SysCall (Path,Path) (Either NoSuchPath ())
   SysPipe :: SysCall () (PipeEnds FD)
-  Unused :: SysCall () FD -- TODO: for used for by with redirectsa
   Fds :: SysCall () [FD]
 
 data E_Read
@@ -113,7 +112,6 @@ instance Show (SysCall a b) where -- TODO: automate?
     Paths -> "Paths"
     Mv -> "Mv"
     SysPipe -> "Pipe"
-    Unused -> "Unused"
     Fds -> "Fds"
 
 newtype PipeKey = PipeKey Int deriving (Eq,Ord,Num)

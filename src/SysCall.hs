@@ -29,12 +29,6 @@ runSys sys s env arg = case sys of
     let res =  OpenFiles.loadBinary s path
     Right $ \k -> k s env res
 
-  Unused -> do
-    let fd = smallestUnused env
-    env <- pure $ FdEnv (Map.insert fd (File OpenFiles.devnull) (unFdEnv env))
-    let env' = env
-    Right $ \k -> k s env' fd
-
   Fds -> do
     let fd = allFds env
     Right $ \k -> k s env fd
