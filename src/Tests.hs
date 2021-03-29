@@ -202,6 +202,7 @@ run = Testing.run $ do
   test ["echo foo >&2"] ["(stderr) foo"]
   test ["echo foo >&3"] ["(stderr) bad file descriptor: &3"]
   test ["echo foo >&7"] ["(stderr) bad file descriptor: &7"]
+  test ["echo foo >&23"] ["(stderr) bad file descriptor: &23"]
 
 
   test ["env"] ["Version=MeNicks-0.1","prefix=sham"]

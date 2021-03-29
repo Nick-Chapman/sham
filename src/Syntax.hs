@@ -196,12 +196,12 @@ lang token = script0 where
 
   redirectSource = alts [ FromPath <$> word, FromFD <$> fdRef ]
   fdRef = do symbol '&'; fd
-  fd = FD <$> digit -- TODO: multi-digit file-desciptors
+  fd = FD <$> digits
 
   word = alts [ Word <$> ident0
               , do keyword "$$"; pure DollarDollar
               , do keyword "$#"; pure DollarHash
-              , do keyword "$"; DollarN <$> digit
+              , do keyword "$"; DollarN <$> digits
               , do keyword "$"; DollarName <$> varname
               ]
 
@@ -216,6 +216,9 @@ lang token = script0 where
     x <- alts [alpha,numer,dash,dot,colon]
     xs <- many (alts [alpha,numer,dash,dot,colon])
     pure (x : xs)
+
+  digits = digit >>= more
+    where more n = alts [ pure n , do d <- digit; more (10*n+d)]
 
   digit = do c <- numer; pure (digitOfChar c)
 
