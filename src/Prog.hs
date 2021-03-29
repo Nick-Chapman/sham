@@ -122,7 +122,6 @@ data OF -- opened file
   | PipeWrite PipeKey
   | FileAppend Path -- nothing done when opened
   | FileContents [String] -- full contents read when opened
-  | DevNull
 
 instance Show OF where
   show = \case
@@ -130,4 +129,3 @@ instance Show OF where
     PipeWrite pk -> "Write:"++show pk
     FileAppend path -> "Append:"++show path
     FileContents xs -> "Contents[size=#"++show (length xs)++"]"
-    DevNull -> "/dev/null"

@@ -1,7 +1,7 @@
 -- | System-wide table of 'open-files' which may be shared between different processes.
 module OpenFiles (
   init, OpenFiles, Key,
-  devnull, open, pipe, dup, close, read, write, ls, mv, fileKind, loadBinary, whatIsKey,
+  open, pipe, dup, close, read, write, ls, mv, fileKind, loadBinary, whatIsKey,
   ) where
 
 import Data.List (intercalate)
@@ -49,12 +49,9 @@ init :: FileSystem -> OpenFiles
 init fs = OpenFiles
   { fs
   , pipeSystem = PipeSystem.empty
-  , table = Tab $ Map.fromList [(21, Entry { rc = 1, what = DevNull })]
-  , nextKey = 22
+  , table = Tab $ Map.fromList []
+  , nextKey = 21
   }
-
-devnull :: Key
-devnull = 21
 
 instance Show OpenFiles where
   show OpenFiles{fs=_,pipeSystem=ps,table,nextKey=_} =
@@ -121,7 +118,6 @@ close state0@OpenFiles{pipeSystem,table} key = do
       let table' = Tab (Map.delete key (unTab table))
       let state = state0 { table = table' }
       case what of
-        DevNull -> state
         PipeRead pk -> state { pipeSystem = PipeSystem.closeForReading pipeSystem pk }
         PipeWrite pk -> state { pipeSystem = PipeSystem.closeForWriting pipeSystem pk }
         FileAppend{} -> state
@@ -132,7 +128,6 @@ read :: OpenFiles -> Key -> Either NotReadable (Either Block (Either EOF String,
 read state@OpenFiles{table,pipeSystem} key = do
   let e@Entry{what} = look "read" key (unTab table)
   case what of
-    DevNull -> Right (Right (Left EOF, state))
     PipeWrite{} -> Left NotReadable
     FileAppend{} -> Left NotReadable
     PipeRead pk  -> do
@@ -156,7 +151,6 @@ write :: OpenFiles -> Key -> String -> Either NotWritable (Either Block (Either 
 write state@OpenFiles{table,pipeSystem,fs} key line = do
   let Entry{what} = look "write" key (unTab table)
   case what of
-    DevNull -> Right (Right (Right state))
     PipeRead{} -> Left NotWritable
     FileContents{} -> Left NotWritable
     PipeWrite pk ->
