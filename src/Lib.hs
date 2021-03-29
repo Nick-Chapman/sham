@@ -94,10 +94,7 @@ tryLoadBinary name = do
     Left LBE_CantLoadAsBinary -> do
       pure Nothing
     Left LBE_NoSuchPath -> do
-      -- TODO: err2/exit, but tests will need updating
-      --err2 $ "no such executable: " ++ name
-      --exit
-      pure Nothing
+      err2 $ "no such executable: " ++ name
 
 execCommand :: Environment -> Command -> Prog ()
 execCommand environment command@(Command (name,args))  = do

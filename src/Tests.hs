@@ -96,7 +96,7 @@ run = Testing.run $ do
   test [".head 3 < days"] (take 3 days)
   test [".countdown -1 | .head 3"] ["-1","-2","-3"]
 
-  test ["doh"] ["(stderr) no such path: doh"]
+  test ["doh"] ["(stderr) no such executable: doh"]
 
   test ["echo $0"] ["sham"]
   test ["echo $1"] ["(stderr) $1 unbound",""]
@@ -133,21 +133,21 @@ run = Testing.run $ do
   test ["ls nope"] ["(stderr) ls: takes no arguments, or a single '-a'"]
   test ["ps nope"] ["(stderr) ps: takes no arguments"]
 
-  test ["echo doh > x","echo echo foo >> x","x"] ["(stderr) no such path: doh","foo"]
-  test ["echo doh > x","echo echo foo >> x","x > hide"] ["(stderr) no such path: doh"]
+  test ["echo doh > x","echo echo foo >> x","x"] ["(stderr) no such executable: doh","foo"]
+  test ["echo doh > x","echo echo foo >> x","x > hide"] ["(stderr) no such executable: doh"]
   test ["echo doh > x","echo echo foo >> x","x 2> hide"] ["foo"]
-  test ["echo doh > x","echo echo foo >> x","x 2>&1 > hide"] ["no such path: doh"]
+  test ["echo doh > x","echo echo foo >> x","x 2>&1 > hide"] ["no such executable: doh"]
   test ["echo doh > x","echo echo foo >> x","x > hide 2>&1"] []
   test ["echo doh > x","echo echo foo >> x","x 3>&2 2>&1 1>&3"]
-    ["no such path: doh","(stderr) foo"]
+    ["no such executable: doh","(stderr) foo"]
   test ["echo doh > x","echo echo foo >> x","x 3>&1 1>&2 2>&3"]
-    ["no such path: doh","(stderr) foo"]
+    ["no such executable: doh","(stderr) foo"]
 
   test ["rev 0> x"] ["(stderr) &0 not readable"]
   test ["echo hey < days >&0"] ["(stderr) &1 not writable"]
 
   test ["echo AA 4< days >&4"] ["(stderr) &1 not writable"]
-  test ["doh 4< days"] ["(stderr) no such path: doh"]
+  test ["doh 4< days"] ["(stderr) no such executable: doh"]
   test ["doh 4< days 2>&4"] [] -- redirecting stderr to unwritable FD looses error
 
   test ["cat days &", "cat days"] (take 1 days ++ merge (drop 1 days) days) -- rather fragile
@@ -193,7 +193,7 @@ run = Testing.run $ do
   -- test ["exec ls"] paths0
 
   -- TODO: rewrite of bash interpreter has broken these...
-  --test ["exec 2>e","foo","bar","cat e"] ["no such path: foo", "no such path: bar"]
+  --test ["exec 2>e","foo","bar","cat e"] ["no such executable: foo", "no such executable: bar"]
   --test ["exec >&2", "echo foo"] ["(stderr) foo"]
 
 
