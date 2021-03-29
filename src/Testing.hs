@@ -73,7 +73,7 @@ runInteraction i (Lines xs0) = loop xs0 [] i where
         line:xs -> loop xs ys (f (Right line))
     I_Write mode line i -> do
       loop xs ((tag++line):ys) i
-        where tag = case mode of Normal -> ""; StdErr -> "(stderr) "
+        where tag = case mode of StdOut -> ""; StdErr -> "(stderr) "
     I_Trace _ i -> do
       loop xs ys i
     I_Halt -> do

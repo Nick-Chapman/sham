@@ -159,7 +159,7 @@ instance Show FdEnv where
 
 instance Show Target where
   show = \case
-    Console Normal -> "Tx"
+    Console StdOut -> "Tx"
     Console StdErr -> "Te"
     File k -> show k
 
@@ -172,8 +172,8 @@ env0 = FdEnv $ Map.fromList
   [ (FD n, Console m)
   | (n,m) <-
     [
-      (0,Normal)
---    , (1,Normal)
+      (0,StdOut)
+--    , (1,StdOut)
 --    , (2,StdErr)
     ]
   ]

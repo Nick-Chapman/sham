@@ -11,6 +11,6 @@ data Interaction where
 
 data Prompt = Prompt String | NoPrompt
 
-data OutMode = Normal | StdErr -- TODO: rename Normal -> StdOut
+data OutMode = StdOut | StdErr
 
-instance Show OutMode where show = \case Normal -> "stdout"; StdErr -> "stderr"
+instance Show OutMode where show = \case StdOut -> "stdout"; StdErr -> "stderr"

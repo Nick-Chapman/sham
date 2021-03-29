@@ -11,7 +11,7 @@ init :: Prog ()
 init = do
   forkWait $ do -- not essential; allows "init" process to remain
     monitor stderr StdErr
-    monitor stdout Normal
+    monitor stdout StdOut
     tryLoadBinary "sham" >>= \case
       Nothing -> do write stderr "init : cannot find sham interpreter"; exit
       Just prog -> do

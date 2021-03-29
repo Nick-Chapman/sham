@@ -32,7 +32,7 @@ runInteraction i0 = do
       I_Write mode line i -> do
         lift $ putStrLn (colouring line)
         loop i
-          where colouring = case mode of Normal -> id; StdErr -> col AN.Red
+          where colouring = case mode of StdOut -> id; StdErr -> col AN.Red
       I_Trace mes i -> do
         lift $ putStrLn (col AN.Yellow mes)
         loop i
