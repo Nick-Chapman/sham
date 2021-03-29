@@ -196,9 +196,12 @@ run = Testing.run $ do
   --test ["exec 2>e","foo","bar","cat e"] ["no such path: foo", "no such path: bar"]
   --test ["exec >&2", "echo foo"] ["(stderr) foo"]
 
-  -- TODO: these two tests started crashing when I reworked the tty
-  --test ["echo foo >&3"] ["(stderr) bad file descriptor: &3"]
-  --test ["echo AA 3< days >&3"] ["(stderr) bad file descriptor: &3"] -- ?? file-opens on fd-3
+
+  --test ["echo foo >&0"] [] -- TODO: crashes because provokes old tty code
+  test ["echo foo >&1"] ["foo"]
+  test ["echo foo >&2"] ["(stderr) foo"]
+  test ["echo foo >&3"] ["(stderr) bad file descriptor: &3"]
+  test ["echo foo >&7"] ["(stderr) bad file descriptor: &7"]
 
 
   test ["env"] ["Version=MeNicks-0.1","prefix=sham"]

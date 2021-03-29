@@ -15,6 +15,10 @@ import qualified Environment (empty,set,Var(..))
 import qualified Init (init)
 import qualified OpenFiles (init)
 
+-- TODO: allow traceMeNicks tobe turned on/off interactively at the console
+traceMeNicks :: Bool
+traceMeNicks = False
+
 start :: FileSystem -> Interaction
 start fs = do
   let oF = OpenFiles.init fs
@@ -69,9 +73,13 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
   case action0 of
 
   A_Halt -> do
-    trace (me,proc0) "Halt" $ do
+    traceProc (me,proc0) "Halt(before)" $ do
+    traceProc (me,proc0) ("fde: " ++ show fde) $ do
+    trace (show state) $ do
     let state' = state { os = closeEnv fde os }
-    --I_Trace (show state') $ do
+    traceProc (me,proc0) "Halt(after)" $ do
+    traceProc (me,proc0) ("fde: " ++ show fde) $ do
+    trace (show state') $ do
     case choose state' of
       Nothing -> I_Halt
       Just (state',other,proc2) ->
@@ -86,7 +94,8 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
   A_Fork f -> do
     let state' = state { os = dupEnv fde os }
     let (state'',pid) = newPid state'
-    trace (me,proc0) ("Fork:"++show pid) $ do
+    traceProc (me,proc0) ("Fork:"++show pid) $ do
+    trace (show state'') $ do
     let child = proc0 { action = f Nothing }
     let parent = proc0 { action = f (Just pid) }
     yield me parent (suspend pid child state'')
@@ -95,7 +104,7 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
     yield me proc0 { environment, command, action } state
 
   A_Wait pid action ->
-    --trace (me,proc0) ("Wait:"++show pid) $ do -- This happens a lot!
+    --traceProc (me,proc0) ("Wait:"++show pid) $ do -- This happens a lot!
     if running pid state
     then block me proc0 state
      -- TODO: resume instead of yield (less rr)
@@ -121,26 +130,19 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
     yield me proc0 { action = f res } state
 
   A_Call sys arg f -> do
-    --trace (me,proc0) (show sys ++ show arg ++"...") $ do
     case runSys sys os fde arg of
       Left Block ->
-        trace (me,proc0) (show sys ++ show arg ++" BLOCKED") $ do
+        traceProc (me,proc0) (show sys ++ show arg ++" BLOCKED") $ do
         block me proc0 state
       Right proceed -> do
         proceed $ \os fde res -> do
-          -- TODO: Cant show res because of LoadBinary syscall
-          trace (me,proc0) (show sys ++ show arg ++" --> " ++ show res) $ do
-          --trace me ("fde: " ++ show fde) $ do
+          traceProc (me,proc0) (show sys ++ show arg ++" --> " ++ show res) $ do
+          traceProc (me,proc0) ("fde: " ++ show fde) $ do
           let state' = state { os }
-          --I_Trace (show state') $ do
+          trace (show state') $ do
           let action = f res
           yield me proc0 { fde, action } state'
 
-trace :: (Pid,Proc) -> String -> Interaction -> Interaction
-trace (me,Proc{command}) mes =
-  -- TODO: allow trace tobe turned on/off interactively at the console
-  if True then id else
-    I_Trace (show me ++ "(" ++ show command ++ ") " ++ mes)
 
 block :: Pid -> Proc -> State -> Interaction
 block = yield -- TODO: track blocked Procs
@@ -149,11 +151,18 @@ yield :: Pid -> Proc -> State -> Interaction
 yield me proc1 state = do
   case choose state of
     Nothing ->
-      --I_Trace (show ("yield, only me!", me)) $
+      --trace (show ("yield, only me!", me)) $
       resume me proc1 state -- nothing else to do, so continue
     Just (state,other,proc2) ->
-      --I_Trace (show ("yield", me, "-->", other)) $
+      --trace (show ("yield", me, "-->", other)) $
       resume other proc2 (suspend me proc1 state)
+
+traceProc :: (Pid,Proc) -> String -> Interaction -> Interaction
+traceProc (me,Proc{command}) mes =
+  trace (show me ++ "(" ++ show command ++ ") " ++ mes)
+
+trace :: String -> Interaction -> Interaction
+trace s = if traceMeNicks then I_Trace s else id
 
 data Proc = Proc
   { command :: Command

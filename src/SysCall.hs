@@ -70,20 +70,20 @@ runSys sys s env arg = case sys of
   Dup2 -> do
     let (fdDest,fdSrc) = arg
     Right $ \k -> do
-      if fdDest == fdSrc then k s env (Right ()) else do
-      let
-        s' =
-          case Map.lookup fdDest (unFdEnv env) of
-            Nothing -> s
-            Just oldTarget -> closeTarget oldTarget s
       case Map.lookup fdSrc (unFdEnv env) of
-        Nothing -> k s' env (Left BadFileDescriptor)
-        Just target -> do
-          let s'' = case target of
-                File key -> OpenFiles.dup s' key
-                Console{}-> s'
-          let env' = FdEnv (Map.insert fdDest target (unFdEnv env))
-          k s'' env' (Right ())
+        Nothing -> k s env (Left BadFileDescriptor)
+        Just src -> do
+          if fdDest == fdSrc then k s env (Right ()) else do
+            let
+              s' =
+                case Map.lookup fdDest (unFdEnv env) of
+                  Nothing -> s
+                  Just oldTarget -> closeTarget oldTarget s
+            let s'' = case src of
+                  File key -> OpenFiles.dup s' key
+                  Console{}-> s'
+            let env' = FdEnv (Map.insert fdDest src (unFdEnv env))
+            k s'' env' (Right ())
 
   Read prompt -> do
     let fd = arg
