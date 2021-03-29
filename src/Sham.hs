@@ -3,7 +3,7 @@ module Sham (sham) where
 
 import Environment (Environment)
 import Interaction (Prompt(..))
-import Lib (loadFile,stdin,stdout,stderr,close,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait,dup2)
+import Lib (loadFile,stdin,stdout,stderr,close,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait,dup2,shift2)
 import Misc (EOF(..),PipeEnds(..))
 import Prelude hiding (Word,read)
 import Prog (Prog,FD(..),Command(..),OpenMode(..),SysCall(..),Pid(..))
@@ -222,7 +222,7 @@ pipeline = \case
           Nothing -> do
             case incoming of
               Nothing -> pure ()
-              Just incoming -> do dup2 stdin incoming; close incoming
+              Just incoming -> shift2 stdin incoming
             prog1
           Just childPid -> do
             case incoming of
@@ -236,9 +236,9 @@ pipeline = \case
           Nothing -> do
             case incoming of
               Nothing -> pure ()
-              Just incoming -> do dup2 stdin incoming; close incoming
+              Just incoming -> shift2 stdin incoming
             close pipeR
-            dup2 stdout pipeW; close pipeW -- TODO: dup2/close --> shift2 (here & elsewhere)
+            shift2 stdout pipeW
             prog1
           Just childPid -> do
             case incoming of
