@@ -19,7 +19,7 @@ import qualified Prelude
 import qualified Prog (Prog(..))
 
 man :: Prog ()
-man = checkAtLeastOneArg $ do
+man = do
   Command(me,args) <- Prog.Argv
   let
     manline :: String -> Prog ()
@@ -27,21 +27,25 @@ man = checkAtLeastOneArg $ do
       case Map.lookup name docsMap of
         Just text -> write stdout (name ++ " : " ++ text)
         Nothing -> write stderr (me ++ " : no manual entry for '" ++ name ++ "'")
-  mapM_ manline args
+
+  case args of
+    [] -> write stdout (unwords [ k | k <- Map.keys docsMap])
+    args -> mapM_ manline args
+
   where
     docsMap :: Map String String
     docsMap = Map.fromList
-     [ ("man"  , "show manual entries for given commands")
-     , ("echo" , "write given arguments to stdout")
+     [ ("man"  , "show manual entries for commands, or show entry keys (no args)")
+     , ("echo" , "write arguments to stdout")
      , ("cat"  , "write named files (or stdin in no files named) to stdout")
      , ("rev"  , "copy stdin to stdout, reversing each line")
      , ("grep" , "copy stdin lines which match the given pattern to stdout ")
      , ("ls"   , "list non-hidden files; add '-a' flag to also see hidden files")
-     , ("ps"   , "list all running processes")
+     , ("ps"   , "list running processes")
      , ("lsof" , "list open files in running processes")
-     , ("sum"  , "write sum of the given numeric arguments to stdout")
+     , ("sum"  , "write sum of numeric arguments to stdout")
      , ("type" , "determine the type of named files: binary or data")
-     , ("xargs", "concatenate lines from stdin, and pass as arguments to the given command")
+     , ("xargs", "concatenate stdin lines, and pass to the given command")
      , ("sham" , "interpret a script, or command (with '-c'), or start a new console (no args)")
      ]
 
@@ -162,4 +166,5 @@ xargs = checkAtLeastOneArg $ do
     [] -> error "impossible"
     com:args -> do
       lines <- readAll stdin
-      execCommand environment (Command (com, args ++ lines))
+      let words = lines >>= Prelude.words
+      execCommand environment (Command (com, args ++ words))
