@@ -130,8 +130,8 @@ run = Testing.run $ do
   test ["cat < days"] days
 
   test ["*"] ["(stderr) unexpected '*' at position 1"]
-  test ["."] ["(stderr) source takes at least one argument"]
-  test ["exit nope"] ["(stderr) exit takes no args"]
+  test ["."] ["(stderr) unexpected end of line"]
+  test ["exit nope"] ["(stderr) unexpected 'n' at position 6"]
 
   test ["rev nope"] ["(stderr) rev: takes no arguments"]
   test ["rev nope < days"] ["(stderr) rev: takes no arguments"]

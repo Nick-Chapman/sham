@@ -110,7 +110,8 @@ lang token = script0 where
     pure (QSetVar x w)
 
   pipeline = do
-    (x,xs) <- parseListSep step (do ws; symbol '|'; ws)
+    x <- step
+    xs <- many (do ws; symbol '|'; ws; step)
     m <- mode
     case xs of
       [] -> pure (m x)
@@ -130,47 +131,51 @@ lang token = script0 where
     pure $ (case rs of [] -> script; _-> QRedirecting script rs)
 
   sequence = do
-    (x1,xs) <- parseListSep script (do ws; symbol ';'; ws)
+    x1 <- script
+    xs <- many (do ws; symbol ';'; ws; step)
     pure $ foldl QSeq x1 xs
 
   run = do
-    thing <- invocation
+    thing <- command
     rs <- redirects
     pure $ (case rs of [] -> thing; _ -> QRedirecting thing rs)
 
   exec = do
     keyword "exec"
-    ws1; thing <- invocation
+    ws1; thing <- command
     rs <- redirects
     pure $ QExec (case rs of [] -> thing; _ -> QRedirecting thing rs)
 
+  command = alts [echo,exit,source,invocation]
+
+  echo = do keyword "echo"; QEcho <$> words
+  exit = do keyword "exit"; pure QExit
+
+  source = do
+    alts [keyword "source",keyword "."]
+    ws1; w <- word
+    ws <- words
+    pure $ QSource w ws
+
   invocation = do
-    (com,args) <- parseListSep word ws1
-    case com of Word "read" -> fail; _ -> pure ()
-    case com of Word "exec" -> fail; _ -> pure ()
-    pure $ makeInvoke (com:args)
+    com <- nonBuiltinWord
+    args <- words
+    pure $ QInvoke com args
 
-  makeInvoke :: [Word] -> Script -- TODO: avoid this matching; just have alt parsers
-  makeInvoke = \case
-    [] -> undefined
-    (Word ".":w:ws) -> QSource w ws
-    (Word "source":w:ws) -> QSource w ws
-    [Word "source"] -> QShamError "source takes at least one argument"
-    [Word "."] -> QShamError "source takes at least one argument"
-    Word "echo":ws -> QEcho ws
-    [Word "exit"] -> QExit
-    (Word "exit":_) -> QShamError "exit takes no args"
-    w:ws -> QInvoke w ws
+  words = many (do ws1; word)
 
-  redirects = alts
+  builtinList = ["echo","exec","exit","read","source","."]
+
+  nonBuiltinWord = do
+    com <- word
+    case com of Word w | w `elem` builtinList -> fail; _ -> pure com
+
+  redirects = many (do ws1; redirect)
     -- TODO: Goal: allow just "ws" to separate args from redirects.
     -- Problem is that currently this causes ambiguity for examples such as:
     --  "echo foo1>xx"
     -- It should parse as:       "echo foo1 >xx"
     -- But we think it might be  "echo foo 1>xx"  !!
-    [ do ws1; (r1,rs) <- parseListSep redirect ws1; pure (r1:rs)
-    , do eps; pure []
-    ]
 
   redirect = alts
     [ do
@@ -217,6 +222,7 @@ lang token = script0 where
     where more n = alts [ pure n , do d <- digit; more (10*n+d)]
 
   digit = do c <- numer; pure (digitOfChar c)
+    where digitOfChar c = Char.ord c - ord0 where ord0 = Char.ord '0'
 
   alpha = sat Char.isAlpha
   numer = sat Char.isDigit
@@ -233,12 +239,3 @@ lang token = script0 where
 
   skip p = do _ <- p; eps
   eps = pure ()
-
-
-digitOfChar :: Char -> Int
-digitOfChar c = Char.ord c - ord0 where ord0 = Char.ord '0'
-
-parseListSep :: Gram a -> Gram () -> Gram (a,[a])
-parseListSep p sep = alts [
-    do x <- p; sep; (x1,xs) <- parseListSep p sep; pure (x,x1:xs),
-    do x <- p; pure (x,[])]
