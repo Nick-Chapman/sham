@@ -8,7 +8,7 @@ import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Environment (Var(..),bindings)
 import Interaction (Prompt(..))
-import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,checkAtLeastOneArg,getSingleArg,getTwoArgs,readAll,exit,execCommand)
+import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,checkAtLeastOneArg,getTwoArgs,readAll,exit,execCommand)
 import Misc (EOF(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
@@ -41,7 +41,7 @@ man = do
       , ("env"   , "list variable bindings")
       , ("exec"  , "(sham builtin) : replace the current process with a new command")
       , ("exit"  , "(sham builtin) : exit the current process")
-      , ("grep"  , "copy stdin lines which match the given pattern to stdout ")
+      , ("grep"  , "copy stdin lines to stdout which match (-v dont match) the pattern")
       , ("ls"    , "list non-hidden files; add '-a' flag to also see hidden files")
       , ("lsof"  , "list open files in running processes")
       , ("man"   , "show manual entries for commands, or show entry keys (no args)")
@@ -100,17 +100,23 @@ rev = checkNoArgs loop where
 
 grep :: Prog ()
 grep = do
-  getSingleArg $ \pat -> do
-  let
-    loop :: Prog ()
-    loop = do
-      read NoPrompt stdin >>= \case
-        Left EOF -> pure ()
-        Right line -> do
-          when (pat `isInfixOf` line) $
-            write stdout line
-          loop
-  loop
+  Command(com,args) <- Prog.Argv
+  case (case args of [pat] -> Just (True,pat)
+                     ["-v",pat] -> Just (False,pat)
+                     _ -> Nothing
+       ) of
+    Nothing -> write stderr (com ++ ": takes optional '-v' and one more argument")
+    Just (sense,pat) -> do
+      let
+        loop :: Prog ()
+        loop = do
+          read NoPrompt stdin >>= \case
+            Left EOF -> pure ()
+            Right line -> do
+              when ((pat `isInfixOf` line) == sense) $
+                write stdout line
+              loop
+      loop
 
 ls :: Prog ()
 ls = do

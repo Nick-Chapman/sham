@@ -52,9 +52,9 @@ _It's not a shell, it's just a sham._
 - man with no args shows all keys
 - man: add entry for "mv" & sham builtins: "env", "read", etc
 - make 'env' a binary instead of a shell builtin
+- grep -v
 
 ### Ideas/Plans
-- grep -v
 - rm
 - quoting ('')
 - introduce tty, which is connected by 3 pipes

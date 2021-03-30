@@ -160,8 +160,10 @@ run = Testing.run $ do
   test ["echo exit > y","cat > x","echo 1","y","echo 2","","x"] ["1","2"]
   test ["echo exit > y","cat > x","echo 1",". y","echo 2","","x"] ["1"]
 
-  test ["cat days | grep u"] [ d | d <- days, "u" `isInfixOf` d ]
-  test ["grep"] ["(stderr) grep: takes a single argument"]
+  test ["grep"] ["(stderr) grep: takes optional '-v' and one more argument"]
+  test ["cat days | grep ur"] [ d | d <- days, "ur" `isInfixOf` d ]
+  test ["grep ur < days"] [ d | d <- days, "ur" `isInfixOf` d ]
+  test ["grep -v ur < days"] [ d | d <- days, not ("ur" `isInfixOf` d) ]
 
   test ["echo my pid is $$"] ["my pid is 4"]
   test [".me"] ["5"]
