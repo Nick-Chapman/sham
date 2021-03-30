@@ -51,9 +51,9 @@ _It's not a shell, it's just a sham._
 - general vars (foo=something, $foo); + env for pasing info to commands. use for 'sham' level
 - man with no args shows all keys
 - man: add entry for "mv" & sham builtins: "env", "read", etc
+- make 'env' a binary instead of a shell builtin
 
 ### Ideas/Plans
-- why is 'env' a shell builtin? it should/could be a normal binary
 - grep -v
 - rm
 - quoting ('')

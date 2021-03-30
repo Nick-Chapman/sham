@@ -105,10 +105,6 @@ runScript env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
       builtinEcho args
       runK env k
 
-    QEnv -> \k -> do
-      builtinEnv env
-      runK env k
-
     QExit -> \_ignored_k -> do
       exit
 
@@ -181,12 +177,6 @@ evalWord Env{pid,argv,environment} = \case
 builtinEcho :: [String] -> Prog ()
 builtinEcho args =
   write stdout (unwords args)
-
-builtinEnv :: Env -> Prog ()
-builtinEnv Env{environment} =
-  sequence_ [ write stdout (k ++ "=" ++ v)
-            | (Var k,v) <- Environment.bindings environment
-            ]
 
 builtinRead :: Prog String
 builtinRead =

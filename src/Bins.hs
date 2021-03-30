@@ -1,11 +1,12 @@
 -- | Predefined 'binary' programs, which will be available on the file-system.
 module Bins (
-  man, echo, cat, rev, grep, ls, mv, ps, lsof, sum, type_, xargs,
+  man, echo, env, cat, rev, grep, ls, mv, ps, lsof, sum, type_, xargs,
   ) where
 
 import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
+import Environment (Var(..),bindings)
 import Interaction (Prompt(..))
 import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,checkAtLeastOneArg,getSingleArg,getTwoArgs,readAll,exit,execCommand)
 import Misc (EOF(..))
@@ -37,7 +38,7 @@ man = do
     docsMap = Map.fromList
       [ ("cat"   , "write named files (or stdin in no files named) to stdout")
       , ("echo"  , "(binary/sham builtin) write arguments to stdout")
-      , ("env"   , "(sham builtin) : display variable bindings")
+      , ("env"   , "list variable bindings")
       , ("exec"  , "(sham builtin) : replace the current process with a new command")
       , ("exit"  , "(sham builtin) : exit the current process")
       , ("grep"  , "copy stdin lines which match the given pattern to stdout ")
@@ -54,6 +55,13 @@ man = do
       , ("type"  , "determine the type of named files: binary or data")
       , ("xargs" , "concatenate stdin lines, and pass to the given command")
       ]
+
+env :: Prog ()
+env = do
+  environment <- Prog.MyEnvironment
+  sequence_ [ write stdout (k ++ "=" ++ v)
+            | (Var k,v) <- Environment.bindings environment
+            ]
 
 echo :: Prog ()
 echo = do

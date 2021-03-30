@@ -1,7 +1,7 @@
 -- | The initial file-system image, containing predefined 'binary' and 'data' files.
 module Image (fs0,readme,days) where
 
-import Bins (echo,cat,rev,grep,ls,mv,ps,lsof,xargs,man,sum,type_)
+import Bins (echo,env,cat,rev,grep,ls,mv,ps,lsof,xargs,man,sum,type_)
 import FileSystem (FileSystem)
 import Prelude hiding (sum)
 import Prog (BinaryMeta(..))
@@ -18,6 +18,7 @@ fs0 = FileSystem.create image where
 
   bins =
     [ ("echo",echo)
+    , ("env",env)
     , ("cat",cat)
     , ("rev",rev)
     , ("grep",grep)
