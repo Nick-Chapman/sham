@@ -14,6 +14,7 @@ import qualified OpenFiles
 
 runSys :: SysCall a b ->
   OpenFiles -> FdEnv -> a ->
+  -- TODO: hmm, this type doesn't allow interaction & then block!
   Either Block ((OpenFiles -> FdEnv -> b -> Interaction) -> Interaction)
 
 runSys sys s env arg = case sys of
@@ -98,10 +99,15 @@ runSys sys s env arg = case sys of
               Right (Right (dat,s)) -> do
                 Right $ \k ->
                   k s env (Right dat)
+
           Console{} -> do
             Right $ \k -> do
-              I_Read prompt $ \lineOrEOF -> do
-                k s env (Right lineOrEOF)
+              I_Read prompt $ \case
+                Nothing -> do
+                  k s env (Right (Right "")) -- TODO: this should block, hack it
+                Just lineOrEOF -> do
+                  k s env (Right lineOrEOF)
+
 
   Write -> do
     let (fd,line) = arg

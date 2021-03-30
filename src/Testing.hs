@@ -67,9 +67,9 @@ runInteraction i (Lines xs0) = loop xs0 [] i where
   loop xs ys = \case
     I_Read _ f -> do
       case xs of
-        [] -> loop xs ys (f (Left EOF))
-        "":xs -> loop xs ys (f (Left EOF))
-        line:xs -> loop xs ys (f (Right line))
+        [] -> loop xs ys (f (Just (Left EOF)))
+        "":xs -> loop xs ys (f (Just (Left EOF)))
+        line:xs -> loop xs ys (f (Just (Right line)))
     I_Write mode line i -> do
       loop xs ((tag++line):ys) i
         where tag = case mode of StdOut -> ""; StdErr -> "(stderr) "

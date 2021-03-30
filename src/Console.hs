@@ -19,15 +19,15 @@ runInteraction i0 = do
         case pM of
           NoPrompt -> do
             HL.getInputLine "(more...) " >>= \case
-              Nothing -> loop (f (Left EOF))
+              Nothing -> loop (f (Just (Left EOF)))
               Just line -> do
-                loop (f (Right line))
+                loop (f (Just (Right line)))
           Prompt prompt -> do
             HL.getInputLine (col AN.Green prompt) >>= \case
-              Nothing -> loop (f (Left EOF))
+              Nothing -> loop (f (Just (Left EOF)))
               Just line -> do
                 when (line /= "") $ updateHistory line
-                loop (f (Right line))
+                loop (f (Just (Right line)))
       I_Write mode line i -> do
         lift $ putStrLn (colouring line)
         loop i

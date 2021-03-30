@@ -1,8 +1,9 @@
 -- | Entry point to the project. Run the regression tests, then start 'MeNicks'.
 module Top (main) where
 
-import Console (runInteraction)
-import Image (fs0)
+import qualified AConsole (runInteraction)
+import qualified Console (runInteraction)
+import qualified Image (fs0)
 import qualified MeNicks (start)
 import qualified Tests (run)
 
@@ -10,4 +11,7 @@ main :: IO ()
 main = do
   Tests.run
   putStrLn "Welcome to *sham*. You can type 'help'."
-  Console.runInteraction (MeNicks.start fs0)
+  runInteraction (MeNicks.start Image.fs0)
+    where
+      runInteraction = AConsole.runInteraction -- WIP: async console
+      _runInteraction = Console.runInteraction -- old console

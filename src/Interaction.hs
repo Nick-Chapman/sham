@@ -2,7 +2,7 @@
 module Interaction (Interaction(..),Prompt(..),OutMode(..),EOF(..)) where
 
 data Interaction where
-  I_Read :: Prompt -> (Either EOF String -> Interaction) -> Interaction
+  I_Read :: Prompt -> (Maybe (Either EOF String) -> Interaction) -> Interaction
   I_Write :: OutMode -> String -> Interaction -> Interaction
   I_Trace :: String -> Interaction -> Interaction
   I_Halt :: Interaction
