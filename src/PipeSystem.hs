@@ -10,9 +10,9 @@ module PipeSystem (
 
 import Data.List (intercalate)
 import Data.Map (Map)
-import Misc (Block(..),EOF(..),EPIPE(..))
+import Interaction (EOF(..))
 import Pipe (Pipe)
-import Prog (PipeKey)
+import Prog (PipeKey,Block(..),EPIPE(..))
 import qualified Data.Map.Strict as Map
 import qualified Pipe
 

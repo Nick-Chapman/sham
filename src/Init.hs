@@ -1,11 +1,10 @@
 -- | 'init' is the top-level program which runs on MeNicks
 module Init (init) where
 
-import Interaction (Prompt(..),OutMode(..))
+import Interaction (Prompt(..),OutMode(..),EOF(..))
 import Lib (tryLoadBinary,forkWait,write,stdout,stderr,exit,execSameEnv,shift2,closeAllBut,close,read)
-import Misc (PipeEnds(..),EOF(..))
 import Prelude hiding (init,read)
-import Prog (Prog(..),FD,SysCall(..),Command(..))
+import Prog (Prog(..),FD,SysCall(..),Command(..),PipeEnds(..))
 
 init :: Prog ()
 init = do

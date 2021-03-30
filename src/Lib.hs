@@ -7,8 +7,7 @@ module Lib (
   ) where
 
 import Environment (Environment)
-import Interaction (Prompt(..))
-import Misc (EOF(..))
+import Interaction (Prompt(..),EOF(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
 import Prog

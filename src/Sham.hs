@@ -2,15 +2,13 @@
 module Sham (sham) where
 
 import Environment (Environment)
-import Interaction (Prompt(..))
+import Interaction (Prompt(..),EOF(..))
 import Lib (loadFile,stdin,stdout,stderr,close,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait,dup2,shift2)
-import Misc (EOF(..),PipeEnds(..))
 import Prelude hiding (Word,read)
-import Prog (Prog,FD(..),Command(..),OpenMode(..),SysCall(..),Pid(..))
+import Prog
 import Syntax (parseLine,Script(..),Word(..),Pred(..),Redirect(..),RedirectSource(..),Var(..))
 import qualified Environment
 import qualified Path (create)
-import qualified Prog (Prog(Argv,MyPid,MyEnvironment,Fork,Call,Wait))
 
 sham :: Prog ()
 sham = do

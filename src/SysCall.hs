@@ -7,7 +7,6 @@ module SysCall (
 import Data.List (intercalate)
 import Data.Map (Map)
 import Interaction (Interaction(..),OutMode(..))
-import Misc (Block(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
 import OpenFiles (OpenFiles,whatIsKey)
 import Prog
 import qualified Data.Map.Strict as Map

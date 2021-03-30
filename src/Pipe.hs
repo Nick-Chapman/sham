@@ -1,7 +1,7 @@
 -- | A 'pipe' is a buffer of data used for inter-process communication.
 module Pipe (Pipe, empty,write,read) where
 
-import Misc (Block(..))
+import Prog (Block(..))
 import Prelude hiding (read)
 
 empty :: Pipe

@@ -4,8 +4,7 @@ module Testing (test,run) where
 import Control.Monad (ap,liftM)
 import Data.List (intercalate)
 import Image (fs0)
-import Interaction (Interaction(..),OutMode(..))
-import Misc (EOF(..))
+import Interaction (Interaction(..),OutMode(..),EOF(..))
 import qualified MeNicks (start)
 
 test :: [String] -> [String] -> Testing ()

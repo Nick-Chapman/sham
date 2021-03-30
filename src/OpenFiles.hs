@@ -7,11 +7,11 @@ module OpenFiles (
 import Data.List (intercalate)
 import Data.Map (Map)
 import FileSystem (FileSystem)
-import Misc (Block(..),EOF(..),EPIPE(..),NotReadable(..),NotWritable(..),PipeEnds(..))
+import Interaction (EOF(..))
 import Path (Path)
 import PipeSystem (PipeSystem)
 import Prelude hiding (init,read)
-import Prog (Prog,OpenMode(..),WriteOpenMode(..),OpenError(..),LoadBinaryError(..),NoSuchPath(..),FileKind,OF(..))
+import Prog
 import qualified Data.Map.Strict as Map
 import qualified File
 import qualified FileSystem

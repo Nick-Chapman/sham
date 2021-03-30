@@ -3,8 +3,7 @@ module Console (runInteraction) where
 
 import Control.Monad (when)
 import Control.Monad.Trans.Class (lift)
-import Interaction (Interaction(..),Prompt(..),OutMode(..))
-import Misc (EOF(..))
+import Interaction (Interaction(..),Prompt(..),OutMode(..),EOF(..))
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
 import qualified System.Console.Haskeline.History as HL

@@ -7,17 +7,15 @@ import Control.Monad (when)
 import Data.List (sort,sortOn,isInfixOf)
 import Data.Map (Map)
 import Environment (Var(..),bindings)
-import Interaction (Prompt(..))
+import Interaction (Prompt(..),EOF(..))
 import Lib (read,write,stdin,stdout,stderr,withOpen,checkNoArgs,checkAtLeastOneArg,getTwoArgs,readAll,exit,execCommand)
-import Misc (EOF(..))
 import Path (Path)
 import Prelude hiding (head,read,sum)
-import Prog (Prog,Command(..),OpenMode(..),SysCall(..),FD,FileKind(..),BinaryMeta(..),NoSuchPath(..))
+import Prog
 import Text.Read (readMaybe)
 import qualified Data.Map.Strict as Map
 import qualified Path (create,toString,hidden)
 import qualified Prelude
-import qualified Prog (Prog(..))
 
 man :: Prog ()
 man = do

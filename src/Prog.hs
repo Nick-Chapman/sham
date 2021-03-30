@@ -5,13 +5,13 @@ module Prog (
   BadFileDescriptor(..), OpenError(..), LoadBinaryError(..), NoSuchPath(..),
   Command(..), FD(..), Pid(..),
   PipeKey, OF(..),
-  E_Write(..), E_Read(..)
+  E_Write(..), E_Read(..),
+  Block(..), EPIPE(..), NotReadable(..), NotWritable(..), PipeEnds(..),
   ) where
 
 import Control.Monad (ap,liftM)
 import Environment (Environment)
-import Interaction (Prompt,OutMode)
-import Misc (EOF(..),PipeEnds(..))
+import Interaction (Prompt,OutMode,EOF)
 import Path (Path)
 
 newtype Pid = Pid Int deriving (Eq,Ord,Num)
@@ -131,3 +131,10 @@ instance Show OF where
     PipeWrite pk -> "Write:"++show pk
     FileAppend path -> "Append:"++show path
     FileContents xs -> "Contents[size=#"++show (length xs)++"]"
+
+
+data Block = Block
+data EPIPE = EPIPE deriving Show
+data NotReadable = NotReadable deriving Show
+data NotWritable = NotWritable deriving Show
+data PipeEnds a = PipeEnds { r :: a, w :: a } deriving Show

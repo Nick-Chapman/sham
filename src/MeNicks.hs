@@ -5,10 +5,9 @@ import Data.Map (Map)
 import Environment (Environment)
 import FileSystem (FileSystem)
 import Interaction (Interaction(..),OutMode(..))
-import Misc (Block(..))
 import OpenFiles (OpenFiles)
 import Prelude hiding (init)
-import Prog (Prog(..),Pid(..),Command(..),SysCall(..),FD,OF)
+import Prog
 import SysCall (FdEnv,env0,dupEnv,closeEnv,runSys,openFiles)
 import qualified Data.Map.Strict as Map
 import qualified Environment (empty,set,Var(..))
