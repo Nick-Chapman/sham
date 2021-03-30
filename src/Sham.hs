@@ -159,20 +159,15 @@ evalWord :: Env -> Word -> Prog String
 evalWord Env{pid,argv,environment} = \case
   Word s -> pure s
   DollarDollar -> let (Pid n) = pid in pure $ show n
-  DollarHash -> pure $ show (length argv - 1) --TODO: -1 ???
+  DollarHash -> pure $ show (length argv - 1)
   DollarN n ->
     if n >= length argv
-    then do
-      write stderr ("$" ++ show n ++ " unbound")
-      pure "" -- TODO: prefer to exit, but mustn't kill sham console
+    then do write stderr ("$" ++ show n ++ " unbound"); pure ""
     else pure $ argv!!n
   DollarName x ->
     case Environment.get environment x of
-      Nothing -> do
-        write stderr ("$" ++ show x ++ " unbound")
-        pure ""
-      Just v ->
-        pure v
+      Nothing -> do write stderr ("$" ++ show x ++ " unbound"); pure ""
+      Just v -> pure v
 
 builtinEcho :: [String] -> Prog ()
 builtinEcho args =
