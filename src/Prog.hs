@@ -60,6 +60,7 @@ data SysCall a b where
   Write :: SysCall (FD,String) (Either E_Write ())
   Paths :: SysCall () [Path]
   Mv :: SysCall (Path,Path) (Either NoSuchPath ())
+  Rm :: SysCall Path (Either NoSuchPath ())
   SysPipe :: SysCall () (PipeEnds FD)
   Fds :: SysCall () [FD]
 
@@ -111,6 +112,7 @@ instance Show (SysCall a b) where -- TODO: automate?
     Write -> "Write"
     Paths -> "Paths"
     Mv -> "Mv"
+    Rm -> "Rm"
     SysPipe -> "Pipe"
     Fds -> "Fds"
 

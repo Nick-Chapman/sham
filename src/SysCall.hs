@@ -128,17 +128,25 @@ runSys sys s env arg = case sys of
             Right $ \k ->
               I_Write outMode line (k s env (Right ()))
 
-  Paths{} -> do
+  Paths -> do
     Right $ \k -> do
       let paths = OpenFiles.ls s
       k s env paths
 
-  Mv{} -> do
+  Mv -> do
     let (src,dest) = arg
     Right $ \k -> do
       case OpenFiles.mv s src dest of
         Left NoSuchPath -> k s env (Left NoSuchPath)
         Right s -> k s env (Right ())
+
+  Rm -> do
+    let path = arg
+    Right $ \k -> do
+      case OpenFiles.rm s path of
+        Left NoSuchPath -> k s env (Left NoSuchPath)
+        Right s -> k s env (Right ())
+
 
 -- TODO: split out FdEnv into new module
 newtype FdEnv = FdEnv { unFdEnv :: Map FD Target } -- per process state, currently just FD map

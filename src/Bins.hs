@@ -1,6 +1,6 @@
 -- | Predefined 'binary' programs, which will be available on the file-system.
 module Bins (
-  man, echo, env, cat, rev, grep, ls, mv, ps, lsof, sum, type_, xargs,
+  man, echo, env, cat, rev, grep, ls, mv, rm, ps, lsof, sum, type_, xargs,
   ) where
 
 import Control.Monad (when)
@@ -49,6 +49,7 @@ man = do
       , ("ps"    , "list running processes")
       , ("read"  , "(sham builtin) : read a line from stdin into a variable")
       , ("rev"   , "copy stdin to stdout, reversing each line")
+      , ("rm"    , "rm multiple files")
       , ("sham"  , "run a script, or command (with '-c'), or start a new console (no args)")
       , ("source", "(sham builtin) : (also '.') interpret a script within the current shell")
       , ("sum"   , "write sum of numeric arguments to stdout")
@@ -100,12 +101,12 @@ rev = checkNoArgs loop where
 
 grep :: Prog ()
 grep = do
-  Command(com,args) <- Prog.Argv
+  Command(me,args) <- Prog.Argv
   case (case args of [pat] -> Just (True,pat)
                      ["-v",pat] -> Just (False,pat)
                      _ -> Nothing
        ) of
-    Nothing -> write stderr (com ++ ": takes optional '-v' and one more argument")
+    Nothing -> write stderr (me ++ ": takes optional '-v' and one more argument")
     Just (sense,pat) -> do
       let
         loop :: Prog ()
@@ -130,9 +131,21 @@ ls = do
 
 mv :: Prog ()
 mv = getTwoArgs $ \src dest -> do
+  Command(me,_) <- Prog.Argv
   Prog.Call Mv (Path.create src, Path.create dest) >>= \case
-    Left NoSuchPath ->  write stderr $ "no such path: " ++ src
+    Left NoSuchPath ->  write stderr (me ++ ": no such path: " ++ src)
     Right () -> pure ()
+
+rm :: Prog ()
+rm = do
+  Command(me,args) <- Prog.Argv
+  let
+    rm1 :: String -> Prog ()
+    rm1 name = do
+      Prog.Call Rm (Path.create name) >>= \case
+        Left NoSuchPath ->  write stderr (me ++ ": no such path: " ++ name)
+        Right () -> pure ()
+  mapM_ rm1 args
 
 ps :: Prog ()
 ps = checkNoArgs $ do
@@ -164,12 +177,12 @@ sum = do
 
 type_ :: Prog ()
 type_ = checkAtLeastOneArg $ do
-  Command(_,args) <- Prog.Argv
+  Command(me,args) <- Prog.Argv
   let
     typeline :: String -> Prog ()
     typeline name = do
       Prog.Call Kind (Path.create name) >>= \case
-        Left _ ->  write stderr $ "no such path: " ++ name
+        Left _ ->  write stderr (me ++ ": no such path: " ++ name)
         Right kind -> do
           let
             str = case kind of
