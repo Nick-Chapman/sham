@@ -63,12 +63,11 @@ run = Testing.run $ do
   test ["type"] ["(stderr) type: takes at least one argument"]
   test ["type ls help"] ["ls : Binary *ls*","help : Data/Script"]
 
-  test ["man"] ["cat echo grep ls lsof man ps rev sham sum type xargs"]
+  test ["man"] ["cat echo env exec exit grep ls lsof man mv ps read rev sham source sum type xargs"]
   test ["man foo"] ["(stderr) man : no manual entry for 'foo'"]
   test ["man ps"] ["ps : list running processes"]
   test ["echo ps | xargs man"] ["ps : list running processes"]
-  test ["echo echo | xargs man"] ["echo : write arguments to stdout"]
-  test ["echo ps echo | xargs man"] ["ps : list running processes", "echo : write arguments to stdout"]
+  test ["echo ps mv | xargs man"] ["ps : list running processes","mv : rename a file"]
 
   test ["mv"] ["(stderr) mv: takes two arguments"]
   test ["mv ps xx","type xx"] ["xx : Binary *ps*"]

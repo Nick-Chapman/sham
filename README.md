@@ -49,15 +49,17 @@ _It's not a shell, it's just a sham._
 - grouping and sequencing: (...), foo;bar
 - mv
 - general vars (foo=something, $foo); + env for pasing info to commands. use for 'sham' level
+- man with no args shows all keys
+- man: add entry for "mv" & sham builtins: "env", "read", etc
 
 ### Ideas/Plans
-- man: add entry for "mv" & sham builtins: "env", "read", etc
-- man with no args shows all keys
+- why is 'env' a shell builtin? it should/could be a normal binary
+- grep -v
 - rm
 - quoting ('')
 - introduce tty, which is connected by 3 pipes
 - scripts: drop N, wc-l
-- grep -v, ls -l
+- ls -l
 - restructure: Interaction stays at level of Prog (not SysCall)
 - avoid special handling of Console in SysCall Target
 - aysnc operation via "Pause" in Prog and Interaction. Clocked externally

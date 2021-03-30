@@ -160,6 +160,8 @@ lang token = script0 where
   makeInvoke = \case
     [] -> undefined
     (Word ".":w:ws) -> QSource w ws
+    (Word "source":w:ws) -> QSource w ws
+    [Word "source"] -> QShamError "source takes at least one argument"
     [Word "."] -> QShamError "source takes at least one argument"
     Word "echo":ws -> QEcho ws
     [Word "exit"] -> QExit

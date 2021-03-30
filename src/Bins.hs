@@ -35,19 +35,25 @@ man = do
   where
     docsMap :: Map String String
     docsMap = Map.fromList
-     [ ("man"  , "show manual entries for commands, or show entry keys (no args)")
-     , ("echo" , "write arguments to stdout")
-     , ("cat"  , "write named files (or stdin in no files named) to stdout")
-     , ("rev"  , "copy stdin to stdout, reversing each line")
-     , ("grep" , "copy stdin lines which match the given pattern to stdout ")
-     , ("ls"   , "list non-hidden files; add '-a' flag to also see hidden files")
-     , ("ps"   , "list running processes")
-     , ("lsof" , "list open files in running processes")
-     , ("sum"  , "write sum of numeric arguments to stdout")
-     , ("type" , "determine the type of named files: binary or data")
-     , ("xargs", "concatenate stdin lines, and pass to the given command")
-     , ("sham" , "interpret a script, or command (with '-c'), or start a new console (no args)")
-     ]
+      [ ("cat"   , "write named files (or stdin in no files named) to stdout")
+      , ("echo"  , "(binary/sham builtin) write arguments to stdout")
+      , ("env"   , "(sham builtin) : display variable bindings")
+      , ("exec"  , "(sham builtin) : replace the current process with a new command")
+      , ("exit"  , "(sham builtin) : exit the current process")
+      , ("grep"  , "copy stdin lines which match the given pattern to stdout ")
+      , ("ls"    , "list non-hidden files; add '-a' flag to also see hidden files")
+      , ("lsof"  , "list open files in running processes")
+      , ("man"   , "show manual entries for commands, or show entry keys (no args)")
+      , ("mv"    , "rename a file")
+      , ("ps"    , "list running processes")
+      , ("read"  , "(sham builtin) : read a line from stdin into a variable")
+      , ("rev"   , "copy stdin to stdout, reversing each line")
+      , ("sham"  , "run a script, or command (with '-c'), or start a new console (no args)")
+      , ("source", "(sham builtin) : (also '.') interpret a script within the current shell")
+      , ("sum"   , "write sum of numeric arguments to stdout")
+      , ("type"  , "determine the type of named files: binary or data")
+      , ("xargs" , "concatenate stdin lines, and pass to the given command")
+      ]
 
 echo :: Prog ()
 echo = do
