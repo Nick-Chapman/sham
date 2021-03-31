@@ -59,7 +59,9 @@ fs0 = FileSystem.create image where
           --"if $1=0 ps #debug",
           "if $1=0 exit",
           "echo $1",
-          "sum $1 -1 | xargs .countdown"
+          -- make it so countdown runs in constant number of processes...
+          --"sum $1 -1 | xargs .countdown &" -- adding & here works
+          "sum $1 -1 | (read v; exec .countdown $v) &" -- but read/exec is nicer than xargs
           ])
 
     , (".like-cat", [
