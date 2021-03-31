@@ -133,7 +133,7 @@ instance Show OF where
     FileContents xs -> "Contents[size=#"++show (length xs)++"]"
 
 
-data Block = Block
+data Block = Block deriving Show
 data EPIPE = EPIPE deriving Show
 data NotReadable = NotReadable deriving Show
 data NotWritable = NotWritable deriving Show

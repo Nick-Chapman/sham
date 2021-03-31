@@ -131,15 +131,21 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
     case runSys sys os fde arg of
       Left Block ->
         traceProc (me,proc0) (show sys ++ show arg ++" BLOCKED") $ do
-        block me proc0 state
+        undefined $ -- TODO: outer blocking no longer used or supported; kill
+          block me proc0 state
       Right proceed -> do
         proceed $ \os fde res -> do
           traceProc (me,proc0) (show sys ++ show arg ++" --> " ++ show res) $ do
           traceProc (me,proc0) ("fde: " ++ show fde) $ do
           let state' = state { os }
           trace (show state') $ do
-          let action = f res
-          yield me proc0 { fde, action } state'
+          case res of
+            Left Block ->
+              block me proc0 state'
+
+            Right res -> do
+              let action = f res
+              yield me proc0 { fde, action } state'
 
 
 block :: Pid -> Proc -> State -> Interaction

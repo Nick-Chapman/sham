@@ -44,6 +44,7 @@ loop env@Env{environment} n = do
     Left EOF -> pure ()
     Right line -> do
       let script = parseLine line
+      --Trace (show ("sham",script))
       runScript env script $ \env -> loop env (n+1)
 
 parseLines :: [String] -> Script
