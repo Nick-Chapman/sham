@@ -31,7 +31,10 @@ start fs = do
 
 environment0 :: Environment
 environment0 =
-  Environment.set Environment.empty (Environment.Var "Version") "MeNicks-0.1"
+  foldl (\e (v,s)-> Environment.set e (Environment.Var v) s) Environment.empty
+  [ ("Version", "MeNicks-0.1")
+  , ("debug", "0")
+  ]
 
 linearize :: Prog a -> (a -> Action) -> Action
 linearize p0 = case p0 of

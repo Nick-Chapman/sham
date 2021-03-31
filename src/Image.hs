@@ -47,22 +47,29 @@ fs0 = FileSystem.create image where
 
     , ("yes"   , ["# Write an infinite stream of 'y's to stdout", "echo y","exec yes"])
 
+    , ("countdown", [
+          "# countdown N: generate decrementing sequence of numbers starting at N",
+          "# if N is negative, the sequence will never stop",
+          "if $# != 1 (echo $0 : takes one argument >&2; exit)",
+          "if $1 = 0 exit",
+          "echo $1",
+          "sum $1 -1 | (read v; exec countdown $v)" -- &
+          ])
+
+    , ("head", [
+          "# head N: take first N line from stdin",
+          "if $debug = 1 echo debug: head $1 >&2",
+          "if $# != 1 (echo $0 : takes one numeric argument >&2; exit)",
+          "if $1 = 0 exit",
+          "read x",
+          "echo $x",
+          "(sum $1 -1; cat) | (read v; exec head $v)" -- &
+          ])
+
     -- hidden scripts (path begins "."), for testing and experimentation
 
     , (".bomb"  , ["echo $$ >&2", ".bomb | .bomb"])
     , (".me"    , ["echo $$"])
-    , (".countdown", [
-          "# countdown N: generate decrementing sequence of numbers starting at N",
-          "# if N is negative, the sequence will never stop",
-          "if $# != 1 echo $0 : takes one argument >&2",
-          "if $# != 1 exit",
-          --"if $1=0 ps #debug",
-          "if $1=0 exit",
-          "echo $1",
-          -- make it so countdown runs in constant number of processes...
-          --"sum $1 -1 | xargs .countdown &" -- adding & here works
-          "sum $1 -1 | (read v; exec .countdown $v) &" -- but read/exec is nicer than xargs
-          ])
 
     , (".like-cat", [
           "# like-cat: this script should have the same behavior as cat",
@@ -70,38 +77,25 @@ fs0 = FileSystem.create image where
           "echo $x",
           "like-cat"
           ])
-
     , (".head-1", [
           "# head-1: copy the first line on stdin to stdout",
           "read x",
           "echo $x"
           ])
-
     , (".make-head-N", [
           "# make-head: output a head-script for N determined by size of input",
           "read ignored",
           "echo .head-1",
           ".make-head-N"])
-
     , (".head", [
-          "# head N: take first N line from stdin",
+          "# head N: take first N line from stdin (alternative version)",
           "# if N is negative, this script will hang",
           "if $# != 1 echo $0 : takes one numeric argument >&2",
           "if $# != 1 exit",
           "echo > .tmp", -- TODO: fix ">>" so this is not necessary
-          ".countdown $1 | .make-head-N >> .tmp",
+          "countdown $1 | .make-head-N >> .tmp",
           ".tmp"
           ])
-{-
-    , ("wip-head-needs-proc-sub", [
-          "# head N: take first N line from stdin",
-          "if $# != 1 echo head: takes one numeric argument >&2",
-          "if $# != 1 exit",
-          "if $1=0 exit",
-          "read | cat",
-          "exec head $(sum $1 -1)" -- TODO: support process substituion
-          ])
--}
     ]
 
 readme :: [String]

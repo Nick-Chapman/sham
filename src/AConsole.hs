@@ -35,7 +35,7 @@ supplyInteraction Comm{user,done} putLine i0 = loop i0
     loop :: Interaction -> IO ()
     loop = \case
       I_Read _prompt f -> do -- TODO: dont ignore prompt
-        threadDelay (1000 * 20) -- rate limit OS. TODO: what is the correct way of doing this?
+        threadDelay (1000) -- rate limit OS. TODO: what is the correct way of doing this?
         tryTakeMVar user >>= \m -> loop (f m)
       I_Write mode line i -> do
         putLine (colouring line)

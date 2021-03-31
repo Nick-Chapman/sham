@@ -85,21 +85,21 @@ run = Testing.run $ do
   test ["sum 100 -1 0 200"] ["299"]
   test ["sum 100 -1 0 x200"] ["(stderr) sum: unable to convert 'x200' to a number","99"]
 
-  test ["cat days | .head 1"] ["Monday"]
-  test ["cat days | grep u | .head 1"] ["Tuesday"]
-  test ["yes | .head 1", "echo woo hoo"] ["y","woo hoo"]
-  test ["yes | .head 2", "echo woo hoo"] ["y","y","woo hoo"]
-  test ["yes | .head 1", "yes | .head 1"] ["y","y"]
+  test ["cat days | head 1"] ["Monday"]
+  test ["cat days | grep u | head 1"] ["Tuesday"]
+  test ["yes | head 1", "echo woo hoo"] ["y","woo hoo"]
+  test ["yes | head 2", "echo woo hoo"] ["y","y","woo hoo"]
+  test ["yes | head 1", "yes | head 1"] ["y","y"]
 
-  test [".countdown"] ["(stderr) .countdown : takes one argument"]
-  test [".countdown 0"] []
-  test [".countdown 1"] ["1"]
-  --test [".countdown 3"] ["3","2","1"] -- test fails since countdown uses backgrounding to continue
-  test [".countdown -1 | .head-1"] ["-1"]
+  test ["countdown"] ["(stderr) countdown : takes one argument"]
+  test ["countdown 0"] []
+  test ["countdown 1"] ["1"]
+  test ["countdown 3"] ["3","2","1"] -- test fails if countdown uses backgrounding to continue
+  test ["countdown -1 | head 1"] ["-1"]
 
-  test ["cat days | .head 3"] (take 3 days)
-  test [".head 3 < days"] (take 3 days)
-  test [".countdown -1 | .head 3"] ["-1","-2","-3"]
+  test ["cat days | head 3"] (take 3 days)
+  test ["head 3 < days"] (take 3 days)
+  test ["countdown -1 | head 3"] ["-1","-2","-3"]
 
   test ["doh"] ["(stderr) no such executable: doh"]
 
@@ -212,7 +212,7 @@ run = Testing.run $ do
   test ["echo foo >&23"] ["(stderr) bad file descriptor: &23"]
 
 
-  test ["env"] ["Version=MeNicks-0.1","prefix=sham"]
+  test ["env"] ["Version=MeNicks-0.1","debug=0","prefix=sham"]
   test ["foo=123","echo $foo"] ["123"]
   test ["foo=123","bar=456","echo $foo $bar"] ["123 456"]
   test ["foo=ls","$foo"] paths0
