@@ -50,7 +50,7 @@ supplyInteraction Comm{user,done} putLine i0 = loop i0
         putMVar done ()
 
 runPrompt :: Comm -> HL.InputT IO ()
-runPrompt Comm{user,done} = loop 0
+runPrompt Comm{user,done} = loop 1
   where
     loop :: Int -> HL.InputT IO ()
     loop n = do
@@ -59,7 +59,7 @@ runPrompt Comm{user,done} = loop 0
         Just () ->
           pure ()
         Nothing -> do
-          HL.getInputLine (col AN.Green ("prompt[" ++ show n ++ "]> ")) >>= \case
+          HL.getInputLine (col AN.Green ("sham[" ++ show n ++ "]$ ")) >>= \case
             Nothing -> do
               lift $ putMVar user (Left EOF)
               loop (n+1)

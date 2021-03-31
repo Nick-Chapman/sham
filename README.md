@@ -8,6 +8,9 @@ No real files will be harmed during the execution of `sham`.
 
 _It's not a shell, it's just a sham._
 
+To try the more experiemental asynchronous console, type `stack run async`
+
+
 ### Goal is to better understand:
 
 - IO redirection
@@ -54,6 +57,7 @@ _It's not a shell, it's just a sham._
 - make 'env' a binary instead of a shell builtin
 - grep -v
 - rm (multiple files!)
+- experimental async console
 
 ### Ideas/Plans
 - quoting ('')
