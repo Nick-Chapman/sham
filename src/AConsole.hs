@@ -4,7 +4,7 @@ module AConsole (runInteraction) where
 import Control.Concurrent (MVar,forkIO,newEmptyMVar,putMVar,tryTakeMVar,threadDelay)
 import Control.Monad (when)
 import Control.Monad.Trans.Class (lift)
-import Interaction (Interaction(..),EOF(..))
+import Interaction (Interaction(..),EOF(..),OutMode(..))
 import qualified System.Console.ANSI as AN
 import qualified System.Console.Haskeline as HL
 import qualified System.Console.Haskeline.History as HL
@@ -37,13 +37,16 @@ supplyInteraction Comm{user,done} putLine i0 = loop i0
       I_Read _prompt f -> do -- TODO: dont ignore prompt
         threadDelay (1000 * 20) -- rate limit OS. TODO: what is the correct way of doing this?
         tryTakeMVar user >>= \m -> loop (f m)
-      I_Write _mode line i -> do -- TODO: add colour to distinguish mode & trace
-        putLine line
+      I_Write mode line i -> do
+        putLine (colouring line)
         loop i
-      I_Trace line i -> do
-        putLine $ "(trace) " ++ line
+          where colouring = case mode of StdOut -> id; StdErr -> col AN.Red
+
+      I_Trace mes i -> do
+        putLine (col AN.Yellow mes)
         loop i
       I_Halt -> do
+        putLine "*MeNicks* halted"
         putMVar done ()
 
 runPrompt :: Comm -> HL.InputT IO ()
