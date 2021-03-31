@@ -76,7 +76,7 @@ lang token = script0 where
 
   lineComment = do symbol '#'; skipWhile (skip token)
 
-  script = alts [ pipeline, conditional, readIntoVar, setVar ]
+  script = alts [ pipeline, conditional, setVar ]
 
   conditional = do
     keyword "if"
@@ -146,7 +146,7 @@ lang token = script0 where
     rs <- redirects
     pure $ QExec (case rs of [] -> thing; _ -> QRedirecting thing rs)
 
-  command = alts [echo,exit,source,invocation]
+  command = alts [echo,exit,source,invocation,readIntoVar]
 
   echo = do keyword "echo"; QEcho <$> words
   exit = do keyword "exit"; pure QExit
