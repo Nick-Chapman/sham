@@ -79,7 +79,8 @@ runScript env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
       com <- evalWord env w
       args <- mapM (evalWord env) ws
       script <- loadShamScript com
-      runScript env { argv = (com:args) } script $ \env -> runK env k
+      let Env{argv=saved} = env
+      runScript env { argv = (com:args) } script $ \env -> runK env {argv = saved } k
 
     QIf pred s1 s2 -> \k -> do
       b <- evalPred env pred
