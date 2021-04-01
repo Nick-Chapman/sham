@@ -200,11 +200,19 @@ lang token = script0 where
   fd = FD <$> digits
 
   word = alts [ Word <$> ident0
+              , Word <$> quotedIdent
               , do keyword "$$"; pure DollarDollar
               , do keyword "$#"; pure DollarHash
               , do keyword "$"; DollarN <$> digits
               , do keyword "$"; DollarName <$> varname
               ]
+
+  quotedIdent = do
+    symbol q
+    res <- many (sat (not . (== q)))
+    symbol q
+    pure res
+      where q = '\''
 
   keyword string = mapM_ symbol string
 

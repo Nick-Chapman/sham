@@ -38,7 +38,7 @@ run = Testing.run $ do
   test ["README"] [
     "(stderr) unexpected '*' at position 12",
     "(stderr) unexpected ',' at position 31",
-    "(stderr) unexpected ''' at position 6"]
+    "(stderr) no such executable: Type"]
 
   test ["ls"] paths0
   test ["sham ls"] ["(stderr) cant open for reading: ls"]
@@ -224,3 +224,6 @@ run = Testing.run $ do
   test ["foo","kill 2","foo"] ["(stderr) no such executable: foo"]
   test ["kill 4"] []
   test ["kill 1","echo carry on after init gone"] ["carry on after init gone"]
+
+  test ["echo $$","echo echo $$ > x","x"] ["4","4"]
+  test ["echo $$","echo 'echo $$' > x","x"] ["4","6"]

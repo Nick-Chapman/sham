@@ -59,9 +59,9 @@ To try the more experiemental asynchronous console, type `stack run async`
 - rm (multiple files!)
 - experimental async console
 - support kill
+- quoting, with single quotes
 
 ### Ideas/Plans
-- quoting ('')
 - introduce tty, which is connected by 3 pipes -- have done the 2 output pipes
 - scripts: drop N, wc-l
 - ls -l
