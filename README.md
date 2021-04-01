@@ -58,15 +58,16 @@ To try the more experiemental asynchronous console, type `stack run async`
 - grep -v
 - rm (multiple files!)
 - experimental async console
+- support kill
 
 ### Ideas/Plans
 - quoting ('')
-- introduce tty, which is connected by 3 pipes
+- introduce tty, which is connected by 3 pipes -- have done the 2 output pipes
 - scripts: drop N, wc-l
 - ls -l
 - restructure: Interaction stays at level of Prog (not SysCall)
-- avoid special handling of Console in SysCall Target
+- avoid special handling of Console in SysCall Target -- half done
 - aysnc operation via "Pause" in Prog and Interaction. Clocked externally
-- predefined: mktmp, kill, sleep
+- predefined: mktmp, sleep
 - exit codes
 - scripts: withtmp, ignore, uptime, alarm, cron, killall

@@ -7,6 +7,7 @@ module Prog (
   PipeKey, OF(..),
   E_Write(..), E_Read(..),
   Block(..), EPIPE(..), NotReadable(..), NotWritable(..), PipeEnds(..),
+  NoSuchProcess(..),
   ) where
 
 import Control.Monad (ap,liftM)
@@ -27,6 +28,8 @@ instance Show FD where show (FD n) = "&" ++ show n
 
 data BadFileDescriptor = BadFileDescriptor deriving Show
 
+data NoSuchProcess = NoSuchProcess
+
 data Prog a where
   Ret :: a -> Prog a
   Bind :: Prog a -> (a -> Prog b) -> Prog b
@@ -35,6 +38,7 @@ data Prog a where
   Trace :: String -> Prog ()
   Fork :: Prog (Maybe Pid)
   Exec :: Environment -> Command -> Prog a -> Prog b
+  Kill :: Pid -> Prog (Either NoSuchProcess ())
   Wait :: Pid -> Prog ()
   Alive :: Pid -> Prog Bool
   Argv :: Prog Command

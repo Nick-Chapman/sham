@@ -1,6 +1,6 @@
 -- | Predefined 'binary' programs, which will be available on the file-system.
 module Bins (
-  man, echo, env, cat, rev, grep, ls, mv, rm, ps, lsof, sum, type_, xargs,
+  man, echo, env, cat, rev, grep, ls, kill, mv, rm, ps, lsof, sum, type_, xargs,
   ) where
 
 import Control.Monad (when)
@@ -40,6 +40,7 @@ man = do
       , ("exec"  , "(sham builtin) : replace the current process with a new command")
       , ("exit"  , "(sham builtin) : exit the current process")
       , ("grep"  , "copy stdin lines to stdout which match (-v dont match) the pattern")
+      , ("kill"  , "kill processes by pid")
       , ("ls"    , "list non-hidden files; add '-a' flag to also see hidden files")
       , ("lsof"  , "list open files in running processes")
       , ("man"   , "show manual entries for commands, or show entry keys (no args)")
@@ -144,6 +145,22 @@ rm = do
         Left NoSuchPath ->  write stderr (me ++ ": no such path: " ++ name)
         Right () -> pure ()
   mapM_ rm1 args
+
+kill :: Prog ()
+kill = checkAtLeastOneArg $ do
+  Command(me,args) <- Prog.Argv
+  let
+    k1 :: String -> Prog ()
+    k1 arg = do
+      case readMaybe arg of
+        Nothing -> do
+          write stderr (me ++ ": not a pid: " ++ arg)
+        Just n -> do
+          let pid = Pid n
+          Prog.Kill pid >>= \case
+            Left NoSuchProcess ->  write stderr (me ++ ": no such process: " ++ show pid)
+            Right () -> pure ()
+  mapM_ k1 args
 
 ps :: Prog ()
 ps = checkNoArgs $ do

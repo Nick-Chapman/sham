@@ -15,6 +15,8 @@ run = Testing.run $ do
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
   let paths0 = [ Path.toString p | p <- FileSystem.ls Image.fs0, not (Path.hidden p) ]
 
+  test ["man"] ["cat echo env exec exit grep kill ls lsof man mv ps read rev rm sham source sum type xargs"]
+
   test ["echo foo"] ["foo"]
   test ["sham echo foo"] ["(stderr) cant open for reading: echo"]
   test ["sham -c echo foo"] ["foo"]
@@ -63,7 +65,6 @@ run = Testing.run $ do
   test ["type"] ["(stderr) type: takes at least one argument"]
   test ["type ls help"] ["ls : Binary *ls*","help : Data/Script"]
 
-  test ["man"] ["cat echo env exec exit grep ls lsof man mv ps read rev rm sham source sum type xargs"]
   test ["man foo"] ["(stderr) man : no manual entry for 'foo'"]
   test ["man ps"] ["ps : list running processes"]
   test ["echo ps | xargs man"] ["ps : list running processes"]

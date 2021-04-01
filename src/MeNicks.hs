@@ -46,6 +46,7 @@ linearize p0 = case p0 of
   Fork -> A_Fork
   Exec e command prog -> \_ignoredK -> A_Exec e command (linearize prog $ \_ -> A_Halt)
   Wait pid -> \k -> A_Wait pid (k ())
+  Kill pid -> A_Kill pid
   Alive pid -> A_Alive pid
   Argv -> A_Argv
   MyPid -> A_MyPid
@@ -61,6 +62,7 @@ data Action where
   A_Fork :: (Maybe Pid -> Action) -> Action
   A_Exec :: Environment -> Command -> Action -> Action
   A_Wait :: Pid -> Action -> Action
+  A_Kill :: Pid -> (Either NoSuchProcess () -> Action) -> Action
   A_Alive :: Pid -> (Bool -> Action) -> Action
   A_Argv :: (Command -> Action) -> Action
   A_MyPid :: (Pid -> Action) -> Action
@@ -110,6 +112,14 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
     then block me proc0 state
      -- TODO: resume instead of yield (less rr)
     else yield me proc0 { action } state
+
+  A_Kill pid f -> do
+    case select pid state of
+      Nothing -> do
+        yield me proc0 { action = f (Left NoSuchProcess) } state
+      Just (state,Proc{fde}) -> do
+        let state' = state { os = closeEnv fde os }
+        yield me proc0 { action = f (Right ()) } state'
 
   A_Alive pid f -> do
     let answer = running pid state
@@ -227,5 +237,17 @@ choose s@State{waiting,suspended} =
         Just ((pid1,proc1),suspended) ->
           -- re-animate the suspended...
           Just (s { waiting = suspended, suspended = Map.empty }, pid1, proc1)
+        Nothing ->
+          Nothing
+
+select :: Pid -> State -> Maybe (State,Proc)
+select pid s@State{waiting,suspended} =
+  case Map.lookup pid waiting of
+    Just proc1 ->
+      Just (s { waiting = Map.delete pid waiting }, proc1)
+    Nothing ->
+      case Map.lookup pid suspended of
+        Just proc1 ->
+          Just (s { suspended = Map.delete pid suspended }, proc1)
         Nothing ->
           Nothing
