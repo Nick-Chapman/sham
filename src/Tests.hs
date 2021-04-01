@@ -212,8 +212,15 @@ run = Testing.run $ do
   test ["echo foo >&7"] ["(stderr) bad file descriptor: &7"]
   test ["echo foo >&23"] ["(stderr) bad file descriptor: &23"]
 
-
   test ["env"] ["Version=MeNicks-0.1","debug=0","prefix=sham"]
   test ["foo=123","echo $foo"] ["123"]
   test ["foo=123","bar=456","echo $foo $bar"] ["123 456"]
   test ["foo=ls","$foo"] paths0
+
+  test ["kill"] ["(stderr) kill: takes at least one argument"]
+  test ["kill what"] ["(stderr) kill: not a pid: what"]
+  test ["kill 99"] ["(stderr) kill: no such process: [99]"]
+  test ["kill 4"] []
+  test ["foo","kill 2","foo"] ["(stderr) no such executable: foo"]
+  test ["kill 4"] []
+  test ["kill 1","echo carry on after init gone"] ["carry on after init gone"]
