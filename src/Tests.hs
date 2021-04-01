@@ -227,3 +227,7 @@ run = Testing.run $ do
 
   test ["echo $$","echo echo $$ > x","x"] ["4","4"]
   test ["echo $$","echo 'echo $$' > x","x"] ["4","6"]
+
+  test ["wc-l < days"] ["7"]
+  test ["wc-l days"] ["7"]
+  test ["wc-l days days"] ["(stderr) wc-l : takes zero or one argument"]

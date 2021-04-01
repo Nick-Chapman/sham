@@ -67,6 +67,16 @@ fs0 = FileSystem.create image where
           "(sum $1 -1; cat) | (read v; exec head $v)" -- &
           ])
 
+    , (".forever", ["source $1", "exec .forever $1"])
+    , (".read-echo-1", ["read ignore", "echo 1"])
+
+    , ("wc-l", [
+          "# counts lines on stdin, or named file",
+          "if $# = 0  (.forever .read-echo-1 | xargs sum ; exit)",
+          "if $# = 1  (cat $1 | .forever .read-echo-1 | xargs sum ; exit)",
+          "(echo $0 : takes zero or one argument >&2; exit)"
+          ])
+
     -- hidden scripts (path begins "."), for testing and experimentation
 
     , (".bomb"  , ["echo $$ >&2", ".bomb | .bomb"])

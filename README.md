@@ -60,10 +60,11 @@ To try the more experiemental asynchronous console, type `stack run async`
 - experimental async console
 - support kill
 - quoting, with single quotes
+- new script: wc -l
 
 ### Ideas/Plans
 - introduce tty, which is connected by 3 pipes -- have done the 2 output pipes
-- scripts: drop N, wc-l
+- scripts: drop N
 - ls -l
 - restructure: Interaction stays at level of Prog (not SysCall)
 - avoid special handling of Console in SysCall Target -- half done
