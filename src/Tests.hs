@@ -205,7 +205,7 @@ run = Testing.run $ do
   --test ["exec >&2", "echo foo"] ["(stderr) foo"]
 
 
-  --test ["echo foo >&0"] ["foo"] -- TODO: make this work
+  test ["echo foo >&0"] ["foo"] -- TODO: make this work
   test ["echo foo >&1"] ["foo"]
   test ["echo foo >&2"] ["(stderr) foo"]
   test ["echo foo >&3"] ["(stderr) bad file descriptor: &3"]
@@ -220,8 +220,6 @@ run = Testing.run $ do
   test ["kill"] ["(stderr) kill: takes at least one argument"]
   test ["kill what"] ["(stderr) kill: not a pid: what"]
   test ["kill 99"] ["(stderr) kill: no such process: [99]"]
-  test ["kill 4"] []
-  test ["foo","kill 2","foo"] ["(stderr) no such executable: foo"]
   test ["kill 4"] []
   test ["kill 1","echo carry on after init gone"] ["carry on after init gone"]
 
