@@ -205,7 +205,7 @@ run = Testing.run $ do
   --test ["exec >&2", "echo foo"] ["(stderr) foo"]
 
 
-  --test ["echo foo >&0"] [] -- TODO: crashes because provokes old tty code
+  --test ["echo foo >&0"] ["foo"] -- TODO: make this work
   test ["echo foo >&1"] ["foo"]
   test ["echo foo >&2"] ["(stderr) foo"]
   test ["echo foo >&3"] ["(stderr) bad file descriptor: &3"]

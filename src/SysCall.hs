@@ -90,24 +90,21 @@ runSys sys s env arg = case sys of
       Just thing -> do
         case thing of
           File key -> do
-            case OpenFiles.read s key of
-              Left NotReadable -> do
-                Right $ \k ->
+            Right $ \k -> do
+              OpenFiles.read prompt s key $ \case
+                Left NotReadable ->
                   k s env (Right (Left ER_NotReadable))
-              Right (Left Block) ->
-                Right $ \k -> k s env (Left Block)
-
-              Right (Right (dat,s)) -> do
-                Right $ \k ->
+                Right (Left Block) ->
+                  k s env (Left Block)
+                Right (Right (dat,s)) ->
                   k s env (Right (Right dat))
 
-          Console{} -> do
+          Console{} -> do -- TODO: deprecate this
             Right $ \k -> do
               I_Read prompt $ \case
-                Nothing -> do
+                Nothing ->
                   k s env (Left Block)
-
-                Just lineOrEOF -> do
+                Just lineOrEOF ->
                   k s env (Right (Right lineOrEOF))
 
 
@@ -118,18 +115,15 @@ runSys sys s env arg = case sys of
       Just thing -> do
         case thing of
           File key -> do
-            case OpenFiles.write s key line of
-              Left NotWritable -> do
-                Right $ \k ->
+            Right $ \k ->
+              OpenFiles.write s key line $ \case
+                Left NotWritable ->
                   k s env (Right (Left EW_NotWritable))
-              Right (Left Block) -> do
-                Right $ \k -> k s env (Left Block)
-
-              Right (Right (Left EPIPE)) -> do
-                Right $ \k ->
+                Right (Left Block) ->
+                  k s env (Left Block)
+                Right (Right (Left EPIPE)) ->
                   k s env (Right (Left EW_PIPE))
-              Right (Right (Right s)) -> do
-                Right $ \k ->
+                Right (Right (Right s)) ->
                   k s env (Right (Right ()))
 
           Console outMode -> undefined $ do -- TODO: now depreated; kill
@@ -179,13 +173,11 @@ openFiles os (FdEnv m) =
 
 env0 :: FdEnv
 env0 = FdEnv $ Map.fromList
-  [ (FD n, Console m)
-  | (n,m) <-
-    [
-      (0,StdOut)
---    , (1,StdOut)
---    , (2,StdErr)
-    ]
+  [
+--   (FD 2, File OpenFiles.terminalx),
+--   (FD 1, File OpenFiles.terminal),
+   (FD 0, Console StdOut)
+--   (FD 0, File OpenFiles.terminal)
   ]
 
 dupEnv :: FdEnv -> OpenFiles -> OpenFiles

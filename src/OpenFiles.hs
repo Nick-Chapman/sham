@@ -2,12 +2,13 @@
 module OpenFiles (
   init, OpenFiles, Key,
   open, pipe, dup, close, read, write, ls, mv, rm, fileKind, loadBinary, whatIsKey,
+  terminal, terminalx
   ) where
 
 import Data.List (intercalate)
 import Data.Map (Map)
 import FileSystem (FileSystem)
-import Interaction (EOF(..))
+import Interaction (Interaction(..),EOF(..),Prompt(..),OutMode(..))
 import Path (Path)
 import PipeSystem (PipeSystem)
 import Prelude hiding (init,read)
@@ -49,9 +50,16 @@ init :: FileSystem -> OpenFiles
 init fs = OpenFiles
   { fs
   , pipeSystem = PipeSystem.empty
-  , table = Tab $ Map.fromList []
-  , nextKey = 21
+  , table = Tab $ Map.fromList
+    [ (terminal, Entry { rc = 5, what = Terminal StdOut})
+    , (terminalx, Entry { rc = 5, what = Terminal StdErr})
+    ]
+  , nextKey = 23
   }
+
+terminal, terminalx :: Key
+terminal = 21
+terminalx = 22
 
 instance Show OpenFiles where
   show OpenFiles{fs=_,pipeSystem=ps,table,nextKey=_} =
@@ -118,24 +126,34 @@ close state0@OpenFiles{pipeSystem,table} key = do
       let table' = Tab (Map.delete key (unTab table))
       let state = state0 { table = table' }
       case what of
+        Terminal{} -> state
         PipeRead pk -> state { pipeSystem = PipeSystem.closeForReading pipeSystem pk }
         PipeWrite pk -> state { pipeSystem = PipeSystem.closeForWriting pipeSystem pk }
         FileAppend{} -> state
         FileContents{} -> state)
 
 
-read :: OpenFiles -> Key -> Either NotReadable (Either Block (Either EOF String, OpenFiles))
-read state@OpenFiles{table,pipeSystem} key = do
+type K a = (a -> Interaction) -> Interaction
+
+read :: Prompt -> OpenFiles -> Key -> K (Either NotReadable (Either Block (Either EOF String, OpenFiles)))
+read prompt state@OpenFiles{table,pipeSystem} key k = do
   let e@Entry{what} = look "read" key (unTab table)
   case what of
-    PipeWrite{} -> Left NotReadable
-    FileAppend{} -> Left NotReadable
-    PipeRead pk  -> do
+    Terminal{} -> do
+      I_Read prompt $ \case
+        Nothing -> do
+          k (Right (Left Block))
+        Just lineOrEOF -> do
+          k (Right (Right (lineOrEOF, state)))
+
+    PipeWrite{} -> k (Left NotReadable)
+    FileAppend{} -> k (Left NotReadable)
+    PipeRead pk  -> k $ do
       case PipeSystem.readPipe pipeSystem pk of
         Left Block -> Right (Left Block)
         Right (x,pipeSystem) -> Right (Right (x,state {pipeSystem}))
 
-    FileContents xs -> do
+    FileContents xs -> k $ do
       case xs of
         [] -> Right (Right (Left EOF, state))
         line:xs' -> do
@@ -147,18 +165,21 @@ read state@OpenFiles{table,pipeSystem} key = do
 
 
 
-write :: OpenFiles -> Key -> String -> Either NotWritable (Either Block (Either EPIPE OpenFiles))
-write state@OpenFiles{table,pipeSystem,fs} key line = do
+write :: OpenFiles -> Key -> String -> K (Either NotWritable (Either Block (Either EPIPE OpenFiles)))
+write state@OpenFiles{table,pipeSystem,fs} key line k = do
   let Entry{what} = look "write" key (unTab table)
   case what of
-    PipeRead{} -> Left NotWritable
-    FileContents{} -> Left NotWritable
-    PipeWrite pk ->
+    Terminal mode -> do
+      I_Write mode line (k (Right (Right (Right state))))
+
+    PipeRead{} -> k (Left NotWritable)
+    FileContents{} -> k (Left NotWritable)
+    PipeWrite pk -> k $ do
       case PipeSystem.writePipe pipeSystem pk line of
         Left Block -> Right (Left Block)
         Right (Left EPIPE) -> Right (Right (Left EPIPE))
         Right (Right pipeSystem) -> Right (Right (Right state { pipeSystem }))
-    FileAppend path -> do
+    FileAppend path -> k $ do
       let file = case FileSystem.read fs path of
             Left NoSuchPath -> File.createData []
             Right file -> file
