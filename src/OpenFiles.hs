@@ -2,7 +2,7 @@
 module OpenFiles (
   init, OpenFiles, Key,
   open, pipe, dup, close, read, write, ls, mv, rm, fileKind, loadBinary, whatIsKey,
-  terminal, terminalx
+  getTerminal
   ) where
 
 import Data.List (intercalate)
@@ -50,22 +50,21 @@ init :: FileSystem -> OpenFiles
 init fs = OpenFiles
   { fs
   , pipeSystem = PipeSystem.empty
-  , table = Tab $ Map.fromList
-    [ (terminal, Entry { rc = 5, what = Terminal StdOut})
-    , (terminalx, Entry { rc = 5, what = Terminal StdErr})
-    ]
-  , nextKey = 23
+  , table = Tab $ Map.empty
+  , nextKey = 21
   }
-
-terminal, terminalx :: Key
-terminal = 21
-terminalx = 22
 
 instance Show OpenFiles where
   show OpenFiles{fs=_,pipeSystem=ps,table,nextKey=_} =
     "open: " ++ show table ++ "\n" ++
     "pipe: " ++ show ps
 
+getTerminal :: OpenFiles -> OutMode -> (Key,OpenFiles)
+getTerminal state@OpenFiles{nextKey=key,table} mode = do
+  let nextKey = key+1
+  let entry = Entry { rc = 1, what = Terminal mode }
+  let table' = Tab (Map.insert key entry (unTab table))
+  (key, state { nextKey, table = table' })
 
 open :: OpenFiles -> Path -> OpenMode -> Either OpenError (Key,OpenFiles)
 open state@OpenFiles{nextKey=key,fs,table} path = \case

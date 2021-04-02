@@ -1,7 +1,7 @@
 -- | Interpret a 'system-call' of a MeNicks program, with respect to the process-env & open-files.
 module SysCall (
   SysCall,runSys,
-  FdEnv,env0,dupEnv,closeEnv,openFiles,
+  FdEnv,makeEnv,dupEnv,closeEnv,openFiles,
   ) where
 
 import Data.List (intercalate)
@@ -171,16 +171,8 @@ openFiles :: OpenFiles -> FdEnv -> [(FD,OF)]
 openFiles os (FdEnv m) =
   [ (fd,oF) | (fd,File key) <- Map.toList m, let oF = OpenFiles.whatIsKey os key ]
 
-env0 :: FdEnv
-env0 = FdEnv $ Map.fromList
-  [
-   (FD 2, File OpenFiles.terminalx),
-   (FD 1, File OpenFiles.terminal),
-   (FD 0, File OpenFiles.terminal)
---   (FD 2, Console StdErr),
---   (FD 1, Console StdOut),
---   (FD 0, Console StdOut)
-  ]
+makeEnv :: [ (FD,OpenFiles.Key) ] -> FdEnv
+makeEnv xs = FdEnv (Map.fromList [ (fd,File op) | (fd,op) <- xs ])
 
 dupEnv :: FdEnv -> OpenFiles -> OpenFiles
 dupEnv (FdEnv m) s =

@@ -5,10 +5,10 @@ import Data.Map (Map)
 import Environment (Environment)
 import FileSystem (FileSystem)
 import Interaction (Interaction(..),OutMode(..))
-import OpenFiles (OpenFiles)
+import OpenFiles (OpenFiles,getTerminal,dup)
 import Prelude hiding (init)
 import Prog
-import SysCall (FdEnv,env0,dupEnv,closeEnv,runSys,openFiles)
+import SysCall (FdEnv,makeEnv,dupEnv,closeEnv,runSys,openFiles)
 import qualified Data.Map.Strict as Map
 import qualified Environment (empty,set,Var(..))
 import qualified Init (init)
@@ -19,14 +19,18 @@ traceMeNicks = False
 
 start :: FileSystem -> Interaction
 start fs = do
-  let oF = OpenFiles.init fs
+  let of1 = OpenFiles.init fs
+  let (term, of2) = getTerminal of1 StdOut
+  let (termx,of3) = getTerminal of2 StdErr
+  let of4 = dup of3 term
+  let env0 = makeEnv [(0,term),(1,term),(2,termx)]
   let initProc = Proc
         { command = Command ("init",[])
         , environment = environment0
         , fde = env0
         , action = linearize Init.init (\() -> A_Halt)
         }
-  let (state,pid) = newPid (initState oF)
+  let (state,pid) = newPid (initState of4)
   resume pid initProc state
 
 environment0 :: Environment
