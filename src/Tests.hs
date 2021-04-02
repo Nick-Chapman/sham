@@ -171,12 +171,6 @@ run = Testing.run $ do
   test ["grep ur < days"] [ d | d <- days, "ur" `isInfixOf` d ]
   test ["grep -v ur < days"] [ d | d <- days, not ("ur" `isInfixOf` d) ]
 
-  test ["echo my pid is $$"] ["my pid is 4"]
-  test [".me"] ["5"]
-  test ["exec .me"] ["4"]
-  test ["cat .me > a","echo .me >> a","a",".me"] ["7","8","9"]
-  test ["cat .me > a","echo exec .me >> a","a",".me"] ["7","7","8"]
-
   test ["(echo foo; echo bar)"] ["foo","bar"]
   test ["(echo foo; echo bar) | rev"] ["oof","rab"]
   test ["(ls;cat days) | grep es"] ["yes","Tuesday","Wednesday"]
@@ -184,8 +178,6 @@ run = Testing.run $ do
   -- backgrounding is massivley elayed since tty rework
   -- test ["help &"] Image.readme
   -- test ["cat days &", "echo FOO"] ("FOO" : days)
-
-  test ["ps"] ["[1] init","[2] tty-stderr","[3] tty-stdout","[4] sham","[5] ps"]
 
   -- tests that show ps are to fragile
   --test ["(ls;ps)"] (paths0 ++ ["[1] tty-monitor-stdout","[2] sham","[4] ps"])
@@ -204,7 +196,6 @@ run = Testing.run $ do
   --test ["exec 2>e","foo","bar","cat e"] ["no such executable: foo", "no such executable: bar"]
   --test ["exec >&2", "echo foo"] ["(stderr) foo"]
 
-
   test ["echo foo >&0"] ["foo"]
   test ["echo foo >&1"] ["foo"]
   test ["echo foo >&2"] ["(stderr) foo"]
@@ -217,15 +208,22 @@ run = Testing.run $ do
   test ["foo=123","bar=456","echo $foo $bar"] ["123 456"]
   test ["foo=ls","$foo"] paths0
 
-  test ["kill"] ["(stderr) kill: takes at least one argument"]
-  test ["kill what"] ["(stderr) kill: not a pid: what"]
-  test ["kill 99"] ["(stderr) kill: no such process: [99]"]
-  test ["kill 4"] []
-  test ["kill 1","echo carry on after init gone"] ["carry on after init gone"]
-
-  test ["echo $$","echo echo $$ > x","x"] ["4","4"]
-  test ["echo $$","echo 'echo $$' > x","x"] ["4","6"]
+  test ["echo $$","echo echo $$ > x","x"] ["2","2"]
+  test ["echo $$","echo 'echo $$' > x","x"] ["2","4"]
 
   test ["wc-l < days"] ["7"]
   test ["wc-l days"] ["7"]
   test ["wc-l days days"] ["(stderr) wc-l : takes zero or one argument"]
+
+  test ["ps"] ["[1] init","[2] sham","[3] ps"]
+  test ["echo my pid is $$"] ["my pid is 2"]
+  test [".me"] ["3"]
+  test ["exec .me"] ["2"]
+  test ["cat .me > a","echo .me >> a","a",".me"] ["5","6","7"]
+  test ["cat .me > a","echo exec .me >> a","a",".me"] ["5","5","6"]
+
+  test ["kill"] ["(stderr) kill: takes at least one argument"]
+  test ["kill what"] ["(stderr) kill: not a pid: what"]
+  test ["kill 99"] ["(stderr) kill: no such process: [99]"]
+  test ["kill 2"] []
+  test ["kill 1","echo carry on after init gone"] ["carry on after init gone"]

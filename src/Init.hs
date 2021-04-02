@@ -9,8 +9,8 @@ import Prog (Prog(..),FD,SysCall(..),Command(..),PipeEnds(..))
 init :: Prog ()
 init = do
   forkWait $ do -- not essential; allows "init" process to remain
-    monitor (100+stderr) StdErr -- TODO: step to removing. put on fd 102
-    monitor (100+stdout) StdOut -- TODO: step to removing. put on fd 101
+    let _ = monitor (100+stderr) StdErr -- TODO: step to removing. put on fd 102
+    let _ = monitor (100+stdout) StdOut -- TODO: step to removing. put on fd 101
     tryLoadBinary "sham" >>= \case
       Nothing -> do write stderr "init : cannot find sham interpreter"; exit
       Just prog -> do
