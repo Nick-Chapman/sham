@@ -99,7 +99,7 @@ runSys sys s env arg = case sys of
                 Right (Right (dat,s)) ->
                   k s env (Right (Right dat))
 
-          Console{} -> do -- TODO: deprecate this
+          Console{} -> undefined $ do -- TODO: deprecate this
             Right $ \k -> do
               I_Read prompt $ \case
                 Nothing ->
@@ -126,7 +126,7 @@ runSys sys s env arg = case sys of
                 Right (Right (Right s)) ->
                   k s env (Right (Right ()))
 
-          Console outMode -> do -- TODO: now depreated; kill
+          Console outMode -> undefined $ do -- TODO: now depreated; kill
             Right $ \k ->
               I_Write outMode line (k s env (Right (Right ())))
 
@@ -174,12 +174,12 @@ openFiles os (FdEnv m) =
 env0 :: FdEnv
 env0 = FdEnv $ Map.fromList
   [
---   (FD 2, File OpenFiles.terminalx),
---   (FD 1, File OpenFiles.terminal),
-   (FD 2, Console StdErr),
-   (FD 1, Console StdOut),
-   (FD 0, Console StdOut)
---   (FD 0, File OpenFiles.terminal)
+   (FD 2, File OpenFiles.terminalx),
+   (FD 1, File OpenFiles.terminal),
+   (FD 0, File OpenFiles.terminal)
+--   (FD 2, Console StdErr),
+--   (FD 1, Console StdOut),
+--   (FD 0, Console StdOut)
   ]
 
 dupEnv :: FdEnv -> OpenFiles -> OpenFiles
