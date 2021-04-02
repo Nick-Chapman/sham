@@ -14,7 +14,6 @@ import qualified OpenFiles
 
 runSys :: SysCall a b ->
   OpenFiles -> FdEnv -> a ->
-  Either Block -- TODO: kill unused outer block
   ((OpenFiles -> FdEnv -> (Either Block b) -> Interaction) -> Interaction)
 
 runSys sys s env arg = case sys of
@@ -22,16 +21,16 @@ runSys sys s env arg = case sys of
   Kind -> do
     let path = arg
     let res =  OpenFiles.fileKind s path
-    Right $ \k -> k s env (Right res)
+    \k -> k s env (Right res)
 
   LoadBinary -> do
     let path = arg
     let res =  OpenFiles.loadBinary s path
-    Right $ \k -> k s env (Right res)
+    \k -> k s env (Right res)
 
   Fds -> do
     let fd = allFds env
-    Right $ \k -> k s env (Right fd)
+    \k -> k s env (Right fd)
 
   SysPipe -> do
     case OpenFiles.pipe s of
@@ -41,16 +40,16 @@ runSys sys s env arg = case sys of
         let fdW = smallestUnused env
         env <- pure $ FdEnv (Map.insert fdW (File keyW) (unFdEnv env))
         let pe = PipeEnds { r = fdR, w = fdW }
-        Right $ \k -> k s env (Right pe)
+        \k -> k s env (Right pe)
 
   Open -> do
     let (path,mode) = arg
     case OpenFiles.open s path mode of
       Left err -> do
-        Right $ \k ->
+        \k ->
           k s env (Right (Left err))
       Right (key,s) -> do
-        Right $ \k -> do
+        \k -> do
           let fd = smallestUnused env
           let env' = FdEnv (Map.insert fd (File key) (unFdEnv env))
           k s env' (Right (Right fd))
@@ -58,16 +57,16 @@ runSys sys s env arg = case sys of
   Close -> do
     let fd = arg
     case Map.lookup fd (unFdEnv env) of
-      Nothing -> Right $ \k -> k s env (Right (Left BadFileDescriptor))
+      Nothing -> \k -> k s env (Right (Left BadFileDescriptor))
       Just thing -> do
-        Right $ \k -> do
+        \k -> do
           case closeTarget thing s
             of s -> do
                  k s (FdEnv (Map.delete fd (unFdEnv env))) (Right (Right ()))
 
   Dup2 -> do
     let (fdDest,fdSrc) = arg
-    Right $ \k -> do
+    \k -> do
       case Map.lookup fdSrc (unFdEnv env) of
         Nothing -> k s env (Right (Left BadFileDescriptor))
         Just src -> do
@@ -86,11 +85,11 @@ runSys sys s env arg = case sys of
   Read prompt -> do
     let fd = arg
     case Map.lookup fd (unFdEnv env) of
-      Nothing -> Right $ \k -> k s env (Right (Left ER_BadFileDescriptor))
+      Nothing -> \k -> k s env (Right (Left ER_BadFileDescriptor))
       Just thing -> do
         case thing of
           File key -> do
-            Right $ \k -> do
+            \k -> do
               OpenFiles.read prompt s key $ \case
                 Left NotReadable ->
                   k s env (Right (Left ER_NotReadable))
@@ -100,7 +99,7 @@ runSys sys s env arg = case sys of
                   k s env (Right (Right dat))
 
           Console{} -> undefined $ do -- TODO: deprecate this
-            Right $ \k -> do
+            \k -> do
               I_Read prompt $ \case
                 Nothing ->
                   k s env (Left Block)
@@ -111,11 +110,11 @@ runSys sys s env arg = case sys of
   Write -> do
     let (fd,line) = arg
     case Map.lookup fd (unFdEnv env) of
-      Nothing -> Right $ \k -> k s env (Right (Left EW_BadFileDescriptor))
+      Nothing -> \k -> k s env (Right (Left EW_BadFileDescriptor))
       Just thing -> do
         case thing of
           File key -> do
-            Right $ \k ->
+            \k ->
               OpenFiles.write s key line $ \case
                 Left NotWritable ->
                   k s env (Right (Left EW_NotWritable))
@@ -127,24 +126,24 @@ runSys sys s env arg = case sys of
                   k s env (Right (Right ()))
 
           Console outMode -> undefined $ do -- TODO: now depreated; kill
-            Right $ \k ->
+            \k ->
               I_Write outMode line (k s env (Right (Right ())))
 
   Paths -> do
-    Right $ \k -> do
+    \k -> do
       let paths = OpenFiles.ls s
       k s env (Right paths)
 
   Mv -> do
     let (src,dest) = arg
-    Right $ \k -> do
+    \k -> do
       case OpenFiles.mv s src dest of
         Left NoSuchPath -> k s env (Right (Left NoSuchPath))
         Right s -> k s env (Right (Right ()))
 
   Rm -> do
     let path = arg
-    Right $ \k -> do
+    \k -> do
       case OpenFiles.rm s path of
         Left NoSuchPath -> k s env (Right (Left NoSuchPath))
         Right s -> k s env (Right (Right ()))
