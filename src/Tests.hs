@@ -122,7 +122,6 @@ run = Testing.run $ do
   test ["echo foo  bar"] ["foo bar"]
   test ["echo foo > x", "echo bar > x", "cat x"] ["bar"]
   test ["echo foo > x", "echo bar >> x", "cat x"] ["foo","bar"]
-  test ["echo foo >&2"] ["(stderr) foo"]
 
   test ["cat days"] days
   test ["cat days days"] (days ++ days)
@@ -202,6 +201,10 @@ run = Testing.run $ do
   test ["echo foo >&3"] ["(stderr) bad file descriptor: &3"]
   test ["echo foo >&7"] ["(stderr) bad file descriptor: &7"]
   test ["echo foo >&23"] ["(stderr) bad file descriptor: &23"]
+
+  test ["echo foo <days >&0"] ["(stderr) &1 not writable"]
+  test ["echo foo >&0 <days"] ["foo"]
+  test ["(echo foo >&0) <days"] ["(stderr) &1 not writable"]
 
   test ["env"] ["Version=MeNicks-0.1","debug=0","prefix=sham"]
   test ["foo=123","echo $foo"] ["123"]
