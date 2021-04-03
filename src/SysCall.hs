@@ -6,7 +6,7 @@ module SysCall (
 
 import Data.List (intercalate)
 import Data.Map (Map)
-import Interaction (Interaction(..),OutMode(..))
+import Interaction (Interaction(..))
 import OpenFiles (OpenFiles,whatIsKey)
 import Prog
 import qualified Data.Map.Strict as Map
@@ -78,7 +78,6 @@ runSys sys s env arg = case sys of
                   Just oldTarget -> closeTarget oldTarget s
             let s'' = case src of
                   File key -> OpenFiles.dup s' key
-                  Console{}-> s'
             let env' = FdEnv (Map.insert fdDest src (unFdEnv env))
             k s'' env' (Right (Right ()))
 
@@ -98,15 +97,6 @@ runSys sys s env arg = case sys of
                 Right (Right (dat,s)) ->
                   k s env (Right (Right dat))
 
-          Console{} -> undefined $ do -- TODO: deprecate this
-            \k -> do
-              I_Read prompt $ \case
-                Nothing ->
-                  k s env (Left Block)
-                Just lineOrEOF ->
-                  k s env (Right (Right lineOrEOF))
-
-
   Write -> do
     let (fd,line) = arg
     case Map.lookup fd (unFdEnv env) of
@@ -124,10 +114,6 @@ runSys sys s env arg = case sys of
                   k s env (Right (Left EW_PIPE))
                 Right (Right (Right s)) ->
                   k s env (Right (Right ()))
-
-          Console outMode -> undefined $ do -- TODO: now depreated; kill
-            \k ->
-              I_Write outMode line (k s env (Right (Right ())))
 
   Paths -> do
     \k -> do
@@ -152,9 +138,7 @@ runSys sys s env arg = case sys of
 -- TODO: split out FdEnv into new module
 newtype FdEnv = FdEnv { unFdEnv :: Map FD Target } -- per process state, currently just FD map
 
-data Target
-  = Console OutMode -- TODO: plan to deprecate this, and handle console via tty/pipes
-  | File OpenFiles.Key
+data Target = File OpenFiles.Key -- TODO: remove unnecessary type wrapping
 
 instance Show FdEnv where
   show FdEnv{unFdEnv=m} =
@@ -162,8 +146,6 @@ instance Show FdEnv where
 
 instance Show Target where
   show = \case
-    Console StdOut -> "Tx"
-    Console StdErr -> "Te"
     File k -> show k
 
 openFiles :: OpenFiles -> FdEnv -> [(FD,OF)]
@@ -186,13 +168,11 @@ dupTarget :: Target -> OpenFiles -> OpenFiles
 dupTarget tar s =
   case tar of
     File key -> OpenFiles.dup s key
-    Console{}-> s
 
 closeTarget :: Target -> OpenFiles -> OpenFiles
 closeTarget tar s =
   case tar of
     File key -> snd (OpenFiles.close s key)
-    Console{}-> s
 
 smallestUnused :: FdEnv -> FD
 smallestUnused (FdEnv m) = head [ fd | fd <- [FD 0..], fd `notElem` used ]

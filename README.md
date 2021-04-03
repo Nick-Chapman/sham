@@ -64,11 +64,8 @@ To try the more experiemental asynchronous console, type `stack run async`
 - support redirection syntax to close file-descriptors: "4>&-"
 
 ### Ideas/Plans
-- introduce tty, which is connected by 3 pipes -- have done the 2 output pipes
 - scripts: drop N
 - ls -l
-- restructure: Interaction stays at level of Prog (not SysCall)
-- avoid special handling of Console in SysCall Target -- half done
 - aysnc operation via "Pause" in Prog and Interaction. Clocked externally
 - predefined: mktmp, sleep
 - exit codes
