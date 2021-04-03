@@ -70,13 +70,13 @@ runSys sys s env arg = case sys of
       case Map.lookup fdSrc (unFdEnv env) of
         Nothing -> k s env (Right (Left BadFileDescriptor))
         Just srcKey -> do
-          if fdDest == fdSrc -- TODO: should test be at level of Keys, not FDs ?
+          if fdDest == fdSrc
             then k s env (Right (Right ())) else do
             let
               s' =
                 case Map.lookup fdDest (unFdEnv env) of
                   Nothing -> s
-                  Just oldFile -> OpenFiles.close s oldFile
+                  Just oldKey -> OpenFiles.close s oldKey
             let s'' = OpenFiles.dup s' srcKey
             let env' = FdEnv (Map.insert fdDest srcKey (unFdEnv env))
             k s'' env' (Right (Right ()))
