@@ -1,14 +1,14 @@
 -- | The 'MeNicks' operating system. Run 'init', which forks a 'sham' interpreter.
 module MeNicks (start) where
 
-import Data.Map (Map)
 import Environment (Environment)
 import FileSystem (FileSystem)
 import Interaction (Interaction(..),OutMode(..))
+import Kernel (State(..),Proc(..),Action(..))
 import OpenFiles (OpenFiles,getTerminal,dup)
 import Prelude hiding (init)
 import Prog
-import SysCall (FdEnv,makeEnv,dupEnv,closeEnv,runSys,openFiles)
+import SysCall (makeEnv,dupEnv,closeEnv,runSys,openFiles)
 import qualified Data.Map.Strict as Map
 import qualified Environment (empty,set,Var(..))
 import qualified Init (init)
@@ -30,7 +30,7 @@ start fs = do
         , fde = env0
         , action = linearize Init.init (\() -> A_Halt)
         }
-  let (state,pid) = newPid (initState of4)
+  let (state,pid) = newPid (initKernelState of4)
   resume pid initProc state
 
 environment0 :: Environment
@@ -58,22 +58,6 @@ linearize p0 = case p0 of
   Procs -> A_Procs
   Lsof -> A_Lsof
   Call sys arg -> A_Call sys arg
-
-data Action where
-  A_Halt :: Action
-  A_WriteConsole :: OutMode -> String -> Action -> Action
-  A_Trace :: String -> Action -> Action
-  A_Fork :: (Maybe Pid -> Action) -> Action
-  A_Exec :: Environment -> Command -> Action -> Action
-  A_Wait :: Pid -> Action -> Action
-  A_Kill :: Pid -> (Either NoSuchProcess () -> Action) -> Action
-  A_Alive :: Pid -> (Bool -> Action) -> Action
-  A_Argv :: (Command -> Action) -> Action
-  A_MyPid :: (Pid -> Action) -> Action
-  A_MyEnvironment :: (Environment -> Action) -> Action
-  A_Procs :: ([(Pid,Command)] -> Action) -> Action
-  A_Lsof :: ([(Pid,Command,FD,OF)] -> Action) -> Action
-  A_Call :: (Show a, Show b) => SysCall a b -> a -> (b -> Action) -> Action
 
 resume :: Pid -> Proc -> State -> Interaction
 resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@State{os} =
@@ -177,30 +161,13 @@ traceProc (me,Proc{command}) mes =
 trace :: String -> Interaction -> Interaction
 trace s = if traceMeNicks then I_Trace s else id
 
-data Proc = Proc
-  { command :: Command
-  , environment :: Environment
-  , fde :: FdEnv
-  , action :: Action
-  }
-
-data State = State
-  { os :: OpenFiles
-  , nextPid :: Pid
-  , waiting :: Map Pid Proc
-  , suspended :: Map Pid Proc
-  }
-
-initState :: OpenFiles -> State
-initState os = State
+initKernelState :: OpenFiles -> State
+initKernelState os = State
   { os
   , nextPid = 1
   , waiting = Map.empty
   , suspended = Map.empty
   }
-
-instance Show State where
-  show State{os} = show os
 
 allProcs :: State -> [(Pid,Command)]
 allProcs State{waiting,suspended} =

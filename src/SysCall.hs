@@ -1,12 +1,8 @@
 -- | Interpret a 'system-call' of a MeNicks program, with respect to the process-env & open-files.
-module SysCall (
-  SysCall,runSys,
-  FdEnv,makeEnv,dupEnv,closeEnv,openFiles,
-  ) where
+module SysCall (SysCall,runSys,makeEnv,dupEnv,closeEnv,openFiles) where
 
-import Data.List (intercalate)
-import Data.Map (Map)
 import Interaction (Interaction(..))
+import Kernel (FdEnv(..))
 import OpenFiles (OpenFiles,whatIsKey)
 import Prog
 import qualified Data.Map.Strict as Map
@@ -130,13 +126,6 @@ runSys sys s env arg = case sys of
         Left NoSuchPath -> k s env (Right (Left NoSuchPath))
         Right s -> k s env (Right (Right ()))
 
-
-newtype FdEnv = -- TODO: split out FdEnv into new module
-  FdEnv { unFdEnv :: Map FD OpenFiles.Key } -- per process state
-
-instance Show FdEnv where
-  show FdEnv{unFdEnv=m} =
-    intercalate ", " [ show k ++ "=" ++ show e | (k,e) <- Map.toList m ]
 
 openFiles :: OpenFiles -> FdEnv -> [(FD,OF)]
 openFiles os (FdEnv m) =
