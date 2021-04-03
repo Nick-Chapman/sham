@@ -103,7 +103,7 @@ fs0 = FileSystem.create image where
           "# if N is negative, this script will hang",
           "if $# != 1 echo $0 : takes one numeric argument >&2",
           "if $# != 1 exit",
-          "echo > .tmp", -- TODO: fix ">>" so this is not necessary
+          "echo > .tmp",
           "countdown $1 | .make-head-N >> .tmp",
           ".tmp"
           ])
