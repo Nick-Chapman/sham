@@ -5,12 +5,12 @@ import Data.List (intercalate)
 import Data.Map (Map)
 import Environment (Environment)
 import Interaction (OutMode)
-import OpenFiles (OpenFiles,Key)
+import OpenFileTable (OpenFileTable,Key)
 import Prog (Pid,Command,FD,NoSuchProcess,OF,SysCall)
 import qualified Data.Map.Strict as Map
 
 data State = State -- system wide state
-  { os :: OpenFiles
+  { os :: OpenFileTable
   , nextPid :: Pid
   , waiting :: Map Pid Proc
   , suspended :: Map Pid Proc
@@ -26,7 +26,7 @@ data Proc = Proc -- per process state
   , action :: Action
   }
 
-newtype FdEnv = FdEnv { unFdEnv :: Map FD OpenFiles.Key }
+newtype FdEnv = FdEnv { unFdEnv :: Map FD OpenFileTable.Key }
 
 instance Show FdEnv where
   show FdEnv{unFdEnv=m} =

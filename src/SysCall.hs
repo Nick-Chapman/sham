@@ -3,10 +3,10 @@ module SysCall (SysCall,runSys,makeEnv,dupEnv,closeEnv,openFiles) where
 
 import Interaction (Interaction(..))
 import Kernel (State(..),FdEnv(..))
-import OpenFiles (OpenFiles,whatIsKey)
+import OpenFileTable (OpenFileTable,whatIsKey)
 import Prog
 import qualified Data.Map.Strict as Map
-import qualified OpenFiles
+import qualified OpenFileTable
 
 runSys :: SysCall a b ->
   State -> FdEnv -> a ->
@@ -16,12 +16,12 @@ runSys sys s@State{os} env arg = case sys of
 
   Kind -> do
     let path = arg
-    let res =  OpenFiles.fileKind os path
+    let res =  OpenFileTable.fileKind os path
     \k -> k s env (Right res)
 
   LoadBinary -> do
     let path = arg
-    let res =  OpenFiles.loadBinary os path
+    let res =  OpenFileTable.loadBinary os path
     \k -> k s env (Right res)
 
   Fds -> do
@@ -29,7 +29,7 @@ runSys sys s@State{os} env arg = case sys of
     \k -> k s env (Right fd)
 
   SysPipe -> do
-    case OpenFiles.pipe os of
+    case OpenFileTable.pipe os of
       (PipeEnds{r=keyR,w=keyW},os) -> do
         let fdR = smallestUnused env
         env <- pure $ FdEnv (Map.insert fdR keyR (unFdEnv env))
@@ -40,7 +40,7 @@ runSys sys s@State{os} env arg = case sys of
 
   Open -> do
     let (path,mode) = arg
-    case OpenFiles.open os path mode of
+    case OpenFileTable.open os path mode of
       Left err -> do
         \k ->
           k s env (Right (Left err))
@@ -56,7 +56,7 @@ runSys sys s@State{os} env arg = case sys of
       Nothing -> \k -> k s env (Right (Left BadFileDescriptor))
       Just key -> do
         \k -> do
-          case OpenFiles.close os key of
+          case OpenFileTable.close os key of
             os -> do
               k s { os } (FdEnv (Map.delete fd (unFdEnv env))) (Right (Right ()))
 
@@ -72,8 +72,8 @@ runSys sys s@State{os} env arg = case sys of
               os1 =
                 case Map.lookup fdDest (unFdEnv env) of
                   Nothing -> os
-                  Just oldKey -> OpenFiles.close os oldKey
-            let os2 = OpenFiles.dup os1 srcKey
+                  Just oldKey -> OpenFileTable.close os oldKey
+            let os2 = OpenFileTable.dup os1 srcKey
             let env' = FdEnv (Map.insert fdDest srcKey (unFdEnv env))
             k s { os = os2 } env' (Right (Right ()))
 
@@ -83,7 +83,7 @@ runSys sys s@State{os} env arg = case sys of
       Nothing -> \k -> k s env (Right (Left ER_BadFileDescriptor))
       Just key -> do
         \k -> do
-          OpenFiles.read prompt os key $ \case
+          OpenFileTable.read prompt os key $ \case
             Left NotReadable ->
               k s env (Right (Left ER_NotReadable))
             Right (Left Block) ->
@@ -97,7 +97,7 @@ runSys sys s@State{os} env arg = case sys of
       Nothing -> \k -> k s env (Right (Left EW_BadFileDescriptor))
       Just key -> do
         \k ->
-          OpenFiles.write os key line $ \case
+          OpenFileTable.write os key line $ \case
             Left NotWritable ->
               k s env (Right (Left EW_NotWritable))
             Right (Left Block) ->
@@ -109,38 +109,38 @@ runSys sys s@State{os} env arg = case sys of
 
   Paths -> do
     \k -> do
-      let paths = OpenFiles.ls os
+      let paths = OpenFileTable.ls os
       k s env (Right paths)
 
   Mv -> do
     let (src,dest) = arg
     \k -> do
-      case OpenFiles.mv os src dest of
+      case OpenFileTable.mv os src dest of
         Left NoSuchPath -> k s env (Right (Left NoSuchPath))
         Right os -> k s { os } env (Right (Right ()))
 
   Rm -> do
     let path = arg
     \k -> do
-      case OpenFiles.rm os path of
+      case OpenFileTable.rm os path of
         Left NoSuchPath -> k s env (Right (Left NoSuchPath))
         Right os -> k s { os } env (Right (Right ()))
 
 
-openFiles :: OpenFiles -> FdEnv -> [(FD,OF)]
+openFiles :: OpenFileTable -> FdEnv -> [(FD,OF)]
 openFiles os (FdEnv m) =
-  [ (fd,oF) | (fd,key) <- Map.toList m, let oF = OpenFiles.whatIsKey os key ]
+  [ (fd,oF) | (fd,key) <- Map.toList m, let oF = OpenFileTable.whatIsKey os key ]
 
-makeEnv :: [ (FD,OpenFiles.Key) ] -> FdEnv
+makeEnv :: [ (FD,OpenFileTable.Key) ] -> FdEnv
 makeEnv xs = FdEnv $ Map.fromList xs
 
-dupEnv :: FdEnv -> OpenFiles -> OpenFiles
+dupEnv :: FdEnv -> OpenFileTable -> OpenFileTable
 dupEnv (FdEnv m) s =
-  foldl OpenFiles.dup s [ t | (_,t) <- Map.toList m ]
+  foldl OpenFileTable.dup s [ t | (_,t) <- Map.toList m ]
 
-closeEnv :: FdEnv -> OpenFiles -> OpenFiles
+closeEnv :: FdEnv -> OpenFileTable -> OpenFileTable
 closeEnv (FdEnv m) s =
-  foldl OpenFiles.close s [ t | (_,t) <- Map.toList m ]
+  foldl OpenFileTable.close s [ t | (_,t) <- Map.toList m ]
 
 smallestUnused :: FdEnv -> FD
 smallestUnused (FdEnv m) = head [ fd | fd <- [FD 0..], fd `notElem` used ]

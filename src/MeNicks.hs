@@ -5,21 +5,21 @@ import Environment (Environment)
 import FileSystem (FileSystem)
 import Interaction (Interaction(..),OutMode(..))
 import Kernel (State(..),Proc(..),Action(..),FdEnv)
-import OpenFiles (OpenFiles,getTerminal,dup)
+import OpenFileTable (OpenFileTable,getTerminal,dup)
 import Prelude hiding (init)
 import Prog
 import SysCall (makeEnv,dupEnv,closeEnv,runSys,openFiles)
 import qualified Data.Map.Strict as Map
 import qualified Environment (empty,set,Var(..))
 import qualified Init (init)
-import qualified OpenFiles (init)
+import qualified OpenFileTable (init)
 
 traceMeNicks :: Bool
 traceMeNicks = False
 
 start :: FileSystem -> Interaction
 start fs = do
-  let of1 = OpenFiles.init fs
+  let of1 = OpenFileTable.init fs
   let (term, of2) = getTerminal of1 StdOut
   let (termx,of3) = getTerminal of2 StdErr
   let of4 = dup of3 term
@@ -166,7 +166,7 @@ traceProc (me,Proc{command}) mes =
 trace :: String -> Interaction -> Interaction
 trace s = if traceMeNicks then I_Trace s else id
 
-initKernelState :: OpenFiles -> State
+initKernelState :: OpenFileTable -> State
 initKernelState os = State
   { os
   , nextPid = 1
