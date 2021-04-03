@@ -6,7 +6,7 @@ import Interaction (Prompt(..),EOF(..))
 import Lib (loadFile,stdin,stdout,stderr,close,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait,dup2,shift2)
 import Prelude hiding (Word,read)
 import Prog
-import Syntax (parseLine,Script(..),Word(..),Pred(..),Redirect(..),RedirectSource(..),Var(..))
+import Syntax (parseLine,Script(..),Word(..),Pred(..),Redirect(..),RedirectRhs(..),Var(..))
 import qualified Environment
 import qualified Path (create)
 
@@ -188,11 +188,11 @@ loadShamScript path = do
 
 execRedirect :: Env -> Redirect -> Prog ()
 execRedirect env = \case
-  Redirect om dest (FromPath path) -> do
+  Redirect om dest (RedirectRhsPath path) -> do
     path <- evalWord env path
     withOpen (Path.create path) om $ \src -> do
       dup2 dest src
-  Redirect _om dest (FromFD src) -> do -- do we care what the open-mode is?
+  Redirect _om dest (RedirectRhsFD src) -> do -- do we care what the open-mode is?
     dup2 dest src
 
 pipeline :: [Prog()] -> Prog ()

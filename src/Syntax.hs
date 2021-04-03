@@ -1,6 +1,6 @@
 -- | Parser and AST for 'sham' scripts
 module Syntax (
-  Script(..), Redirect(..), RedirectSource(..), Pred(..), Word(..), Var(..),
+  Script(..), Redirect(..), RedirectRhs(..), Pred(..), Word(..), Var(..),
   parseLine,
   ) where
 
@@ -41,10 +41,10 @@ data Word
   | DollarName Var
   deriving Show
 
-data Redirect = Redirect OpenMode FD RedirectSource
+data Redirect = Redirect OpenMode FD RedirectRhs
   deriving Show
 
-data RedirectSource = FromPath Word | FromFD FD
+data RedirectRhs = RedirectRhsPath Word | RedirectRhsFD FD
   deriving Show
 
 
@@ -183,7 +183,7 @@ lang token = script0 where
         let mode = OpenForReading
         symbol '<'
         ws
-        src <- redirectSource
+        src <- redirectRhs
         pure $ Redirect mode dest src
     , do
         dest <- alts [ do eps; pure 1, do n <- fd; ws; pure n ]
@@ -191,11 +191,11 @@ lang token = script0 where
           alts [ do symbol  '>';  pure $ OpenForWriting Truncate
                , do keyword ">>"; pure $ OpenForWriting Append ]
         ws
-        src <- redirectSource
+        src <- redirectRhs
         pure $ Redirect mode dest src
     ]
 
-  redirectSource = alts [ FromPath <$> word, FromFD <$> fdRef ]
+  redirectRhs = alts [ RedirectRhsPath <$> word, RedirectRhsFD <$> fdRef ]
   fdRef = do symbol '&'; fd
   fd = FD <$> digits
 
