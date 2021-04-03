@@ -12,16 +12,16 @@ runSys :: SysCall a b ->
   State -> FdEnv -> a ->
   ((State -> FdEnv -> (Either Block b) -> Interaction) -> Interaction)
 
-runSys sys s@State{os} env arg = case sys of
+runSys sys s@State{oft} env arg = case sys of
 
   Kind -> do
     let path = arg
-    let res =  OpenFileTable.fileKind os path
+    let res =  OpenFileTable.fileKind oft path
     \k -> k s env (Right res)
 
   LoadBinary -> do
     let path = arg
-    let res =  OpenFileTable.loadBinary os path
+    let res =  OpenFileTable.loadBinary oft path
     \k -> k s env (Right res)
 
   Fds -> do
@@ -29,26 +29,26 @@ runSys sys s@State{os} env arg = case sys of
     \k -> k s env (Right fd)
 
   SysPipe -> do
-    case OpenFileTable.pipe os of
-      (PipeEnds{r=keyR,w=keyW},os) -> do
+    case OpenFileTable.pipe oft of
+      (PipeEnds{r=keyR,w=keyW},oft) -> do
         let fdR = smallestUnused env
         env <- pure $ FdEnv (Map.insert fdR keyR (unFdEnv env))
         let fdW = smallestUnused env
         env <- pure $ FdEnv (Map.insert fdW keyW (unFdEnv env))
         let pe = PipeEnds { r = fdR, w = fdW }
-        \k -> k s { os } env (Right pe)
+        \k -> k s { oft } env (Right pe)
 
   Open -> do
     let (path,mode) = arg
-    case OpenFileTable.open os path mode of
+    case OpenFileTable.open oft path mode of
       Left err -> do
         \k ->
           k s env (Right (Left err))
-      Right (key,os) -> do
+      Right (key,oft) -> do
         \k -> do
           let fd = smallestUnused env
           let env' = FdEnv (Map.insert fd key (unFdEnv env))
-          k s { os } env' (Right (Right fd))
+          k s { oft } env' (Right (Right fd))
 
   Close -> do
     let fd = arg
@@ -56,9 +56,9 @@ runSys sys s@State{os} env arg = case sys of
       Nothing -> \k -> k s env (Right (Left BadFileDescriptor))
       Just key -> do
         \k -> do
-          case OpenFileTable.close os key of
-            os -> do
-              k s { os } (FdEnv (Map.delete fd (unFdEnv env))) (Right (Right ()))
+          case OpenFileTable.close oft key of
+            oft -> do
+              k s { oft } (FdEnv (Map.delete fd (unFdEnv env))) (Right (Right ()))
 
   Dup2 -> do
     let (fdDest,fdSrc) = arg
@@ -69,13 +69,13 @@ runSys sys s@State{os} env arg = case sys of
           if fdDest == fdSrc
             then k s env (Right (Right ())) else do
             let
-              os1 =
+              oft1 =
                 case Map.lookup fdDest (unFdEnv env) of
-                  Nothing -> os
-                  Just oldKey -> OpenFileTable.close os oldKey
-            let os2 = OpenFileTable.dup os1 srcKey
+                  Nothing -> oft
+                  Just oldKey -> OpenFileTable.close oft oldKey
+            let oft2 = OpenFileTable.dup oft1 srcKey
             let env' = FdEnv (Map.insert fdDest srcKey (unFdEnv env))
-            k s { os = os2 } env' (Right (Right ()))
+            k s { oft = oft2 } env' (Right (Right ()))
 
   Read prompt -> do
     let fd = arg
@@ -83,13 +83,13 @@ runSys sys s@State{os} env arg = case sys of
       Nothing -> \k -> k s env (Right (Left ER_BadFileDescriptor))
       Just key -> do
         \k -> do
-          OpenFileTable.read prompt os key $ \case
+          OpenFileTable.read prompt oft key $ \case
             Left NotReadable ->
               k s env (Right (Left ER_NotReadable))
             Right (Left Block) ->
               k s env (Left Block)
-            Right (Right (dat,os)) ->
-              k s { os } env (Right (Right dat))
+            Right (Right (dat,oft)) ->
+              k s { oft } env (Right (Right dat))
 
   Write -> do
     let (fd,line) = arg
@@ -97,39 +97,39 @@ runSys sys s@State{os} env arg = case sys of
       Nothing -> \k -> k s env (Right (Left EW_BadFileDescriptor))
       Just key -> do
         \k ->
-          OpenFileTable.write os key line $ \case
+          OpenFileTable.write oft key line $ \case
             Left NotWritable ->
               k s env (Right (Left EW_NotWritable))
             Right (Left Block) ->
               k s env (Left Block)
             Right (Right (Left EPIPE)) ->
               k s env (Right (Left EW_PIPE))
-            Right (Right (Right os)) ->
-              k s { os } env (Right (Right ()))
+            Right (Right (Right oft)) ->
+              k s { oft } env (Right (Right ()))
 
   Paths -> do
     \k -> do
-      let paths = OpenFileTable.ls os
+      let paths = OpenFileTable.ls oft
       k s env (Right paths)
 
   Mv -> do
     let (src,dest) = arg
     \k -> do
-      case OpenFileTable.mv os src dest of
+      case OpenFileTable.mv oft src dest of
         Left NoSuchPath -> k s env (Right (Left NoSuchPath))
-        Right os -> k s { os } env (Right (Right ()))
+        Right oft -> k s { oft } env (Right (Right ()))
 
   Rm -> do
     let path = arg
     \k -> do
-      case OpenFileTable.rm os path of
+      case OpenFileTable.rm oft path of
         Left NoSuchPath -> k s env (Right (Left NoSuchPath))
-        Right os -> k s { os } env (Right (Right ()))
+        Right oft -> k s { oft } env (Right (Right ()))
 
 
 openFiles :: OpenFileTable -> FdEnv -> [(FD,OF)]
-openFiles os (FdEnv m) =
-  [ (fd,oF) | (fd,key) <- Map.toList m, let oF = OpenFileTable.whatIsKey os key ]
+openFiles oft (FdEnv m) =
+  [ (fd,oF) | (fd,key) <- Map.toList m, let oF = OpenFileTable.whatIsKey oft key ]
 
 makeEnv :: [ (FD,OpenFileTable.Key) ] -> FdEnv
 makeEnv xs = FdEnv $ Map.fromList xs

@@ -10,14 +10,14 @@ import Prog (Pid,Command,FD,NoSuchProcess,OF,SysCall)
 import qualified Data.Map.Strict as Map
 
 data State = State -- system wide state
-  { os :: OpenFileTable
+  { oft :: OpenFileTable
   , nextPid :: Pid
   , waiting :: Map Pid Proc
   , suspended :: Map Pid Proc
   }
 
 instance Show State where
-  show Kernel.State{os} = show os
+  show Kernel.State{oft} = show oft
 
 data Proc = Proc -- per process state
   { command :: Command

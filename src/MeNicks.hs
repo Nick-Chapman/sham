@@ -141,10 +141,10 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state =
 
 
 closeAllOpen :: FdEnv -> State -> State
-closeAllOpen fde state@State{os} = state { os = closeEnv fde os }
+closeAllOpen fde state@State{oft} = state { oft = closeEnv fde oft }
 
 dupAllOpen :: FdEnv -> State -> State
-dupAllOpen fde state@State{os} = state { os = dupEnv fde os }
+dupAllOpen fde state@State{oft} = state { oft = dupEnv fde oft }
 
 block :: Pid -> Proc -> State -> Interaction
 block = yield -- TODO: track blocked Procs
@@ -167,8 +167,8 @@ trace :: String -> Interaction -> Interaction
 trace s = if traceMeNicks then I_Trace s else id
 
 initKernelState :: OpenFileTable -> State
-initKernelState os = State
-  { os
+initKernelState oft = State
+  { oft
   , nextPid = 1
   , waiting = Map.empty
   , suspended = Map.empty
@@ -179,10 +179,10 @@ allProcs State{waiting,suspended} =
   [ (pid,command) | (pid,Proc{command}) <-  Map.toList waiting ++ Map.toList suspended ]
 
 lsof :: (Pid,Proc) -> State -> [(Pid,Command,FD,OF)]
-lsof (me,proc0) State{os,waiting,suspended} =
+lsof (me,proc0) State{oft,waiting,suspended} =
   [ (pid,command,fd,oF)
   | (pid,Proc{command,fde}) <- (me,proc0) : (Map.toList waiting ++ Map.toList suspended)
-  , (fd,oF) <- openFiles os fde
+  , (fd,oF) <- openFiles oft fde
   ]
 
 running :: Pid -> State -> Bool
