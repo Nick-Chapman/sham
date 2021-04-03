@@ -36,9 +36,9 @@ runSys sys s env arg = case sys of
     case OpenFiles.pipe s of
       (PipeEnds{r=keyR,w=keyW},s) -> do
         let fdR = smallestUnused env
-        env <- pure $ FdEnv (Map.insert fdR (File keyR) (unFdEnv env))
+        env <- pure $ FdEnv (Map.insert fdR keyR (unFdEnv env))
         let fdW = smallestUnused env
-        env <- pure $ FdEnv (Map.insert fdW (File keyW) (unFdEnv env))
+        env <- pure $ FdEnv (Map.insert fdW keyW (unFdEnv env))
         let pe = PipeEnds { r = fdR, w = fdW }
         \k -> k s env (Right pe)
 
@@ -51,16 +51,16 @@ runSys sys s env arg = case sys of
       Right (key,s) -> do
         \k -> do
           let fd = smallestUnused env
-          let env' = FdEnv (Map.insert fd (File key) (unFdEnv env))
+          let env' = FdEnv (Map.insert fd key (unFdEnv env))
           k s env' (Right (Right fd))
 
   Close -> do
     let fd = arg
     case Map.lookup fd (unFdEnv env) of
       Nothing -> \k -> k s env (Right (Left BadFileDescriptor))
-      Just thing -> do
+      Just key -> do
         \k -> do
-          case closeTarget thing s
+          case OpenFiles.close s key
             of s -> do
                  k s (FdEnv (Map.delete fd (unFdEnv env))) (Right (Right ()))
 
@@ -69,51 +69,47 @@ runSys sys s env arg = case sys of
     \k -> do
       case Map.lookup fdSrc (unFdEnv env) of
         Nothing -> k s env (Right (Left BadFileDescriptor))
-        Just src -> do
-          if fdDest == fdSrc then k s env (Right (Right ())) else do
+        Just srcKey -> do
+          if fdDest == fdSrc -- TODO: should test be at level of Keys, not FDs ?
+            then k s env (Right (Right ())) else do
             let
               s' =
                 case Map.lookup fdDest (unFdEnv env) of
                   Nothing -> s
-                  Just oldTarget -> closeTarget oldTarget s
-            let s'' = case src of
-                  File key -> OpenFiles.dup s' key
-            let env' = FdEnv (Map.insert fdDest src (unFdEnv env))
+                  Just oldFile -> OpenFiles.close s oldFile
+            let s'' = OpenFiles.dup s' srcKey
+            let env' = FdEnv (Map.insert fdDest srcKey (unFdEnv env))
             k s'' env' (Right (Right ()))
 
   Read prompt -> do
     let fd = arg
     case Map.lookup fd (unFdEnv env) of
       Nothing -> \k -> k s env (Right (Left ER_BadFileDescriptor))
-      Just thing -> do
-        case thing of
-          File key -> do
-            \k -> do
-              OpenFiles.read prompt s key $ \case
-                Left NotReadable ->
-                  k s env (Right (Left ER_NotReadable))
-                Right (Left Block) ->
-                  k s env (Left Block)
-                Right (Right (dat,s)) ->
-                  k s env (Right (Right dat))
+      Just key -> do
+        \k -> do
+          OpenFiles.read prompt s key $ \case
+            Left NotReadable ->
+              k s env (Right (Left ER_NotReadable))
+            Right (Left Block) ->
+              k s env (Left Block)
+            Right (Right (dat,s)) ->
+              k s env (Right (Right dat))
 
   Write -> do
     let (fd,line) = arg
     case Map.lookup fd (unFdEnv env) of
       Nothing -> \k -> k s env (Right (Left EW_BadFileDescriptor))
-      Just thing -> do
-        case thing of
-          File key -> do
-            \k ->
-              OpenFiles.write s key line $ \case
-                Left NotWritable ->
-                  k s env (Right (Left EW_NotWritable))
-                Right (Left Block) ->
-                  k s env (Left Block)
-                Right (Right (Left EPIPE)) ->
-                  k s env (Right (Left EW_PIPE))
-                Right (Right (Right s)) ->
-                  k s env (Right (Right ()))
+      Just key -> do
+        \k ->
+          OpenFiles.write s key line $ \case
+            Left NotWritable ->
+              k s env (Right (Left EW_NotWritable))
+            Right (Left Block) ->
+              k s env (Left Block)
+            Right (Right (Left EPIPE)) ->
+              k s env (Right (Left EW_PIPE))
+            Right (Right (Right s)) ->
+              k s env (Right (Right ()))
 
   Paths -> do
     \k -> do
@@ -135,44 +131,27 @@ runSys sys s env arg = case sys of
         Right s -> k s env (Right (Right ()))
 
 
--- TODO: split out FdEnv into new module
-newtype FdEnv = FdEnv { unFdEnv :: Map FD Target } -- per process state, currently just FD map
-
-data Target = File OpenFiles.Key -- TODO: remove unnecessary type wrapping
+newtype FdEnv = -- TODO: split out FdEnv into new module
+  FdEnv { unFdEnv :: Map FD OpenFiles.Key } -- per process state
 
 instance Show FdEnv where
   show FdEnv{unFdEnv=m} =
     intercalate ", " [ show k ++ "=" ++ show e | (k,e) <- Map.toList m ]
 
-instance Show Target where
-  show = \case
-    File k -> show k
-
 openFiles :: OpenFiles -> FdEnv -> [(FD,OF)]
 openFiles os (FdEnv m) =
-  [ (fd,oF) | (fd,File key) <- Map.toList m, let oF = OpenFiles.whatIsKey os key ]
+  [ (fd,oF) | (fd,key) <- Map.toList m, let oF = OpenFiles.whatIsKey os key ]
 
 makeEnv :: [ (FD,OpenFiles.Key) ] -> FdEnv
-makeEnv xs = FdEnv (Map.fromList [ (fd,File op) | (fd,op) <- xs ])
+makeEnv xs = FdEnv $ Map.fromList xs
 
 dupEnv :: FdEnv -> OpenFiles -> OpenFiles
 dupEnv (FdEnv m) s =
-  foldr dupTarget s [ t | (_,t) <- Map.toList m ]
+  foldl OpenFiles.dup s [ t | (_,t) <- Map.toList m ]
 
 closeEnv :: FdEnv -> OpenFiles -> OpenFiles
 closeEnv (FdEnv m) s =
-  foldr closeTarget s [ t | (_,t) <- Map.toList m ]
-
--- TOOD: use {dup,close}Target in code above, for better sharing
-dupTarget :: Target -> OpenFiles -> OpenFiles
-dupTarget tar s =
-  case tar of
-    File key -> OpenFiles.dup s key
-
-closeTarget :: Target -> OpenFiles -> OpenFiles
-closeTarget tar s =
-  case tar of
-    File key -> snd (OpenFiles.close s key)
+  foldl OpenFiles.close s [ t | (_,t) <- Map.toList m ]
 
 smallestUnused :: FdEnv -> FD
 smallestUnused (FdEnv m) = head [ fd | fd <- [FD 0..], fd `notElem` used ]

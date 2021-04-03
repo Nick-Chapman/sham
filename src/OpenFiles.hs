@@ -112,11 +112,11 @@ dup state@OpenFiles{table} key = do
   state { table = table' }
 
 
-close :: OpenFiles -> Key -> (Bool,OpenFiles)
+close :: OpenFiles -> Key -> OpenFiles
 close state0@OpenFiles{pipeSystem,table} key = do
   let e@Entry{rc,what} = look "close" key (unTab table)
   let closing = (rc == 1)
-  (closing, case closing of
+  case closing of
     False -> do
       let e' = e { rc = rc - 1 }
       let table' = Tab (Map.insert key e' (unTab table))
@@ -129,7 +129,7 @@ close state0@OpenFiles{pipeSystem,table} key = do
         PipeRead pk -> state { pipeSystem = PipeSystem.closeForReading pipeSystem pk }
         PipeWrite pk -> state { pipeSystem = PipeSystem.closeForWriting pipeSystem pk }
         FileAppend{} -> state
-        FileContents{} -> state)
+        FileContents{} -> state
 
 
 type K a = (a -> Interaction) -> Interaction
