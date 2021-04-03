@@ -61,6 +61,7 @@ To try the more experiemental asynchronous console, type `stack run async`
 - support kill
 - quoting, with single quotes
 - new script: wc -l
+- support redirection syntax to close file-descriptors: "4>&-"
 
 ### Ideas/Plans
 - introduce tty, which is connected by 3 pipes -- have done the 2 output pipes
