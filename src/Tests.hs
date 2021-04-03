@@ -209,7 +209,7 @@ run = Testing.run $ do
   test ["echo foo >&-"] ["(stderr) bad file descriptor: &1"]
 
   test ["((echo before >&4; lsof 4>&- 0<&- 2<&-; echo after >&4) | grep lsof | grep -v grep) 4>&1"]
-    ["before","[8] (lsof) &1 Write:pipe1","after"]
+    ["before","[9] (lsof) &1 Write:pipe2","after"]
 
   test ["env"] ["Version=MeNicks-0.1","debug=0","prefix=sham"]
   test ["foo=123","echo $foo"] ["123"]

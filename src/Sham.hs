@@ -44,7 +44,7 @@ loop env@Env{environment} n = do
     Left EOF -> pure ()
     Right line -> do
       let script = parseLine line
-      --Trace (show ("sham",script))
+      --Trace (show script)
       runScript env script $ \env -> loop env (n+1)
 
 parseLines :: [String] -> Script
@@ -135,14 +135,31 @@ runScript env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
             loop env s Done
           k env
 
-    QPipeline scrips -> \k -> do
-      pipeline (map (\s -> loop env s Done) scrips)
+    QPipe s1 s2 -> \k -> do
+      pipe2 (loop env s1 Done) (loop env s2 Done)
       runK env k
 
     QBackGrounding s -> \k -> do
       forkNoWait $ do
         loop env s Done
       runK env k
+
+pipe2 :: Prog () -> Prog () -> Prog ()
+pipe2 prog1 prog2 = do
+  PipeEnds{w=pipeW,r=pipeR} <- Prog.Call SysPipe ()
+  Prog.Fork >>= \case
+    Nothing -> do -- LHS, child
+      close pipeR
+      shift2 stdout pipeW
+      prog1
+      exit
+    Just childPid -> do -- RHS, parent
+      close pipeW
+      forkWait $ do
+        shift2 stdin pipeR
+        prog2
+      close pipeR
+      Wait childPid
 
 evalPred :: Env -> Pred -> Prog Bool
 evalPred env = \case
@@ -196,40 +213,3 @@ execRedirect env = \case
     dup2 dest src
   Redirect _ dest RedirectRhsClose -> do
     close dest
-
-pipeline :: [Prog()] -> Prog ()
-pipeline = \case
-    [] -> error "runPipeline[]"
-    prog1:progs -> loop Nothing [] prog1 progs
-  where
-    loop :: Maybe FD -> [Pid] -> Prog () -> [Prog ()] -> Prog ()
-    loop incoming pids prog1 = \case
-      [] -> do
-        Prog.Fork >>= \case
-          Nothing -> do
-            case incoming of
-              Nothing -> pure ()
-              Just incoming -> shift2 stdin incoming
-            prog1
-          Just childPid -> do
-            case incoming of
-              Nothing -> pure ()
-              Just incoming -> close incoming
-            mapM_ Prog.Wait (childPid:pids)
-
-      prog2:progs -> do
-        PipeEnds{w=pipeW,r=pipeR} <- Prog.Call SysPipe ()
-        Prog.Fork >>= \case
-          Nothing -> do
-            case incoming of
-              Nothing -> pure ()
-              Just incoming -> shift2 stdin incoming
-            close pipeR
-            shift2 stdout pipeW
-            prog1
-          Just childPid -> do
-            case incoming of
-              Nothing -> pure ()
-              Just incoming -> close incoming
-            close pipeW
-            loop (Just pipeR) (childPid:pids) prog2 progs

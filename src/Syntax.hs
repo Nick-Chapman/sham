@@ -23,7 +23,7 @@ data Script -- TODO: loose Q prefix?
   | QExec Script
   | QInvoke Word [Word]
   | QSource Word [Word]
-  | QPipeline [Script]
+  | QPipe Script Script
   | QBackGrounding Script
   | QRedirecting Script [Redirect] -- TODO: have just 1 redirect!
   deriving Show
@@ -110,12 +110,10 @@ lang token = script0 where
     pure (QSetVar x w)
 
   pipeline = do
-    x <- step
+    x1 <- step
     xs <- many (do ws; symbol '|'; ws; step)
     m <- mode
-    case xs of
-      [] -> pure (m x)
-      _ -> pure $ m $ QPipeline (x:xs)
+    pure $ m $ foldl QPipe x1 xs
 
   mode :: Gram (Script -> Script) =
     alts [ do eps; pure id,
