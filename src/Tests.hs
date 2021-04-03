@@ -206,6 +206,8 @@ run = Testing.run $ do
   test ["echo foo >&0 <days"] ["foo"]
   test ["(echo foo >&0) <days"] ["(stderr) &1 not writable"]
 
+  test ["echo foo >&-"] ["(stderr) bad file descriptor: &1"]
+
   test ["env"] ["Version=MeNicks-0.1","debug=0","prefix=sham"]
   test ["foo=123","echo $foo"] ["123"]
   test ["foo=123","bar=456","echo $foo $bar"] ["123 456"]

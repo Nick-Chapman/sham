@@ -192,8 +192,10 @@ execRedirect env = \case
     path <- evalWord env path
     withOpen (Path.create path) om $ \src -> do
       dup2 dest src
-  Redirect _om dest (RedirectRhsFD src) -> do -- do we care what the open-mode is?
+  Redirect _ dest (RedirectRhsFD src) -> do
     dup2 dest src
+  Redirect _ dest RedirectRhsClose -> do
+    close dest
 
 pipeline :: [Prog()] -> Prog ()
 pipeline = \case

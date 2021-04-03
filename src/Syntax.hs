@@ -44,7 +44,7 @@ data Word
 data Redirect = Redirect OpenMode FD RedirectRhs
   deriving Show
 
-data RedirectRhs = RedirectRhsPath Word | RedirectRhsFD FD
+data RedirectRhs = RedirectRhsPath Word | RedirectRhsFD FD | RedirectRhsClose
   deriving Show
 
 
@@ -195,8 +195,12 @@ lang token = script0 where
         pure $ Redirect mode dest src
     ]
 
-  redirectRhs = alts [ RedirectRhsPath <$> word, RedirectRhsFD <$> fdRef ]
-  fdRef = do symbol '&'; fd
+  redirectRhs = alts
+    [ RedirectRhsPath <$> word
+    , do symbol '&'; RedirectRhsFD <$> fd
+    , do symbol '&'; symbol '-'; pure RedirectRhsClose
+    ]
+
   fd = FD <$> digits
 
   word = alts [ Word <$> ident0
