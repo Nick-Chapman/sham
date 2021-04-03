@@ -4,7 +4,7 @@ module MeNicks (start) where
 import Environment (Environment)
 import FileSystem (FileSystem)
 import Interaction (Interaction(..),OutMode(..))
-import Kernel (State(..),Proc(..),Action(..))
+import Kernel (State(..),Proc(..),Action(..),FdEnv)
 import OpenFiles (OpenFiles,getTerminal,dup)
 import Prelude hiding (init)
 import Prog
@@ -60,14 +60,14 @@ linearize p0 = case p0 of
   Call sys arg -> A_Call sys arg
 
 resume :: Pid -> Proc -> State -> Interaction
-resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@State{os} =
+resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state =
   case action0 of
 
   A_Halt -> do
     traceProc (me,proc0) "Halt(before)" $ do
     traceProc (me,proc0) ("fde: " ++ show fde) $ do
     trace (show state) $ do
-    let state' = state { os = closeEnv fde os }
+    let state' = closeAllOpen fde state
     traceProc (me,proc0) "Halt(after)" $ do
     traceProc (me,proc0) ("fde: " ++ show fde) $ do
     trace (show state') $ do
@@ -83,7 +83,7 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
     I_Write mode message (yield me proc0 { fde, action } state)
 
   A_Fork f -> do
-    let state' = state { os = dupEnv fde os }
+    let state' = dupAllOpen fde state
     let (state'',pid) = newPid state'
     traceProc (me,proc0) ("Fork:"++show pid) $ do
     trace (show state'') $ do
@@ -106,7 +106,7 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
       Nothing -> do
         yield me proc0 { action = f (Left NoSuchProcess) } state
       Just (state,Proc{fde}) -> do
-        let state' = state { os = closeEnv fde os }
+        let state' = closeAllOpen fde state
         yield me proc0 { action = f (Right ()) } state'
 
   A_Alive pid f -> do
@@ -129,17 +129,22 @@ resume me proc0@(Proc{command=command0,environment,fde,action=action0}) state@St
     yield me proc0 { action = f res } state
 
   A_Call sys arg f -> do
-    runSys sys os fde arg $ \os fde res -> do
+    runSys sys state fde arg $ \state fde res -> do
       traceProc (me,proc0) (show sys ++ show arg ++" --> " ++ show res) $ do
       traceProc (me,proc0) ("fde: " ++ show fde) $ do
-      let state' = state { os }
-      trace (show state') $ do
+      trace (show state) $ do
       case res of
-        Left Block -> block me proc0 state'
+        Left Block -> block me proc0 state
         Right res -> do
           let action = f res
-          yield me proc0 { fde, action } state'
+          yield me proc0 { fde, action } state
 
+
+closeAllOpen :: FdEnv -> State -> State
+closeAllOpen fde state@State{os} = state { os = closeEnv fde os }
+
+dupAllOpen :: FdEnv -> State -> State
+dupAllOpen fde state@State{os} = state { os = dupEnv fde os }
 
 block :: Pid -> Proc -> State -> Interaction
 block = yield -- TODO: track blocked Procs
