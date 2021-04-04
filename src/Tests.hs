@@ -191,9 +191,8 @@ run = Testing.run $ do
   -- test ["exec ps"] ["[1] tty-monitor-stdout","[2] ps"]
   -- test ["exec ls"] paths0
 
-  -- TODO: rewrite of bash interpreter has broken these...
-  --test ["exec 2>e","foo","bar","cat e"] ["no such executable: foo", "no such executable: bar"]
-  --test ["exec >&2", "echo foo"] ["(stderr) foo"]
+  test ["exec 2>e","foo","bar","cat e"] ["no such executable: foo", "no such executable: bar"]
+  test ["exec >&2", "echo foo"] ["(stderr) foo"]
 
   test ["echo foo >&0"] ["foo"]
   test ["echo foo >&1"] ["foo"]

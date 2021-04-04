@@ -135,6 +135,10 @@ runScript env0 scrip0 k = loop env0 scrip0 (Cont $ \env -> k env) where
             loop env s Done
           k env
 
+    QRedirects rs -> \k -> do
+      mapM_ (execRedirect env) rs
+      runK env k
+
     QPipe s1 s2 -> \k -> do
       pipe2 (loop env s1 Done) (loop env s2 Done)
       runK env k

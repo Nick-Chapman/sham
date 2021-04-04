@@ -26,6 +26,7 @@ data Script -- TODO: loose Q prefix?
   | QPipe Script Script
   | QBackGrounding Script
   | QRedirecting Script [Redirect] -- TODO: have just 1 redirect!
+  | QRedirects [Redirect]
   deriving Show
 
 data Pred
@@ -119,7 +120,7 @@ lang token = script0 where
     alts [ do eps; pure id,
            do ws; symbol '&'; pure QBackGrounding ]
 
-  step = alts [run,exec,subshell]
+  step = alts [subshell,runCommand,execCommand,execRedirects]
 
   subshell = do
     symbol '('
@@ -133,16 +134,21 @@ lang token = script0 where
     xs <- many (do ws; symbol ';'; ws; step)
     pure $ foldl QSeq x1 xs
 
-  run = do
+  runCommand = do
     thing <- command
     rs <- redirects
     pure $ (case rs of [] -> thing; _ -> QRedirecting thing rs)
 
-  exec = do
+  execCommand = do
     keyword "exec"
     ws1; thing <- command
     rs <- redirects
     pure $ QExec (case rs of [] -> thing; _ -> QRedirecting thing rs)
+
+  execRedirects = do
+    keyword "exec"
+    rs <- redirects
+    pure $ QRedirects rs
 
   command = alts [echo,exit,source,invocation,readIntoVar]
 
