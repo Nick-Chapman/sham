@@ -1,8 +1,6 @@
 -- | System-wide table of 'open-files' which may be shared between different processes.
 module OpenFileTable (
-  init, OpenFileTable, Key,
-  open, pipe, dup, close, read, write, ls, mv, rm, fileKind, loadBinary, whatIsKey,
-  getTerminal
+  init, OpenFileTable, Key, open, pipe, dup, close, read, write, whatIsKey, getTerminal
   ) where
 
 import Data.List (intercalate)
@@ -19,8 +17,7 @@ import qualified FileSystem
 import qualified PipeSystem
 
 data OpenFileTable = OpenFileTable
-  { fs :: FileSystem
-  , pipeSystem :: PipeSystem
+  { pipeSystem :: PipeSystem
   , table :: FileTable
   , nextKey :: Key
   }
@@ -46,16 +43,15 @@ instance Show Entry where
   show Entry{rc,what} =
     show what ++ "(" ++ show rc ++ ")"
 
-init :: FileSystem -> OpenFileTable
-init fs = OpenFileTable
-  { fs
-  , pipeSystem = PipeSystem.empty
+init :: OpenFileTable
+init = OpenFileTable
+  { pipeSystem = PipeSystem.empty
   , table = Tab $ Map.empty
   , nextKey = 21
   }
 
 instance Show OpenFileTable where
-  show OpenFileTable{fs=_,pipeSystem=ps,table,nextKey=_} =
+  show OpenFileTable{pipeSystem=ps,table,nextKey=_} =
     "open: " ++ show table ++ "\n" ++
     "pipe: " ++ show ps
 
@@ -66,8 +62,8 @@ getTerminal state@OpenFileTable{nextKey=key,table} mode = do
   let table' = Tab (Map.insert key entry (unTab table))
   (key, state { nextKey, table = table' })
 
-open :: OpenFileTable -> Path -> OpenMode -> Either OpenError (Key,OpenFileTable)
-open state@OpenFileTable{nextKey=key,fs,table} path = \case
+open :: (OpenFileTable,FileSystem) -> Path -> OpenMode -> Either OpenError (Key,OpenFileTable,FileSystem)
+open (state@OpenFileTable{nextKey=key,table},fs) path = \case
   OpenForReading{} -> do
     let nextKey = key+1
     case FileSystem.read fs path of
@@ -79,7 +75,7 @@ open state@OpenFileTable{nextKey=key,fs,table} path = \case
             let entry = Entry { rc = 1, what = FileContents contents }
             let table' = Tab (Map.insert key entry (unTab table))
             let state' = state { nextKey, table = table' }
-            Right (key,state')
+            Right (key,state',fs)
   OpenForWriting wom -> do
     let
       fs' = case wom of
@@ -88,8 +84,8 @@ open state@OpenFileTable{nextKey=key,fs,table} path = \case
     let nextKey = key+1
     let entry = Entry { rc = 1, what = FileAppend path }
     let table' = Tab (Map.insert key entry (unTab table))
-    let state' = state { nextKey, fs = fs', table = table' }
-    Right (key,state')
+    let state' = state { nextKey, table = table' }
+    Right (key,state',fs')
 
 
 pipe :: OpenFileTable -> (PipeEnds Key,OpenFileTable)
@@ -164,12 +160,12 @@ read prompt state@OpenFileTable{table,pipeSystem} key k = do
 
 
 
-write :: OpenFileTable -> Key -> String -> K (Either NotWritable (Either Block (Either EPIPE OpenFileTable)))
-write state@OpenFileTable{table,pipeSystem,fs} key line k = do
+write :: (OpenFileTable,FileSystem) -> Key -> String -> K (Either NotWritable (Either Block (Either EPIPE (OpenFileTable,FileSystem))))
+write (state@OpenFileTable{table,pipeSystem},fs) key line k = do
   let Entry{what} = look "write" key (unTab table)
   case what of
     Terminal mode -> do
-      I_Write mode line (k (Right (Right (Right state))))
+      I_Write mode line (k (Right (Right (Right (state,fs)))))
 
     PipeRead{} -> k (Left NotWritable)
     FileContents{} -> k (Left NotWritable)
@@ -177,7 +173,7 @@ write state@OpenFileTable{table,pipeSystem,fs} key line k = do
       case PipeSystem.writePipe pipeSystem pk line of
         Left Block -> Right (Left Block)
         Right (Left EPIPE) -> Right (Right (Left EPIPE))
-        Right (Right pipeSystem) -> Right (Right (Right state { pipeSystem }))
+        Right (Right pipeSystem) -> Right (Right (Right (state { pipeSystem }, fs)))
     FileAppend path -> k $ do
       let file = case FileSystem.read fs path of
             Left NoSuchPath -> File.createData []
@@ -187,42 +183,12 @@ write state@OpenFileTable{table,pipeSystem,fs} key line k = do
         Just lines -> do
           let file' = File.createData (lines ++ [line])
           let fs' = FileSystem.link fs path file'
-          Right (Right (Right state { fs = fs' }))
+          Right (Right (Right (state,fs')))
 
 whatIsKey :: OpenFileTable -> Key -> OF
 whatIsKey OpenFileTable{table} key = do
   let Entry{what} = look "whatIsKey" key (unTab table)
   what
-
-ls :: OpenFileTable -> [Path]
-ls OpenFileTable{fs} = FileSystem.ls fs
-
-mv :: OpenFileTable -> Path -> Path -> Either NoSuchPath OpenFileTable
-mv state@OpenFileTable{fs} src dest =
-  case FileSystem.mv fs src dest of
-    Left NoSuchPath -> Left NoSuchPath
-    Right fs -> Right $ state { fs }
-
-rm :: OpenFileTable -> Path -> Either NoSuchPath OpenFileTable
-rm state@OpenFileTable{fs} path =
-  case FileSystem.unlink fs path of
-    Left NoSuchPath -> Left NoSuchPath
-    Right fs -> Right $ state { fs }
-
-fileKind :: OpenFileTable -> Path -> Either NoSuchPath FileKind
-fileKind OpenFileTable{fs} path =
-  case FileSystem.read fs path of
-    Left NoSuchPath -> Left NoSuchPath
-    Right file -> Right (File.kind file)
-
-loadBinary :: OpenFileTable -> Path -> Either LoadBinaryError (Prog ())
-loadBinary OpenFileTable{fs} path =
-  case FileSystem.read fs path of
-    Left NoSuchPath -> Left LBE_NoSuchPath
-    Right file ->
-      case File.accessProg file of
-        Nothing -> Left LBE_CantLoadAsBinary
-        Just prog -> Right prog
 
 -- helper for map lookup
 look :: (Show k, Ord k) => String -> k -> Map k b -> b

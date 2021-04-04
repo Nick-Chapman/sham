@@ -19,7 +19,7 @@ traceMeNicks = False
 
 start :: FileSystem -> Interaction
 start fs = do
-  let of1 = OpenFileTable.init fs
+  let of1 = OpenFileTable.init
   let (term, of2) = getTerminal of1 StdOut
   let (termx,of3) = getTerminal of2 StdErr
   let of4 = dup of3 term
@@ -30,7 +30,7 @@ start fs = do
         , fde = env0
         , action = linearize Init.init (\() -> A_Halt)
         }
-  let (state,pid) = newPid (initKernelState of4)
+  let (state,pid) = newPid (initKernelState fs of4)
   resume pid initProc state
 
 environment0 :: Environment
@@ -166,9 +166,10 @@ traceProc (me,Proc{command}) mes =
 trace :: String -> Interaction -> Interaction
 trace s = if traceMeNicks then I_Trace s else id
 
-initKernelState :: OpenFileTable -> State
-initKernelState oft = State
-  { oft
+initKernelState :: FileSystem -> OpenFileTable -> State
+initKernelState fs oft = State
+  { fs
+  , oft
   , nextPid = 1
   , waiting = Map.empty
   , suspended = Map.empty

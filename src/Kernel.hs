@@ -4,13 +4,15 @@ module Kernel (State(..), Proc(..), FdEnv(..), Action(..)) where
 import Data.List (intercalate)
 import Data.Map (Map)
 import Environment (Environment)
+import FileSystem (FileSystem)
 import Interaction (OutMode)
 import OpenFileTable (OpenFileTable,Key)
 import Prog (Pid,Command,FD,NoSuchProcess,OF,SysCall)
 import qualified Data.Map.Strict as Map
 
 data State = State -- system wide state
-  { oft :: OpenFileTable
+  { fs :: FileSystem
+  , oft :: OpenFileTable
   , nextPid :: Pid
   , waiting :: Map Pid Proc
   , suspended :: Map Pid Proc
