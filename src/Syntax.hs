@@ -49,14 +49,13 @@ data RedirectRhs = RedirectRhsPath Word | RedirectRhsFD FD | RedirectRhsClose
   deriving Show
 
 
-parseLine :: String -> Script
-parseLine str = do
+parseLine :: String -> String -> Script
+parseLine errPrefix str = do
   case EM.parse (lang <$> getToken) str of
     EM.Parsing{EM.outcome} -> case outcome of
-      Left pe -> QShamError $ prettyParseError str pe
+      Left pe -> QShamError (errPrefix ++ prettyParseError str pe)
       Right script -> script
 
--- TODO: when parsing a script it would be nice to see the line number for a parse error
 prettyParseError :: String -> ParseError -> String
 prettyParseError str = \case
   AmbiguityError (Ambiguity _ p1 p2) -> "ambiguous parse between positions " ++ show p1 ++ "--" ++ show p2

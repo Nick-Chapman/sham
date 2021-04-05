@@ -5,6 +5,7 @@ import Environment (Environment)
 import Interaction (Prompt(..),EOF(..))
 import Lib (loadFile,stdin,stdout,stderr,close,read,write,exit,withOpen,readAll,execCommand,forkWait,forkNoWait,dup2,shift2)
 import Prelude hiding (Word,read)
+import Path (Path)
 import Prog
 import Syntax (parseLine,Script(..),Word(..),Pred(..),Redirect(..),RedirectRhs(..),Var(..))
 import qualified Environment
@@ -16,11 +17,11 @@ sham = do
   env <- initEnv
   case args of
     "-c":rest -> do
-      let script :: Script = parseLine (unwords rest)
+      let script :: Script = parseLine "" (unwords rest)
       runScript env script $ \_env -> pure ()
     path:args -> do
       lines <- loadFile path
-      let script = parseLines lines
+      let script = parseLines (Path.create path) lines
       runScript env { argv = path:args } script $ \_env -> pure ()
     [] ->
       loop env 1
@@ -43,12 +44,15 @@ loop env@Env{environment} n = do
   read (Prompt prompt) (FD 0) >>= \case
     Left EOF -> pure ()
     Right line -> do
-      let script = parseLine line
+      let script = parseLine "" line
       --Trace (show script)
       runScript env script $ \env -> loop env (n+1)
 
-parseLines :: [String] -> Script
-parseLines lines = foldl QSeq QNull (map parseLine lines)
+parseLines :: Path -> [String] -> Script
+parseLines path lines =
+  foldl QSeq QNull (map (\(line,i) -> do
+                            let errPrefix = show path ++ ":" ++ show i ++ ": "
+                            parseLine errPrefix line) (zip lines [1::Int ..]))
 
 data Env = Env
   { pid :: Pid
@@ -205,7 +209,7 @@ loadShamScript path = do
   lines <- do
     withOpen (Path.create path) OpenForReading $ \fd -> do
       readAll fd
-  pure $ parseLines lines
+  pure $ parseLines (Path.create path) lines
 
 execRedirect :: Env -> Redirect -> Prog ()
 execRedirect env = \case

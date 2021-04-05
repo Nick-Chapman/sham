@@ -36,8 +36,8 @@ run = Testing.run $ do
   test ["*"] ["(stderr) unexpected '*' at position 1"]
   test ["*","echo ok"] ["(stderr) unexpected '*' at position 1","ok"]
   test ["README"] [
-    "(stderr) unexpected '*' at position 12",
-    "(stderr) unexpected ',' at position 31",
+    "(stderr) README:1: unexpected '*' at position 12",
+    "(stderr) README:2: unexpected ',' at position 31",
     "(stderr) no such executable: Type"]
 
   test ["ls"] paths0
