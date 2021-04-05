@@ -99,11 +99,6 @@ lang token = script0 where
     x2 <- word
     pure (NotEq x1 x2)
 
-  readIntoVar = do
-    keyword "read"
-    ws1; x <- varname
-    pure $ QReadIntoVar x
-
   setVar = do
     x <- varname
     keyword "=" -- no surrounding whitespace
@@ -126,7 +121,7 @@ lang token = script0 where
     symbol '('
     script <- sequence
     symbol ')'
-    rs <- redirects
+    rs <- redirects False
     pure $ (case rs of [] -> script; _-> QRedirecting script rs)
 
   sequence = do
@@ -135,36 +130,51 @@ lang token = script0 where
     pure $ foldl QSeq x1 xs
 
   runCommand = do
-    thing <- command
-    rs <- redirects
+    (thing,num) <- command
+    rs <- redirects num
     pure $ (case rs of [] -> thing; _ -> QRedirecting thing rs)
 
   execCommand = do
     keyword "exec"
-    ws1; thing <- command
-    rs <- redirects
+    ws1; (thing,num) <- command
+    rs <- redirects num
     pure $ QExec (case rs of [] -> thing; _ -> QRedirecting thing rs)
 
   execRedirects = do
     keyword "exec"
-    rs <- redirects
+    rs <- redirects False
     pure $ QRedirects rs
 
+  command :: Gram (Script,Bool) -- this Bool is True if the final word was a number
   command = alts [echo,exit,source,invocation,readIntoVar]
 
-  echo = do keyword "echo"; QEcho <$> words
-  exit = do keyword "exit"; pure QExit
+  echo = do
+    keyword "echo"
+    ws <- words
+    let num = case ws of [] -> False; _ -> isNumeric (last ws)
+    pure (QEcho ws, num)
+
+  exit = do
+    keyword "exit"
+    pure (QExit, False)
 
   source = do
     alts [keyword "source",keyword "."]
     ws1; w <- word
     ws <- words
-    pure $ QSource w ws
+    let num = isNumeric (last (w:ws))
+    pure (QSource w ws, num)
 
   invocation = do
     com <- nonBuiltinWord
     args <- words
-    pure $ QInvoke com args
+    let num = isNumeric (last (com:args))
+    pure (QInvoke com args, num)
+
+  readIntoVar = do
+    keyword "read"
+    ws1; x <- varname
+    pure (QReadIntoVar x, False)
 
   words = many (do ws1; word)
 
@@ -174,30 +184,37 @@ lang token = script0 where
     com <- word
     case com of Word w | w `elem` builtinList -> fail; _ -> pure com
 
-  redirects = many (do ws1; redirect)
-    -- TODO: Goal: allow just "ws" to separate args from redirects.
-    -- Problem is that currently this causes ambiguity for examples such as:
-    --  "echo foo1>xx"
-    -- It should parse as:       "echo foo1 >xx"
-    -- But we think it might be  "echo foo 1>xx"  !!
+  redirects num = alts [ do eps; pure []
+                      , do
+                          r <- redirect num
+                          rs <- many (redirect False)
+                          pure (r:rs)
+                      ]
 
-  redirect = alts
-    [ do
-        dest <- alts [ do eps; pure 0, do n <- fd; pure n ]
-        let mode = OpenForReading
-        symbol '<'
-        ws
-        src <- redirectRhs
-        pure $ Redirect mode dest src
-    , do
-        dest <- alts [ do eps; pure 1, do n <- fd; ws; pure n ]
-        mode <-
-          alts [ do symbol  '>';  pure $ OpenForWriting Truncate
-               , do keyword ">>"; pure $ OpenForWriting Append ]
-        ws
-        src <- redirectRhs
-        pure $ Redirect mode dest src
-    ]
+  redirect followingNum = do
+    -- If the word before a redirect is a number then we insist on a space before ">" or "<".
+    -- This avoids ambiguity in cases like "echo foo 11> x" (which is parsed as a redirect of FD 11)
+    -- As opposed to "echo foo 11 > x" which echo "foo 11" to file x.
+    --
+    -- (we always insist on a space before "11>" or "11<")
+    let leadWs = if followingNum then ws1 else ws
+    alts
+      [ do
+          dest <- alts [ do leadWs; pure 0, do ws1; n <- fd; pure n ]
+          symbol '<'
+          let mode = OpenForReading
+          ws
+          src <- redirectRhs
+          pure $ Redirect mode dest src
+      , do
+          dest <- alts [ do leadWs; pure 1, do ws1; n <- fd; pure n ]
+          mode <-
+            alts [ do symbol  '>';  pure $ OpenForWriting Truncate
+                 , do keyword ">>"; pure $ OpenForWriting Append ]
+          ws
+          src <- redirectRhs
+          pure $ Redirect mode dest src
+      ]
 
   redirectRhs = alts
     [ RedirectRhsPath <$> word
@@ -207,7 +224,7 @@ lang token = script0 where
 
   fd = FD <$> digits
 
-  word = alts [ Word <$> ident0
+  word = alts [ Word <$> ident
               , Word <$> quotedIdent
               , do keyword "$$"; pure DollarDollar
               , do keyword "$#"; pure DollarHash
@@ -229,7 +246,7 @@ lang token = script0 where
     xs <- many (alts [alpha,numer])
     pure (x : xs)
 
-  ident0 = do
+  ident = do
     x <- alts [alpha,numer,dash,dot,colon]
     xs <- many (alts [alpha,numer,dash,dot,colon])
     pure (x : xs)
@@ -255,3 +272,9 @@ lang token = script0 where
 
   skip p = do _ <- p; eps
   eps = pure ()
+
+
+isNumeric :: Word -> Bool
+isNumeric = \case
+  Word s -> all Char.isDigit s
+  _ -> False

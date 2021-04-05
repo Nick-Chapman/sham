@@ -234,3 +234,8 @@ run = Testing.run $ do
   test ["kill 99"] ["(stderr) kill: no such process: [99]"]
   test ["kill 2"] []
   test ["kill 1","echo carry on after init gone"] ["carry on after init gone"]
+
+  test ["echo foo11 >x", "cat x"] ["foo11"]
+  test ["echo foo11>x", "cat x"] ["foo11"]
+  test ["echo foo 11 >x", "cat x"] ["foo 11"]
+  test ["echo foo 11>x"] ["foo"]
