@@ -41,6 +41,7 @@ run = Testing.run $ do
     "(stderr) no such executable: Type"]
 
   test ["ls"] paths0
+  test ["exec ls"] paths0
   test ["sham ls"] ["(stderr) cant open for reading: ls"]
   test ["sham -c ls"] paths0
   test [". ls"] ["(stderr) cant open for reading: ls"]
@@ -174,22 +175,8 @@ run = Testing.run $ do
   test ["(echo foo; echo bar) | rev"] ["oof","rab"]
   test ["(ls;cat days) | grep es"] ["yes","Tuesday","Wednesday"]
 
-  -- backgrounding is massivley elayed since tty rework
-  -- test ["help &"] Image.readme
-  -- test ["cat days &", "echo FOO"] ("FOO" : days)
-
-  -- tests that show ps are to fragile
-  --test ["(ls;ps)"] (paths0 ++ ["[1] tty-monitor-stdout","[2] sham","[4] ps"])
-  --test ["(ls;ps) >x","cat x"] (paths0 ++ ["[1] tty-monitor-stdout","[2] sham","[3] ps"])
-
-  -- lsof output is too fragile
-  --test ["lsof | cat"] ["[3] (lsof) &1 Write:pipe1", "[4] (cat) &0 Read:pipe1"]
-  --test ["ls | grep es","lsof"] ["yes"]
-  --test ["(ls;ls) | grep es","lsof"] ["yes","yes"]
-
-  -- output truncated following tty rework
-  -- test ["exec ps"] ["[1] tty-monitor-stdout","[2] ps"]
-  -- test ["exec ls"] paths0
+  test ["help &"] Image.readme
+  test ["cat days &", "echo FOO"] ("FOO" : days)
 
   test ["exec 2>e","foo","bar","cat e"] ["no such executable: foo", "no such executable: bar"]
   test ["exec >&2", "echo foo"] ["(stderr) foo"]
@@ -208,7 +195,7 @@ run = Testing.run $ do
   test ["echo foo >&-"] ["(stderr) bad file descriptor: &1"]
 
   test ["((echo before >&4; lsof 4>&- 0<&- 2<&-; echo after >&4) | grep lsof | grep -v grep) 4>&1"]
-    ["before","[9] (lsof) &1 Write:pipe2","after"]
+    ["before","9 (lsof) &1 Write:pipe2","after"]
 
   test ["env"] ["Version=MeNicks-0.1","debug=0","prefix=sham"]
   test ["foo=123","echo $foo"] ["123"]
@@ -222,7 +209,8 @@ run = Testing.run $ do
   test ["wc-l days"] ["7"]
   test ["wc-l days days"] ["(stderr) wc-l : takes zero or one argument"]
 
-  test ["ps"] ["[1] init","[2] sham","[3] ps"]
+  test ["ps"] ["1 init","2 sham","3 ps"]
+  test ["exec ps"] ["1 init","2 ps"]
   test ["echo my pid is $$"] ["my pid is 2"]
   test [".me"] ["3"]
   test ["exec .me"] ["2"]
@@ -231,7 +219,7 @@ run = Testing.run $ do
 
   test ["kill"] ["(stderr) kill: takes at least one argument"]
   test ["kill what"] ["(stderr) kill: not a pid: what"]
-  test ["kill 99"] ["(stderr) kill: no such process: [99]"]
+  test ["kill 99"] ["(stderr) kill: no such process: 99"]
   test ["kill 2"] []
   test ["kill 1","echo carry on after init gone"] ["carry on after init gone"]
 

@@ -16,7 +16,7 @@ import Interaction (Prompt,OutMode,EOF)
 import Path (Path)
 
 newtype Pid = Pid Int deriving (Eq,Ord,Num)
-instance Show Pid where show (Pid n) = "[" ++ show n ++ "]"
+instance Show Pid where show (Pid n) = show n
 
 data Command = Command { argv :: (String,[String]) }
 instance Show Command where show (Command (x,xs)) = unwords (x:xs)
