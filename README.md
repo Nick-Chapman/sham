@@ -62,6 +62,8 @@ To try the more experiemental asynchronous console, type `stack run async`
 - quoting, with single quotes
 - new script: wc -l
 - support redirection syntax to close file-descriptors: "4>&-"
+- new binary "cut"
+- new script "pkill"
 
 ### Ideas/Plans
 - scripts: drop N

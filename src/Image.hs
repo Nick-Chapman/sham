@@ -1,7 +1,7 @@
 -- | The initial file-system image, containing predefined 'binary' and 'data' files.
 module Image (fs0,readme,days) where
 
-import Bins (echo,env,cat,rev,grep,ls,kill,mv,rm,ps,lsof,xargs,man,sum,type_)
+import Bins (echo,env,cut,cat,rev,grep,ls,kill,mv,rm,ps,lsof,xargs,man,sum,type_)
 import FileSystem (FileSystem)
 import Prelude hiding (sum)
 import Prog (BinaryMeta(..))
@@ -20,6 +20,7 @@ fs0 = FileSystem.create image where
     [ ("echo",echo)
     , ("env",env)
     , ("cat",cat)
+    , ("cut",cut)
     , ("rev",rev)
     , ("grep",grep)
     , ("kill",kill)
@@ -75,6 +76,12 @@ fs0 = FileSystem.create image where
           "if $# = 0  (.forever .read-echo-1 | xargs sum ; exit)",
           "if $# = 1  (cat $1 | .forever .read-echo-1 | xargs sum ; exit)",
           "(echo $0 : takes zero or one argument >&2; exit)"
+          ])
+
+    , ("pkill", [
+          "# kill processes matching given pattern",
+          "if $# != 1 (echo $0 : takes one argument >&2; exit)",
+          "ps | grep $1 | grep -v pkill | grep -v grep | cut 1 | xargs kill"
           ])
 
     -- hidden scripts (path begins "."), for testing and experimentation

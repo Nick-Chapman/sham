@@ -1,6 +1,6 @@
 -- | Predefined 'binary' programs, which will be available on the file-system.
 module Bins (
-  man, echo, env, cat, rev, grep, ls, kill, mv, rm, ps, lsof, sum, type_, xargs,
+  man, echo, env, cut, cat, rev, grep, ls, kill, mv, rm, ps, lsof, sum, type_, xargs,
   ) where
 
 import Control.Monad (when)
@@ -35,6 +35,7 @@ man = do
     docsMap :: Map String String
     docsMap = Map.fromList
       [ ("cat"   , "write named files (or stdin in no files named) to stdout")
+      , ("cut"   , "select numbered fields from each line of stdin")
       , ("echo"  , "(binary/sham builtin) write arguments to stdout")
       , ("env"   , "list variable bindings")
       , ("exec"  , "(sham builtin) : replace the current process with a new command")
@@ -189,6 +190,31 @@ sum = do
   ns <- mapM toInt args
   let res = Prelude.sum ns
   write stdout (show res)
+
+cut :: Prog ()
+cut = do
+  Command(me,args) <- Prog.Argv
+  let
+    toInt :: String -> Prog Int
+    toInt s =
+      case readMaybe s of
+        Just n -> pure n
+        Nothing -> do
+          write stderr (me ++ ": unable to convert '" ++ s ++ "' to a number")
+          exit
+  ns <- mapM toInt args
+  let
+    cutLine :: String -> String
+    cutLine s = unwords [ w | (i,w) <- zip [1::Int ..] (words s), i `elem` ns ]
+  let
+    loop :: Prog ()
+    loop = do
+      read NoPrompt stdin >>= \case
+        Left EOF -> pure ()
+        Right line -> do
+          write stdout (cutLine line)
+          loop
+  loop
 
 type_ :: Prog ()
 type_ = checkAtLeastOneArg $ do

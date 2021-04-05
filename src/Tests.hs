@@ -15,7 +15,9 @@ run = Testing.run $ do
   let merge xs ys = case xs of [] -> ys; x:xs -> x:merge ys xs
   let paths0 = [ Path.toString p | p <- FileSystem.ls Image.fs0, not (Path.hidden p) ]
 
-  test ["man"] ["cat echo env exec exit grep kill ls lsof man mv ps read rev rm sham source sum type xargs"]
+  test ["man"] ["cat cut echo env exec exit grep kill ls lsof man mv ps read rev rm sham source sum type xargs"]
+
+  test ["ls | xargs type | grep Data | cut 1 | xargs echo"] ["README countdown cp days head help pkill wc-l yes"]
 
   test ["echo foo"] ["foo"]
   test ["sham echo foo"] ["(stderr) cant open for reading: echo"]
