@@ -55,7 +55,14 @@ fs0 = FileSystem.create image where
           "if $# != 1 (echo $0 : takes one argument >&2; exit)",
           "if $1 = 0 exit",
           "echo $1",
-          "sum $1 -1 | (read v; exec countdown $v)" -- &
+          --"sum $1 -1 | (read v; exec countdown $v)" -- &
+          "sum $1 -1 > $$",
+          "exec .countdownf $$ <$$"
+          ])
+    , (".countdownf", [
+          "read v",
+          "rm $1",
+          "exec countdown $v"
           ])
 
     , ("head", [
