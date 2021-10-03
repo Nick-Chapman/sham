@@ -100,7 +100,7 @@ fs0 = FileSystem.create image where
           "# like-cat: this script should have the same behavior as cat",
           "read x",
           "echo $x",
-          "like-cat"
+          ".like-cat"
           ])
     , (".head-1", [
           "# head-1: copy the first line on stdin to stdout",
